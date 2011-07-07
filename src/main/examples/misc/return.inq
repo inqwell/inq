@@ -1,0 +1,24 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+// The Inq return statement.
+// An exceptional way to leave a function
+
+function somefunc(boolean p1)
+{
+  if (p1)
+    return (-99);
+
+  99;
+}
+
+
+writeln($catalog.system.out, "normal return : " + call somefunc());
+
+writeln($catalog.system.out, "explicit return : " + call somefunc(p1=true));

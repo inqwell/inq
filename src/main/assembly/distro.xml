@@ -1,0 +1,147 @@
+<assembly xmlns="http://maven.apache.org/plugins/maven-assembly-plugin/assembly/1.1.2"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/plugins/maven-assembly-plugin/assembly/1.1.2
+                        http://maven.apache.org/xsd/assembly-1.1.2.xsd">
+
+  <!--
+  Build the inq runtime, combining its dependencies into
+  the output
+  -->
+
+  <id>dist</id>
+
+  <formats>
+    <format>tar.gz</format>
+    <format>zip</format>
+  </formats>
+
+  <!--
+  <includeBaseDirectory>false</includeBaseDirectory>
+  -->
+
+  <fileSets>
+
+    <fileSet>
+      <directory>src/main</directory>
+      <includes>
+        <include>app/**</include>
+        <include>etc/**</include>
+      </includes>
+      <excludes>
+        <exclude>**/.project</exclude>
+      </excludes>
+      <fileMode>0644</fileMode>
+      <directoryMode>0755</directoryMode>
+      <outputDirectory>/</outputDirectory>
+    </fileSet>
+
+    <fileSet>
+      <directory>src/main</directory>
+      <includes>
+        <include>examples/**/*.inq</include>
+      </includes>
+      <excludes>
+        <exclude>**/.project</exclude>
+      </excludes>
+      <fileMode>0755</fileMode>
+      <directoryMode>0755</directoryMode>
+      <outputDirectory>/</outputDirectory>
+    </fileSet>
+
+    <fileSet>
+      <directory>src/main</directory>
+      <includes>
+        <include>examples/**</include>
+      </includes>
+      <excludes>
+        <exclude>examples/**/*.inq</exclude>
+        <exclude>**/.project</exclude>
+      </excludes>
+      <fileMode>0644</fileMode>
+      <directoryMode>0755</directoryMode>
+      <outputDirectory>/</outputDirectory>
+    </fileSet>
+
+    <fileSet>
+      <directory>src/main</directory>
+      <includes>
+        <!--  <include>bin/inq</include> -->
+        <include>bin/adminpwd.inq</include>
+      </includes>
+      <excludes>
+        <exclude>**/.project</exclude>
+      </excludes>
+      <fileMode>0755</fileMode>
+      <directoryMode>0755</directoryMode>
+      <outputDirectory>/</outputDirectory>
+    </fileSet>
+
+    <fileSet>
+      <directory>src/main</directory>
+      <includes>
+        <include>bin/**</include>
+      </includes>
+      <excludes>
+        <exclude>bin/inq</exclude>
+        <exclude>bin/inq.bat</exclude>
+        <exclude>bin/adminpwd.inq</exclude>
+        <exclude>**/.project</exclude>
+      </excludes>
+      <fileMode>0644</fileMode>
+      <directoryMode>0755</directoryMode>
+      <outputDirectory>/</outputDirectory>
+    </fileSet>
+
+    <fileSet>
+      <directory>src/main</directory>
+      <includes>
+        <include>lib/endorsed/**</include>
+      </includes>
+      <fileMode>0644</fileMode>
+      <directoryMode>0755</directoryMode>
+      <outputDirectory>/</outputDirectory>
+    </fileSet>
+
+    <fileSet>
+      <directory>target</directory>
+      <includes>
+        <include>${project.artifactId}-${project.version}-runtime.jar</include>
+      </includes>
+      <fileMode>0644</fileMode>
+      <outputDirectory>/lib</outputDirectory>
+    </fileSet>
+
+    <!--
+    Create the empty log directory in the distro. Hmmm.
+    -->
+    <fileSet>
+      <directory>src/main/bin</directory>
+      <outputDirectory>/log</outputDirectory>
+      <directoryMode>0755</directoryMode>
+      <excludes>
+        <exclude>*</exclude>
+      </excludes>
+    </fileSet>
+
+  </fileSets>
+
+  <!--
+  The launcher for *nix and Win is filtered, so we have to handle
+  them separately within a "files" section
+  -->
+  <files>
+    <file>
+      <source>src/main/bin/inq</source>
+      <outputDirectory>/bin</outputDirectory>
+      <filtered>true</filtered>
+      <fileMode>0755</fileMode>
+    </file>
+    <file>
+      <source>src/main/bin/inq.bat</source>
+      <outputDirectory>/bin</outputDirectory>
+      <filtered>true</filtered>
+    </file>
+  </files>
+
+</assembly>
+

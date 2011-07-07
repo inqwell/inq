@@ -1,0 +1,1260 @@
+/*
+ * $Archive: /src/com/inqwell/any/client/AnyTreeLevel.java $
+ * $Author: sanderst $
+ * $Revision: 1.1 $
+ * $Date: 2009-06-14 10:54:57 $
+ */
+package com.inqwell.any.client;
+
+import com.inqwell.any.*;
+import javax.swing.JTree;
+import javax.swing.tree.TreePath;
+import javax.swing.tree.DefaultTreeCellRenderer;
+import javax.swing.tree.TreeCellEditor;
+import java.awt.Component;
+
+/**
+ * A TreeLevel implementation that maps a container node
+ * in an Inq structure to a tree level for display.
+ * <H3>Inq-to-Tree Node Mapping</H3>
+ * An <code>AnyTreeLevel</code> references a node, in the Inq sense,
+ * the immediate children of which determine the
+ * number of tree nodes at the next level. There are two ways in which
+ * the nodes a given level can be considered branches or leaves:
+ * <ol>
+ * <li>
+ * If this <code>AnyTreeLevel</code> itself contains a
+ * child <code>AnyTreeLevel</code> then this level is represented
+ * as branch tree nodes. Otherwise, in the absence of explicit
+ * expansion declarations (see below) the level is represented as
+ * leaf nodes.</li>
+ * <li>
+ * If an <code>AnyTreeLevel</code> has explicit expansion 
+ * declarations then the current level is deemed a branch
+ * node irrespective of whether there is a
+ * child <code>AnyTreeLevel</code>.
+ * </li>
+ * </ol>
+ * <p>
+ * When expansion declarations are used, the number of
+ * tree nodes at this level is determined by the number of
+ * expansion declarations and is therefore part of the GUI
+ * configuration. If a tree level has a child tree level, the
+ * number of tree nodes at this level is the number of Inq
+ * children at the referenced node.
+ * <p>
+ * It is permissable to have a child tree level and expansion
+ * declarations in the same <code>AnyTreeLevel</code> instance.
+ * By default, the expansion declarations are returned first,
+ * followed by the Inq children.
+ * <H3>Rendering</H3>
+ * For tree nodes determined by Inq children, a single rendering
+ * specification is applied to each child node, using that child
+ * as the context for node resolution within any rendering
+ * expression. Expansion declarations are represented by one
+ * rendering specification per tree child applied to the 
+ * referenced node.
+ * @author $Author: sanderst $
+ * @version $Revision: 1.1 $
+ */
+public class AnyTreeLevel extends AbstractTreeLevel
+{
+	// The levelRoot_ is the node, relative
+	// to the context, that is the Inq parent of
+	// the tree nodes at this level.
+	private Locate      levelRoot_;
+	private Vectored    levelRootV_;
+  
+  // If we are recursive then level2 and below will have
+  // a different resolver for the subtree root.  This is
+  // hard coded to the last path component of the levelRoot_.
+  // If we are not recursive then this is always null.
+  // So that we know whether to use subRoot_ have a flag that
+  // says when we are recursing.
+  private Locate      subRoot_;
+  private boolean     recursing_;
+
+  // See above.
+	private Any         context_;
+  
+	// When asked to return a tree node, if we are
+	// not the correct level delegate to the next
+	// one.
+	private TreeLevel   nextLevel_;
+	
+  // An optional expression to specify whether nodes at
+  // this level are leaf nodes.
+	private Call        isLeaf_;
+  private AnyBoolean  leafRes_ = new AnyBoolean();
+
+  //...and optional explicitly declared children specified by
+  // individual renderers.
+  private Array       expansionNodes_;
+  
+  // If the Inq children are editable then this will
+  // be set.  For the expansion nodes the editor is held
+  // within the Expansion class.
+  private AnyComponentEditor editor_;
+  
+	// If we must resolve the root data node.
+	private boolean     mustResolve_ = true;
+	
+  // Each level has an event dispatcher to determine
+  // whether an Inq event should be processed at this
+  // level.
+  //private EventDispatcher  levelDispatcher_;
+  
+  // These are the node specs that this level is responsible
+  // for when filtering Inq events
+  private Map         thisNodeSpecs_;
+  
+  // Used to help isLeaf in top level only
+  private Queue       leafPath_;
+	
+	static private Any  node__ = new AnyString("node");
+
+  /**
+	 * Construct an <code>AnyTreeLevel</code> object which
+	 * represents a leaf level in the tree representation.
+	 * @param l the location of the node representing the
+	 * parent of the nodes at this level.
+	 */
+	public AnyTreeLevel(Locate l)
+	{
+		this(l, TreeLevel.terminalLevel__);
+	}
+	
+	/**
+	 * Construct a <code>TreeLevel</code> object which
+	 * represents a non-leaf level in the tree representation.
+	 * @param l the location of the node representing the
+	 * parent of the nodes at this level.
+	 * @param nextLevel the next level in the tree.
+	 */
+	public AnyTreeLevel(Locate l, TreeLevel nextLevel)
+	{
+		levelRoot_ = l;
+    
+    if (nextLevel != null)
+      nextLevel_ = nextLevel;
+    else
+    {
+      nextLevel_ = this; // recursive structure
+      subRoot_ = new LocateNode(l.getNodePath().getLast().toString());
+    }
+	}
+	
+	public void setContext(Any context)
+	{
+		if (context_ != context)
+		  mustResolve_ = true;
+		  
+		context_ = context;
+	}
+	
+	public Any getContext()
+	{
+    return context_;
+	}
+	
+  public TreeLevel getNextTreeLevel()
+  {
+    return nextLevel_;
+  }
+
+  public Any getChild(Object parent, int index) throws AnyException
+  {
+    recursing_ = false;
+  	//System.out.println("AnyTreeLevel.getChild " + parent + " " + index);
+    Any ret;
+    if (!isRecursive())
+      ret = descendForChild((Any)parent, index);
+    else
+      ret = recurseForChild((Any)parent, index);
+      
+  	//System.out.println("AnyTreeLevel.getChild returning " + ret);
+    return ret;
+  }
+  
+  private Any descendForChild(Any parent, int index) throws AnyException
+  {
+  	Vectored v = resolveDataNode(context_, false);
+  	
+  	// The v == parent test yields true only when
+  	// parent is the root of the tree. In other cases the
+  	// parent arg will be the child we returned last time.
+  	// In that case, the level to use is the one immediately
+  	// below the one that returned parent and this is signaled
+  	// by setting the context of the next level to the given
+  	// parent.
+  	if (v        == parent || // returning child of root
+  	    context_ == parent)   // returning child at level 2 or below
+  	{
+  		return getChildNode(v, index);
+  	}
+  	else if (v.containsValue(parent))
+  	{
+  		// If the next level is not the terminal marker then
+  		// it is the relevant one - put the context in as stated
+  		// above.  Otherwise we are the parent of some expansion
+  		// nodes (without which we would have ourselves been
+  		// leaf nodes)
+  		if (nextLevel_ != TreeLevel.terminalLevel__)
+  		{
+	  	  nextLevel_.setContext(parent);
+	  		return nextLevel_.getChild(parent, index);
+  		}
+  		else
+  		{
+  			// There *must* be expansion nodes if we get here
+  			// so just go for it.
+  		  return getExpansionNodeChild(index, parent);
+  		}
+  	}
+  	else
+  	{
+  		return nextLevel_.getChild(parent, index);
+  	}
+  }
+
+  private Any recurseForChild(Any parent, int index) throws AnyException
+  {
+  	Vectored v = resolveDataNode(context_, false);
+  	
+  	// The v == parent test yields true only when
+  	// parent is the root of the tree.
+    if (v == parent) // returning child of root
+      return getChildNode(v, index);
+      
+    // In other cases the
+  	// parent arg will be the child we returned last time.
+  	// In that case, the level to use is the one immediately
+  	// below the one that returned parent.  In the recursive
+    // case the context keeps changing in the (only)AnyTreeLevel
+    // and we must test for the object presence as we
+    // progress down the levels.
+    recursing_ = true;
+    if (v.containsValue(parent))
+  	{
+      // When we have found the Vectored that contains the given
+      // parent we are at the level above the relevant one.
+      // Set the context and return.
+      setContext(parent);
+      v = resolveDataNode(context_, false);
+      return getChildNode(v, index);
+  	}
+    
+    // When recursive nextLevel_ == this, so there's never a
+    // terminal marker.  Just set the context and try again.
+    // Note that any expansion nodes will be processed at
+    // every level by getChildNode()
+  	setContext(parent);
+    v = resolveDataNode(context_, false);
+    return getChildNode(v, index);
+	  //return recurseForChild(parent, index);
+  }
+
+  public int getChildCount(Object parent) throws AnyException
+  {
+    recursing_ = false;
+
+    if (!isRecursive())
+      return descendForCount((Any)parent);
+    else
+    {
+      int i = recurseForCount((Any)parent);
+      //System.out.println("getChildCount " + i);
+      return i;
+    }
+  }
+  
+  private int descendForCount(Any parent) throws AnyException
+  {
+  	//System.out.println("AnyTreeLevel.getChildCount " + parent);
+  	Vectored v = resolveDataNode(context_, false);
+  	if (v == parent || context_ == parent)
+  	{
+  		if (v == null)
+  		  return 0;
+  		return v.entries() +
+  		  ((nextLevel_ != TreeLevel.terminalLevel__) ? expansionNodesOffset()
+  		                                            : 0);
+  	}
+  	else if (v.containsValue((Any)parent))
+  	{
+  		if (nextLevel_ != TreeLevel.terminalLevel__)
+  		{
+	  	  nextLevel_.setContext((Any)parent);
+	  		return nextLevel_.getChildCount(parent);
+  		}
+  	  else
+  	  {
+  		  return expansionNodes_.entries();
+  	  }
+  	}
+  	else
+  	{
+  		return nextLevel_.getChildCount(parent);
+  	}
+  }
+
+  private int recurseForCount(Any parent) throws AnyException
+  {
+    //System.out.println("recurseForCount " + System.identityHashCode(parent));
+    //System.out.println("recurseForCount " + parent);
+  	Vectored v = resolveDataNode(context_, false);
+    
+    if (v == null)  // only applicable first time in
+      return 0;
+  	
+  	// The v == parent test yields true only when
+  	// parent is the root of the tree.
+    if (v == parent) // child of root
+      return v.entries() + expansionNodesOffset();
+
+    // Progress down the levels
+    recursing_ = true;
+    
+    // Check if this level is empty.  Avoid infinite recursion as
+    // expression is always the same.
+    if (v.entries() == 0)
+      return 0;
+      
+    if (v.containsValue(parent))
+  	{
+      // When we have found the Vectored that contains the given
+      // parent we are at the level above the relevant one.
+      // Set the context and return.
+      setContext(parent);
+      v = resolveDataNode(context_, false);
+      if (v == null)
+        return 0;
+        
+      return doEntries(v) + expansionNodesOffset();
+  	}
+    
+    // We may not go down the hierarchy step-by-step, the JTree
+    // may give us a cached object directly.  We always check the
+    // root first because our context is set to that initially,
+    // but in this case we will not pass through the above test and
+    // we must be at the appropriate level already.
+    
+    // When recursive nextLevel_ == this, so there's never a
+    // terminal marker.  Just set the context and try again.
+    // Note that any expansion nodes will be processed at
+    // every level as above.
+  	setContext(parent);
+    v = resolveDataNode(context_, false);
+    if (v == null)
+      return 0;
+    return doEntries(v) + expansionNodesOffset();
+    
+    
+	  //return recurseForCount(parent);
+  }
+  
+  public int getIndexOfChild(Object parent, Object child) throws AnyException
+  {
+    recursing_ = false;
+    if (!isRecursive())
+      return descendForIndex((Any)parent, (Any)child);
+    else
+      return recurseForIndex((Any)parent, (Any)child);
+  }
+  
+  private int descendForIndex(Any parent, Any child) throws AnyException
+  {
+  	//System.out.println("AnyTreeLevel.getIndexOfChild " + parent + " " + child);
+  	Vectored v = resolveDataNode(context_, false);
+  	if (v == parent || context_ == parent)
+  	{
+  		return getChildIndex(v, child);
+  	}
+  	else if (v.containsValue((Any)parent)) // Inq node child
+  	{
+  		if (nextLevel_ != TreeLevel.terminalLevel__)
+  		{
+	  	  nextLevel_.setContext((Any)parent);
+	  		return nextLevel_.getIndexOfChild(parent, child);
+  		}
+  		else
+  		{
+  			return getExpansionNodeIndex(child);
+  		}
+  	}
+  	else
+  	{
+  		return nextLevel_.getIndexOfChild(parent, child);
+  	}
+  }
+  
+  private int recurseForIndex(Any parent, Any child) throws AnyException
+  {
+  	Vectored v = resolveDataNode(context_, false);
+    
+    if (v == parent) // child of root only
+  		return getChildIndex(v, child);
+
+    recursing_ = true;
+    if (v.containsValue(parent))
+  	{
+      // When we have found the Vectored that contains the given
+      // parent we are at the level above the relevant one.
+      // Set the context, and return.
+      setContext(parent);
+      v = resolveDataNode(context_, false);
+      return getChildIndex(v, child);
+  	}
+    
+    // When recursive nextLevel_ == this, so there's never a
+    // terminal marker.  Just set the context and try again.
+    // Note that any expansion nodes will be processed at
+    // every level by getChildNode()
+  	setContext(parent);
+    v = resolveDataNode(context_, false);
+    return getChildIndex(v, child);
+	  //return recurseForIndex(parent, child);
+  }
+  
+  public Any getRoot() throws AnyException
+  {
+    // Note - only called on the top level instance (or once
+    // at root node context when in recursive mode)
+    recursing_ = false;
+  	Vectored v = resolveDataNode(context_, false);
+  	//System.out.println("AnyTreeLevel.getRoot " + v);
+  	return v;
+  }
+
+	public NodeSpecification getRootPath()
+	{
+    // Note - only called once when in recursive mode and
+    // for the root context path in that case.
+		NodeSpecification root = levelRoot_.getNodePath();
+
+		return root;
+	}
+	
+	public TreeLevel getTreeLevelForPath(TreePath p) throws AnyException
+	{
+	  // 0 is root and that is handled in AnyTreeModel
+
+    if (isRecursive())
+      return this;  // In this case there's only one anyway
+
+    return getTreeLevelForPath(p, 1);
+	}
+	
+	public TreeLevel getTreeLevelForPath(TreePath p, int index) throws AnyException
+	{
+  	Vectored v        = resolveDataNode(context_, false);
+  	Any      treeNode = (Any)p.getPathComponent(index);
+  	//System.out.println("***CONTEXT " + context_);
+  	//System.out.println("AnyTreeLevel.getTreeLevelForPath " + index + " " + treeNode);
+    //for (int x = 0; x < p.getPathCount(); x++)
+    //  System.out.println("p[" + x + "] " + p.getPathComponent(x));
+    
+    if (v.containsValue(treeNode))
+    {
+      // true for sub-levels and tree path doesn't end in an expansion
+      // node.
+      if (++index >= p.getPathCount())
+      {
+        //System.out.println("AnyTreeLevel.getTreeLevelForPath returning " + index);
+        return this;
+      }
+      
+      //System.out.println("AnyTreeLevel.getTreeLevelForPath at " + index);
+      //System.out.println("AnyTreeLevel.getTreeLevelForPath next " + nextLevel_);
+      nextLevel_.setContext(treeNode);
+      
+      // look ahead to the next node to check if it is an expansion
+      // node at this level.
+  	  treeNode = (Any)p.getPathComponent(index);
+      if (isExpansionNode(treeNode))
+        return this;
+        
+      return nextLevel_.getTreeLevelForPath(p, index);
+    }
+    // -er - don't know
+    //System.out.println("AnyTreeLevel.getTreeLevelForPath null :-( ");
+    return null;
+	}
+	
+	public void resolveNodeSpecs(NodeSpecification rootPath, Map nodeSpecs, Any contextNode)
+	{
+    //  EXPANSION NODE SPECIFICATIONS ARE TBD !!
+    
+		// Suffix outer specification with ours
+		NodeSpecification contextRoot = (NodeSpecification)rootPath.cloneAny();
+		NodeSpecification myRoot = this.getRootPath();
+		for (int i = 0; i < myRoot.entries(); i++)
+		  contextRoot.add(myRoot.get(i));
+		
+		// Add the lazy specifier as the rendering node specifications
+		// are applied to the children of the level root.
+		contextRoot.add(NodeSpecification.lazy__);
+		
+    // Generate Node specs from the relative ones in the
+    // rendering expression
+		RenderInfo r = renderer_.getRenderInfo();
+		r.resolveNodeSpecs(contextNode);
+		Map ns = r.getNodeSpecs();
+		
+		// We note the node specs that are relevant to this level
+		// so we can use an event dispatcher to test if an event
+		// should be processed at this level. [Actually not used]
+		thisNodeSpecs_ = AbstractComposite.simpleMap();
+
+		Iter iter = ns.createKeysIterator();
+		while (iter.hasNext())
+		{
+			Any thisNs    = iter.next();
+			Any fieldList = ns.get(thisNs);
+
+			NodeSpecification fromRoot = (NodeSpecification)thisNs.cloneAny();
+			for (int j = 0; j < contextRoot.entries(); j++)
+			{
+				fromRoot.addFirst(contextRoot.get(contextRoot.entries() - j - 1));
+			}
+      
+      if (isRecursive())
+        fromRoot.add(NodeSpecification.lazy__);
+        
+			thisNs = fromRoot;
+
+			if (!thisNodeSpecs_.contains(thisNs))
+			{
+				thisNodeSpecs_.add(thisNs, fieldList);
+			}
+			else
+			{
+				Set fieldSet = (Set)thisNodeSpecs_.get(thisNs);
+				fieldSet.addAll((Set)fieldList, true);
+			}
+		}
+
+		// Add the model root (with no fields) to pick up events when
+		// the model is replaced.
+		thisNodeSpecs_.add(contextRoot, AbstractComposite.fieldSet());
+
+		// When we've done this level add the node specs to the
+		// list for the context node as a whole.
+		iter = thisNodeSpecs_.createKeysIterator();
+		while (iter.hasNext())
+		{
+			Any thisNs    = iter.next();
+			Any fieldList = thisNodeSpecs_.get(thisNs);
+			if (!nodeSpecs.contains(thisNs))
+			{
+				nodeSpecs.add(thisNs, fieldList.cloneAny());
+			}
+			else
+			{
+				Set fieldSet = (Set)nodeSpecs.get(thisNs);
+				fieldSet.addAll((Set)fieldList, true);
+			}
+		}
+    
+    // Do the next level unless we are it for evermore
+    if (!isRecursive())
+      nextLevel_.resolveNodeSpecs(contextRoot, nodeSpecs, contextNode);
+	}
+	
+  public boolean isLeaf(Object node) throws AnyException
+  {
+    // Entry point from model
+
+    recursing_ = false;
+
+    // Explicit expansions determine their own leaf status.  If the
+    // node is an explicit expansion we don't have to determine
+    // which TreeLevel is applicable and we can deal with it now.
+    // This is important as further down we will assume that the
+    // node is a part of a navigable structure to the tree root...
+    if (node instanceof TreeNodeExpansion)
+    {
+      return ((TreeNodeExpansion)node).isLeaf(node);
+    }
+    
+  	//System.out.println("AnyTreeLevel.isLeaf " + node);
+  	if (node == null)
+    {
+      System.out.println("AnyTreeLevel.isLeaf(node) null!");
+  	  return true;
+    }
+    
+  	Vectored v = resolveDataNode(context_, false);
+  	
+  	if (v == node)
+  	  return false; // root level
+  	  
+  	// When dealing with levels below the root, isLeaf(node, path) can
+    // be called when the current context in the sub-AnyTreeLevel
+  	// node is 'stale' - that is it refers to a different
+  	// sub-tree to that in which the given node resides.
+  	// Since we are not given the parent node we have to
+  	// build the path back to the root and navigate it
+  	// Note this method is only called on the root node.
+  	Composite current = (Composite)node;
+    buildLeafPath(current, v);
+    
+  	boolean ret = isLeaf((Any)node, leafPath_);
+  	leafPath_.empty();
+  	return ret;
+  }
+  
+  private void buildLeafPath(Composite start, Any end)
+  {
+  	if (leafPath_ == null)
+  	  leafPath_ = AbstractComposite.queue();
+  	
+  	leafPath_.addFirst(start);
+  	while (end != start)
+  	{
+  		start = start.getParent();
+  		leafPath_.addFirst(start);
+  	} 
+  }
+
+  public boolean isLeaf(Any node, Queue leafPath) throws AnyException
+  {
+  	//System.out.println("AnyTreeLevel.isLeaf(Any, Queue) " + node);
+  	//System.out.println("AnyTreeLevel.isLeaf(Any, Queue) " + leafPath.entries());
+    // shouldn't happen
+    if (leafPath.entries() == 0)
+    {
+      throw new AnyException("AnyTreeLevel.isLeaf(Any, Queue) empty queue");
+    }
+      
+  	// Prevailing condition is that context_ has been set
+  	// correctly by our parent.  We then resolve the vector root
+  	// for this level and consume elements from the queue
+  	// until the vector root is reached.  The next element in
+  	// the queue will either be the given node (thus identifying
+  	// this instance as the relevant tree level) or the context
+  	// for the next level.
+  	
+  	Vectored v       = resolveDataNode(context_, false);
+  	Any      current = leafPath.removeFirst();
+  	while (leafPath.entries() != 0 &&
+           current != v)
+    {
+      current = leafPath.removeFirst();
+    }
+    
+    // shouldn't happen
+    if (current != v)
+    {
+      throw new AnyException("AnyTreeLevel.isLeaf(Any, Queue) current != v");
+    }
+    
+    current = leafPath.removeFirst();
+    if (current != node)
+    {
+      // not this level, try next
+      if (isRecursive())
+        recursing_ = true;
+      nextLevel_.setContext(current);
+      return nextLevel_.isLeaf(node, leafPath);
+    }
+    else
+    {
+      // Recursive levels can have an Inq leaf expression.  If we encounter
+      // a recursive level there will be no further sub-levels to navigate.
+      if (isRecursive())
+      {
+        return doLeafExpression((Any)node);
+      }
+      
+      // This level is the one node pertains to. The case of node
+      // being an Expansion has already been handled.
+  		if (nextLevel_ != TreeLevel.terminalLevel__)
+  		  return false;
+  		
+  		if (expansionNodes_ == null)
+  		  return true;
+  		else
+  		  return false;
+  	}
+  }
+  
+  /**
+   * Supply the rendering information for the Inq child nodes
+   * represented at this level
+   */
+	public void setRenderInfo(RenderInfo r)
+	{
+		renderer_ = new AnyRenderer(r);
+	}
+	
+	public boolean isEditable(Any a)
+	{
+		if (!isExpansionNode(a))
+		  return renderer_.isEditable();
+		else
+		{
+			TreeNodeExpansion e = (TreeNodeExpansion)a;
+			return e.isEditable(a);
+		}
+	}
+	
+	public Any getResponsibleFor(Any a)
+	{
+		try
+		{
+			if (!isExpansionNode(a))
+			  return renderer_.getRenderInfo().resolveResponsibleData(a);
+			else
+			{
+				TreeNodeExpansion e = (TreeNodeExpansion)a;
+				return e.getResponsibleFor(a);
+			}
+		}
+		catch (AnyException e)
+		{
+			throw new RuntimeContainedException(e);
+		}
+	}
+	
+	public Any getSelectionFor(Any a)
+	{
+		try
+		{
+			if (!isExpansionNode(a))
+			  return a;
+			else
+			{
+				TreeNodeExpansion e = (TreeNodeExpansion)a;
+				return e.getResponsibleFor(a);
+			}
+		}
+		catch (AnyException e)
+		{
+			throw new RuntimeContainedException(e);
+		}
+	}
+	
+	public Any getKeySelectionFor(Any a)
+	{
+    if (!isExpansionNode(a))
+    {
+      Composite c = (Composite)a;
+      return c.getNameInParent();
+    }
+    else
+    {
+      return null;
+    }
+	}
+
+  public void setLeafExpression(Any isLeaf)
+  {
+    isLeaf_ = AnyComponent.verifyCall(isLeaf);
+  }
+
+	/**
+	 * Supply rendering information for successive explicit
+	 * expansion declarations.
+	 */
+	public void addExpansion(RenderInfo r)
+	{
+    if (expansionNodes_ == null)
+      expansionNodes_ = AbstractComposite.array();
+    
+    expansionNodes_.add(new Expansion(new AnyRenderer(r)));
+  }
+  
+  // TreeLevel expansion - TBD
+	
+  // Build the tree path in the Array path and return the
+  // index of the affected node, or -1 if not applicable.
+  public int translateEvent(Event   e,
+                            Any     baseType,
+                            boolean force,
+                            Any     startAt,
+                            Array   path,
+                            Iter    nodeSpecIter) throws AnyException
+  {
+  	//System.out.println("AnyTreeLevel.translateEvent starts at " + startAt);
+  	setContext(startAt);
+  	Vectored v = resolveDataNode(context_, force);
+  	
+  	//System.out.println("AnyTreeLevel.translateEvent v is " + v);
+  	// From startAt consume node specification elements
+  	// until we reach v, which represents the Inq parent
+  	// of the tree nodes at a given level.
+  	
+  	Map current = (Map)startAt;
+  	
+		while (current != v && nodeSpecIter.hasNext())
+		{
+			Any a = nodeSpecIter.next();
+    	//System.out.println("AnyTreeLevel.translateEvent key " + a);
+			current = (Map)current.get(a);
+    	//System.out.println("AnyTreeLevel.translateEvent current " + current);
+		}
+		
+		if (!nodeSpecIter.hasNext() || current != v)
+		{
+			// getting here means we have exhausted the path
+			// or the Inq parent node could not be found.
+			// Either way, this level cannot be relevant to the
+			// formation of the tree path to the TreeModelListsner
+			// (Note that this is also true if the event relates
+			// to the root node.)
+		  return -1;
+		}
+  	//System.out.println("AnyTreeLevel.translateEvent reached v " + nodeSpecIter.hasNext());
+		
+		// The Inq node given by the next element in the path
+		// would be one that was returned by getChild() etc.
+		Any nextKey  = nodeSpecIter.next();
+  	//System.out.println("AnyTreeLevel.translateEvent nextKey " + nextKey);
+  	if (!current.contains(nextKey))
+  	{
+  		// assume deletion
+  		Any ec = e.getContext();
+  		if (ec != null)
+  		  path.add(ec);
+  		return -1;
+  	}
+  	
+	  Any nextPath = current.get(nextKey);
+	  
+	  // Add the child node of the Inq parent to the tree path.
+	  // It may be the ultimate node, and therefore the child
+	  // node in the TreeModelEvent, but that is handled in the
+	  // enclosing AnyTreeModel.
+	  path.add(nextPath);
+	  
+	  // Likewise the index of the child. If the event is of
+	  // base type NODE_REMOVED then this is derived from the
+	  // event id map and handled in the enclosing AnyTreeModel.
+	  int childIndex = (baseType.equals(EventConstants.NODE_REMOVED) ||
+                      baseType.equals(EventConstants.NODE_REMOVED_CHILD))
+	                 ? -1
+	                 : v.indexOf(nextKey);
+	  
+	  // Go on to the next level.  If the event was actually
+	  // relevant to this level then the next level should fail
+	  // to navigate from the startAt argument to the next level
+	  // Inq parent.  Thus we return the deepest index that can
+	  // be determined.
+    recursing_ = true;
+	  int nextLevelIndex = nextLevel_.translateEvent(e,
+									                                 baseType,
+									                                 force,
+									                                 nextPath,
+									                                 path,
+									                                 nodeSpecIter);
+
+    return (nextLevelIndex != -1) ? nextLevelIndex : childIndex;
+  }
+
+	public Component getTreeCellRendererComponent(JTree   tree,
+	                                              Object  value,
+	                                              boolean selected,
+	                                              boolean expanded,
+	                                              boolean leaf,
+	                                              int     row,
+	                                              boolean hasFocus)
+  {
+  	Any a = (Any)value;
+		
+		if (isExpansionNode(a))
+    {
+      TreeNodeExpansion e = (TreeNodeExpansion)a;
+      return e.getTreeCellRendererComponent(tree,
+                                            a,
+                                            selected,
+                                            expanded,
+                                            leaf,
+                                            row,
+                                            hasFocus);
+    }
+    else
+    {
+      if (isRecursive())
+      {
+        return renderer_.getTreeCellRendererComponent(tree,
+                                                      a,
+                                                      selected,
+                                                      expanded,
+                                                      leaf,
+                                                      row,
+                                                      hasFocus);
+        // Its undoubtedly true that the tree can call us
+        // without the state of the (only) AnyTreeLevel having
+        // been setup by calls to getChild et al.  This is a
+        // shame and now I wish I had implemented a recursive
+        // structure as an automatically growing set of tree
+        // levels as the structure demands.  Well, anyway, we
+        // need to restore the state of levelRootV_.  Our context
+        // has been reset to the top level by AnyTreeModel
+        //Vectored v = resolveDataNode(context_, false);
+        //buildLeafPath(a, v);
+      }
+      else
+      {
+        if (levelRootV_.containsValue(a))
+          return renderer_.getTreeCellRendererComponent(tree,
+                                                        a,
+                                                        selected,
+                                                        expanded,
+                                                        leaf,
+                                                        row,
+                                                        hasFocus);
+        // fall through to next level
+        return nextLevel_.getTreeCellRendererComponent(tree,
+                                                       value,
+                                                       selected,
+                                                       expanded,
+                                                       leaf,
+                                                       row,
+                                                       hasFocus);
+      }
+    }
+  }
+  
+  public DefaultTreeCellRenderer getDefaultTreeCellRenderer(Any a)
+  {
+		if (!isExpansionNode(a))
+		  return renderer_.getDefaultTreeCellRenderer();
+		else
+		{
+			TreeNodeExpansion e = (TreeNodeExpansion)a;
+			return e.getDefaultTreeCellRenderer(a);
+		}
+  }
+  
+  public TreeCellEditor getTreeCellEditor(Any a)
+  {
+		if (!isExpansionNode(a))
+	  {
+	  	if (editor_ == null)
+	  	  editor_ = new AnyComponentEditor(renderer_.getRenderInfo());
+		  return editor_;
+	  }
+		else
+		{
+			TreeNodeExpansion e = (TreeNodeExpansion)a;
+			return e.getTreeCellEditor(a);
+		}
+  }
+  
+  private Vectored resolveDataNode(Any root, boolean force) throws AnyException
+	{
+		//System.out.println ("AnyTableModel.resolveDataNode : " + root);
+		Vectored dataNode = levelRootV_;
+
+		if (dataNode == null || force || mustResolve_)
+		{
+	    dataNode = (Vectored)EvalExpr.evalFunc(Globals.process__.getTransaction(),
+																	      root,
+																	      recursing_ ? subRoot_ :
+                                                     levelRoot_);
+      levelRootV_ = dataNode;
+			
+			mustResolve_ = false;
+		}
+
+		return dataNode;
+	}
+	
+	private int getChildIndex(Vectored v, Object child)
+	{
+		if (isExpansionNode(child))
+		  return getExpansionNodeIndex(child);
+		  
+		int entries =  v.entries();
+    int count   = 0;
+		for (int i = 0; i < entries; i++)
+		{
+			Any a = v.getByVector(i);
+      
+			if (a == child)
+			  return count + expansionNodesOffset();
+        
+      count++;
+		}
+		return -1;
+	}
+	
+  private Any getChildNode(Vectored v, int index)
+  {
+  	if (nextLevel_ != TreeLevel.terminalLevel__) 
+  	{
+	  	if (expansionNodes_ != null &&
+	  	    index < expansionNodes_.entries())
+	  	{
+	  		return getExpansionNodeChild(index);
+	  	}
+	  	
+	  	index -= expansionNodesOffset();
+	  	
+	  	if (index < v.entries())
+	  	  return doChild(v, index);
+	  	else
+	  	  return null;
+  	}
+  	else
+  	{
+	  	if (index < v.entries())
+	  	  return doChild(v, index);
+	  	else
+	  	  return null;
+  	}
+  }
+  
+  private Any doChild(Vectored v, int index)
+  {
+    return v.getByVector(index);
+  }
+	
+  // We should always be on the swing thread here, so no need
+  // to take specific steps in this regard at this level.
+  private boolean doLeafExpression(Any node)
+  {
+    if (isLeaf_ == null)
+      return false;
+     
+    Map leafArgs = isLeaf_.getArgs();
+    Map args = leafArgs; // put originals back afterwards.
+    if (leafArgs == null)
+      leafArgs = AbstractComposite.simpleMap();
+    else
+      leafArgs = (Map)leafArgs.cloneAny();
+      
+    leafArgs.add(node__, node);
+    
+    Transaction t = Globals.process__.getTransaction();
+    isLeaf_.setTransaction(t);
+    isLeaf_.setArgs(leafArgs);
+
+    Any ret = null;
+    try
+    {
+      ret = isLeaf_.exec(getContext());
+    }
+    catch (AnyException e)
+    {
+      throw new RuntimeContainedException(e);
+    }
+    finally
+    {
+      //leafArgs_.empty();
+      isLeaf_.setArgs(args);
+      isLeaf_.setTransaction(Transaction.NULL_TRANSACTION);
+    }
+    
+    leafRes_.copyFrom(ret);
+    return leafRes_.getValue();
+  }
+  
+  // Must have a leaf expression if also wish to constrain children
+  // to branch nodes for an 'explorer' style interface
+  private int doEntries(Vectored v)
+  {
+    return v.entries();
+  }
+  
+	private int expansionNodesOffset()
+	{
+		return (expansionNodes_ != null) ? expansionNodes_.entries()
+		                                 : 0;
+	}
+	
+  // If this instance is intended to work as a level specifier for the
+  // a repeating structure that can nest to any level then this is true.
+  private boolean isRecursive()
+  {
+    return this == nextLevel_;
+  }
+  
+	private boolean isExpansionNode(Object child)
+	{
+		if (expansionNodes_ == null)
+		  return false;
+		
+		return expansionNodes_.contains((Any)child);
+	}
+	
+	private int getExpansionNodeIndex(Object child)
+	{
+		return expansionNodes_.indexOf((Any)child);
+	}
+	
+	private Any getExpansionNodeChild(int index)
+	{
+		return getExpansionNodeChild(index, null);
+	}
+	
+	private Any getExpansionNodeChild(int index, Any context)
+	{
+		TreeNodeExpansion e = (TreeNodeExpansion)expansionNodes_.get(index);
+		e.setContext((context != null) ? context : context_);
+    e.setParentTreeLevel(this);
+		return e.cloneAny();
+	}
+	
+  // When we return nodes from explicit expansion declarations
+  // we need to get the context given back to us for rendering
+  // so we return one of these.  They are only created once for
+  // each expansion declaration so we assume that the observer
+  // uses them as they are returned and does not rely on them in
+  // the interim.
+	static private class Expansion extends    AbstractAny
+	                               implements TreeNodeExpansion,
+                                            Cloneable
+	{
+		AnyRenderer        r_;
+    AnyComponentEditor editor_;
+		Any                context_;
+		
+		Expansion(AnyRenderer r)
+		{
+			r_      = r;
+      editor_ = new AnyComponentEditor(r_.getRenderInfo());
+		}
+    
+    public boolean isLeaf(Object node)
+    {
+      return true;
+    }
+
+    public boolean isEditable(Any a)
+    {
+      return r_.isEditable();
+    }
+    
+    public Any getResponsibleFor(Any a) throws AnyException
+    {
+      return r_.getRenderInfo().resolveResponsibleData(context_);
+    }
+    
+    public Component getTreeCellRendererComponent(JTree   tree,
+                                                  Any     value,
+                                                  boolean selected,
+                                                  boolean expanded,
+                                                  boolean leaf,
+                                                  int     row,
+                                                  boolean hasFocus)
+    {
+      return r_.getTreeCellRendererComponent(tree,
+                                             context_,
+                                             selected,
+                                             expanded,
+                                             leaf,
+                                             row,
+                                             hasFocus);
+    }
+
+    public DefaultTreeCellRenderer getDefaultTreeCellRenderer(Any a)
+    {
+      return r_.getDefaultTreeCellRenderer();
+    }
+
+    public TreeCellEditor getTreeCellEditor(Any a)
+    {
+		  return editor_;
+    }
+    
+    public void setContext(Any a)
+    {
+      context_ = a;
+    }
+    
+    public void setParentTreeLevel(TreeLevel level) {}
+    
+		public int hashCode()
+		{
+			return r_.hashCode();
+		}
+		
+		public boolean equals(Object o)
+		{
+			if (!(o instanceof Expansion))
+			  return false;
+			
+			Expansion e = (Expansion)o;
+			
+			return e.r_ == this.r_;
+		}
+		
+		public Object clone() throws CloneNotSupportedException
+		{
+			return super.clone();
+		}
+	}
+  
+  // A TreeNodeExpansion implementation that has as its children
+  // another tree.
+  static private class LevelExpansion extends    AbstractAny
+                                      implements TreeNodeExpansion,
+                                                 Cloneable
+  {
+    private TreeLevel level_;  // our children
+    private TreeLevel parent_; // the TreeLevel that we are contained in
+		private Any       context_;
+    
+    public boolean isLeaf(Object node)
+    {
+      try
+      {
+        return level_.isLeaf(node);
+      }
+      catch(AnyException e)
+      {
+        throw new RuntimeContainedException(e);
+      }
+    }
+  
+    public boolean isEditable(Any a)
+    {
+      return level_.isEditable(a);
+    }
+    
+    public Any getResponsibleFor(Any a) throws AnyException
+    {
+      return level_.getResponsibleFor(a);
+    }
+  
+    public Component getTreeCellRendererComponent(JTree   tree,
+                                                  Any     value,
+                                                  boolean selected,
+                                                  boolean expanded,
+                                                  boolean leaf,
+                                                  int     row,
+                                                  boolean hasFocus)
+    {
+      return level_.getTreeCellRendererComponent(tree,
+                                                 value,
+                                                 selected,
+                                                 expanded,
+                                                 leaf,
+                                                 row,
+                                                 hasFocus);
+    }
+  
+    public DefaultTreeCellRenderer getDefaultTreeCellRenderer(Any a)
+    {
+      return level_.getDefaultTreeCellRenderer(a);
+    }
+    
+    public TreeCellEditor getTreeCellEditor(Any a)
+    {
+      return level_.getTreeCellEditor(a);
+    }
+  
+    public void setContext(Any a)
+    {
+      context_ = a;
+    }
+
+    public void setParentTreeLevel(TreeLevel level)
+    {
+      parent_ = level;
+    }
+  }
+}

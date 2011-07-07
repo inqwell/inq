@@ -1,0 +1,176 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * PetStore Example
+ *
+ * Item type. Specific items for sale within a general product line
+ */
+
+package examples.petstore;
+
+#include <i18n.inq>
+
+typedef Item
+{
+  fields
+  (
+    string    Item  width=16 label={i18n}.ps.title.ITEM;
+    Product.Product;
+    Price     ListPrice label={i18n}.ps.title.PRICE;
+    Price     UnitCost;
+    Price     LastPrice label={i18n}.ps.title.LAST_PRICE;
+    LastPriceMove;
+    Supplier.Supplier;
+    ItemStatus Status;
+    Attribute Attr1;
+    Attribute Attr2;
+    Attribute Attr3;
+    Attribute Attr4;
+    Attribute Attr5;
+  )
+
+  construct
+  ({
+     call validate(Item = $this);
+  })
+
+  mutate
+  ({
+     call validate(Item = $this.new);
+  })
+
+  destroy
+  ({
+     // We never delete Items, we keep order history.
+     throw("Item - cannot destroy");
+  })
+
+  pkey
+  (
+    fields (Item)
+
+    #include <{db}/Item.pkey.sql>
+  )
+
+  key ByProduct
+  (
+    fields(Product)
+    auxcfg( map(
+    "prepared", true,
+    "read-sql", // column names must be in the same order as key fields spec
+      "
+        {select-stmt}
+        where I.product = ?
+      "
+    ))
+  )
+
+  // This key is the same as ByProduct but has a maximum instance count
+  // of 1. We define a key like this simply to determine whether a Product
+  // has any associated Items (of which there could be many) without
+  // loading them all by doing so. Capped keys cannot be cached.
+  key ByProductCheck max=1 cached=false
+  (
+    fields(Product)
+    auxcfg( map(
+    "prepared", true,
+    "read-sql", // column names must be in the same order as key fields spec
+      "
+        {select-stmt}
+        where I.product = ?
+      "
+    ))
+  )
+
+  key ByMinUnitCost
+  (
+    fields(UnitCost)
+
+    eligible
+    (
+      // This key is cached while at the same time containing an inequality.
+      // To maintain a correct cache when the field is changed the
+      // eligibility expression must match the where-clause. Inq uses
+      // this expression to maintain the cache when new Items are
+      // created or existing items have their UnitCost field updated.
+      $this.instance.UnitCost >= $this.key.UnitCost
+    )
+
+    auxcfg( map(
+    "prepared", true,
+    "read-sql",
+      "
+        {select-stmt}
+        where I.unitcost >= ?
+      "
+    ))
+  )
+
+  // By convention, a general-purpose filter key is called Filter (unless
+  // you have more than one such key :-)  ).
+  // Because the fields refer to other types, this key will not be cached
+  // by default.
+  //    Note - this is *not* the same as saying that the instances
+  //    it returns on a given invocation are not cached, they are, so
+  //    everyone is still dealing with the same reference to support
+  //    transactions and locking. It *does* mean that whenever the
+  //    key is used in read() the SQL server will be accessed.
+  // Not caching this key is the preferred condition because:
+  //   1. the SQL (in an include file) uses such things as pattern
+  //      matching, making an eligibility expression quite complex
+  //   2. the key is only used by interactive users, not batch processing,
+  //      so its frequency of application may be low.
+  key Filter
+  (
+    fields (Category.Category,
+            Product.Name,
+            typedef Price MinPrice,
+            typedef Price MaxPrice,
+            Supplier,
+            Status)
+ 
+    // Use an include file because the SQL cannot be expressed
+    // in SQL92
+    #include <{db}/Item.Filter.sql>
+  )
+
+  // Similarly a Search key. In this example, there is a single
+  // field 'SearchValue' which is applied to one or more underlying
+  // table columns according to the corresponding 'Active' flag.
+  // We look at Item.Item, Item.Attr1, Product.Name and
+  // Product.Description
+  // Limit the number of instances this key can return to 100
+  key Search max=100
+  (
+    fields (Product.Description SearchValue,
+            typedef Flag ItemActive,
+            typedef Flag Attr1Active,
+            typedef Flag NameActive,
+            typedef Flag DescrActive)
+           
+    #include <{db}/Item.Search.sql>
+  )
+  
+  // I/O resource binding
+  iobind (SimpleSqlIO, ps)
+}
+
+// Check Item instance is valid
+local function validate(any Item)
+{
+  if (!(Item.Item && 
+        Item.ListPrice >= 0 &&
+        Item.UnitCost >= 0 &&
+        Item.ListPrice >= Item.UnitCost &&
+        Item.Supplier &&
+        Item.Status
+       )
+     )
+    throw("Illegal Item instance " + Item);
+}
+

@@ -1,0 +1,36 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+// The Inq equivalent of the factorial function as written
+// recursively in Scheme:
+//
+//    (define (fact n)
+//      (if (= n 0)
+//        1
+//        (* n (fact (- n 1)))))
+//
+// so a mini-exercise in language comparison
+
+local function fact(decimal:0 n)
+{
+  (n == 0) ? 1 : n * call fact(n = n - 1);
+}
+
+// 200 was OK on my system but the stack will overflow if
+// the argument is too big. Don't know what other languages
+// do in this regard but mine managed about 220
+
+if (count(args) < 2)
+{
+  writeln($catalog.system.err, "usage: " + args[0] + " <number>");
+  exit(1);
+}
+
+writeln($catalog.system.out, call fact(n=args[1]));
+

@@ -1,0 +1,100 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+// Some traditional exception handling
+// Note - a nested transaction is like try:
+//   transaction
+//   {
+//     .
+//     .
+//   }
+//   catch
+//   {
+//     .
+//   }
+//   finally
+//   {
+//     .
+//   }
+
+try
+{
+  writeln($catalog.system.out, "try 1");
+}
+catch
+{
+  writeln($catalog.system.out, "catch 1");
+}
+
+
+try
+{
+  writeln($catalog.system.out, "try 2");
+}
+catch
+{
+  writeln($catalog.system.out, "catch 2");
+}
+finally
+{
+  writeln($catalog.system.out, "finally 2");
+}
+
+
+try
+{
+  throw("thrown 3");
+}
+catch
+{
+  writeln($catalog.system.out, "catch 3");
+}
+
+try
+{
+  writeln($catalog.system.out, "try (no catch)");
+}
+finally
+{
+  writeln($catalog.system.out, "finally \l");
+}
+
+// Uncomment if you want to try this
+/*
+try
+{
+  writeln($catalog.system.out, "throw (no catch)");
+  throw("thrown");
+}
+finally
+{
+  writeln($catalog.system.out, "finally \l");
+}
+*/
+
+// To do this one must comment out previous!
+
+try
+{
+  throw("thrown");
+}
+catch
+{
+  writeln($catalog.system.out, "catch");
+  writeln($catalog.system.out, "the exception was " + $stack.@exception);
+  writeln($catalog.system.out, "with identity " + identity($stack.@exception));
+  throw();
+}
+finally
+{
+  writeln($catalog.system.out, "the exception was " + $stack.@exception);
+  writeln($catalog.system.out, "with identity " + identity($stack.@exception));
+  writeln($catalog.system.out, "finally");
+}
+

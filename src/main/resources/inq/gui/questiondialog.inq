@@ -1,0 +1,189 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * General purpose confirmation dialog.
+ *
+ * This inq script supports a question dialog which is re-usable
+ * by other parts of the application.
+ *
+ * createQuestionDialogAt() defines the dialog as a context node
+ * because it is self-standing, rather than just a convenient
+ * grouping of components associated with an existing context.
+ * The dialog is placed at a path according to the given parameter.
+ * While perhaps not of much relevance to question
+ * dialogs, this means that any number of dialogs can be created.
+ *
+ * Local functions are defined that are attached to the OK and cancel
+ * events of the dialog.  These call the function arguments
+ * for OK and cancel that were passed by the caller to questionDialog().
+ * This function also accepts the instance of the dialog we wish to use.
+ * If not supplied the assumption is made that "$root.questionDialog" exists.
+ *
+ * Inq dialogs are application-modal by default, however functions that
+ * raise them still return to their caller. Thus the ok and cancel
+ * parameters are recorded for subsequent use in the dialog's OK and Cancel
+ * callbacks. Of course, if asynchronous events in the inq runtime cause
+ * the same dialog to be reused then things could get rather confusing - a
+ * given dialog instance will only remember the most recent set
+ * of callback functions passed to it.  The application must set
+ * up the necessary dialog instances and use them accordingly.
+ */
+
+package inq.gui.util;
+
+// Older - to be removed when apps like xylinq have been modified. Do not use.
+function createQuestionDialog(string dialogName = "questionDialog", any parent)
+{
+  if ($this.{dialogName})
+    return();
+
+	gDialog(parent) dialog;
+
+  call createDialog(dialog, parent);
+
+  add(dialog, path($this.{dialogName}));
+  dialog;
+}
+
+// Use this one, as it allows the dialog to be placed anywhere rather than
+// assuming it will be placed at $this.
+function createQuestionDialogAt(any dialogPath, any parent)
+{
+  if (!dialogPath)
+    any dialogPath = path($root.questionDialog);
+
+	gDialog(parent) dialog;
+
+  call createDialog(dialog, parent);
+
+  add(dialog, dialogPath);
+
+  dialog;
+}
+
+local function createDialog(any dialog, any parent)
+{
+  dialog.properties.hideOnOk     = true;
+  dialog.properties.hideOnCancel = true;
+  dialog.properties.contextNode  = true;
+  dialog.properties.minSize = array s = (200, 100);
+
+  // yuk - hide the icon if no parent!
+  if (parent)
+    dialog.properties.resizable = true;
+  else
+    dialog.properties.resizable = false;
+
+  gEvent(dialog, call dialogOK(),     event=(gDialogok));
+  gEvent(dialog, call dialogCancel(), event=(gDialogcancel));
+  //gEvent(dialog, gDialog=gDialogcancel, event=(gWclosing));
+
+  gTextArea question;
+  question.properties.lineWrap = true;
+  question.properties.fitText  = true;
+  question.properties.editable = false;
+  question.properties.wrapStyleWord = true;
+  question.properties.opaque = false;
+  question.properties.font = $uidefaults.Label.font;
+  question.properties.border = null;
+  question.properties.text = "QUESTION";
+  gLabel    icon;
+
+  gButton ok;
+  gButton cancel;
+
+  gEvent (ok, gDialog=gDialogok);
+  gEvent(cancel, gDialog=gDialogcancel);
+
+  ok.properties.text = "OK";
+  cancel.properties.text = "Cancel";
+
+  ok.properties.mnemonic = keycode(VK_K);
+  cancel.properties.mnemonic = keycode(VK_C);
+
+  set defaultable = (ok, cancel);
+  dialog.properties.defaultableButtons = defaultable;
+
+  func dialog.vars.okExpr;
+  func dialog.vars.cancelExpr;
+
+  layout ($stack, dialog,
+          "
+					 Table  Columns 5, icon=GRID_PREF, 5, msg1=GRID_FILL, button1=0.2, 5, button2=0.2, 5
+					   Rows 5,
+						      icon=GRID_FILL,
+									5,
+						      button=GRID_PREF,
+									5;
+           {
+               Cell icon icon Align tc icon
+               Cell msg1 icon button2 icon question
+               Cell button1 button ok
+               Cell button2 button cancel
+           }
+           ");
+}
+
+function questionDialog(any    dialog,
+                        string questionText  = "No Questions Asked!",
+                        string questionTitle = "Question",
+                        string okText        = "OK",
+                        string cancelText    = "Cancel",
+                        any    icon,
+                        func   okExpr,
+                        func   cancelExpr,
+                        int    maxLines,
+                        string default       = "OK")
+{
+
+	any dialog = dialog ? dialog : $root.questionDialog;
+
+	dialog.ok.properties.text       = okText;
+	dialog.cancel.properties.text   = cancelText;
+	dialog.question.properties.text = questionText;
+	dialog.question.properties.maxLineHeight  = maxLines;
+	dialog.question.properties.caretPosition  = 0;
+	dialog.properties.title         = questionTitle;
+  dialog.icon.properties.icon = icon ? icon : $uidefaults.OptionPane.questionIcon;
+
+	// Remember the call back functions in the variables of
+	// the dialog context
+	dialog.vars.okExpr     = okExpr;
+	dialog.vars.cancelExpr = cancelExpr;
+
+	if (default == "OK")
+	  dialog.properties.defaultButton = dialog.ok;
+	else
+	  dialog.properties.defaultButton = dialog.cancel;
+
+  // Pop up the dialog. Resize it so the label is visible in case it
+  // got bigger from last time.
+  show(dialog, true);
+  tofront(dialog);
+}
+
+local function dialogOK()
+{
+	xfunc($this.vars.okExpr);
+	setnull($this.vars.okExpr);
+	setnull($this.vars.cancelExpr);
+}
+
+local function dialogCancel()
+{
+	xfunc($this.vars.cancelExpr);
+	setnull($this.vars.okExpr);
+	setnull($this.vars.cancelExpr);
+}
+
+// Create a dialog with the default name. Assumes $root is the context!
+//call createQuestionDialog();
+
+// show(call createQuestionDialog());
+// call questionDialog(okText="Yes", focusTo="Cancel");
+

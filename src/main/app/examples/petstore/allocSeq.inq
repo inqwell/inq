@@ -1,0 +1,105 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * PetStore Example
+ *
+ * Allocate numbers using the Sequence type
+ */
+
+package examples.petstore;
+
+/**
+ * Generate a new value for the sequence given by Sequence.  If the
+ * specified set does not exist and <code>onDemand</code>
+ * is <code>true</code> the set will be created with the
+ * given <code>initValue</code>.
+ * @param Sequence The name of the sequence from which the new value
+ * will be generated.
+ * @param onDemand If <code>true</code>creates a set if one
+ * by the given <code>Sequence</code>
+ * does not currently exist.  Throws otherwise
+ * @param initValue Initial value for sequence if it does not
+ * currently exist. Defaults to 1
+ * @param localTxn If true then new Id will be allocated within a
+ * local transaction.  If false then allocation happens in the caller's
+ * transaction.  localTxn=true is the default and is preferred if
+ * the caller's transaction is long-lived. If the caller's transaction is
+ * short-lived then using that instead offers the benefit of the id not
+ * actually being allocated if the transaction fails.
+ * @throws If the set does not exist and onDemand is <code>false</code>;
+ * if <code>Sequence</code> is null.
+ */
+function getUniqueId(string  Sequence,
+                     boolean onDemand = true,
+                     int     initValue=1,
+                     boolean localTxn=false)
+{
+  if (!Sequence)
+    throw("Sequence name cannot be null or zero length");
+
+  if (localTxn)
+  {
+    transaction
+    {
+      any ret = call allocateId(Sequence, onDemand, initValue);
+    }
+  }
+  else
+    any ret = call allocateId(Sequence, onDemand, initValue);
+
+  ret;
+}
+
+/**
+ * The Sequence engine. Handles optional creation of a new
+ * sequence in a fail-safe way, including using the same
+ * sequence while it is in-creation.
+ */
+local function allocateId(any Sequence, any onDemand, any initValue)
+{
+  // Lock the code block.  We do this because we don't want
+  // one process to incur an exception because of primary key
+  // violation if there is a collision creating a Sequence.
+  any locker = "__sequence" + Sequence;
+
+  lock(locker);
+  if (read(Sequence, .))
+  {
+    int ret = Sequence.Value += 1;
+  }
+  else
+  {
+    // Check if we are creating the Sequence in the current transaction.
+    // This would only happen if we create a sequence on demand and then
+    // use it later in the same transaction. In such circumstances
+    // read() will not return the instance in the transaction awaiting
+    // creation.
+    any Sequence = new(Sequence);
+    Sequence.Sequence = Sequence;
+    if (any seq = iscreating(Sequence))
+      int ret = seq.NextId++;
+    else
+    {
+      if (!onDemand)
+        throw("Unique Id requested for non-existent set " + Sequence);
+
+      // We must assign the value before we create the object in the
+      // transaction, since subsequent mutations are ignored.
+      // This would be a problem in that there is a (small) window
+      // in which two processes could create the new sequence.  However,
+      // be have an explicit lock protecting the transaction in this respect,
+      // so everything is OK.
+      int ret = Sequence.Value = initValue;
+      Sequence.Value++;
+      create(Sequence);
+    }
+  }
+  unlock(locker);
+  ret;
+}
+

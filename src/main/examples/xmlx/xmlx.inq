@@ -1,0 +1,166 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+// Test ioXMLX stream type
+
+package xmltest;
+
+// A typedef to test meta data with
+typedef FooType
+{
+  fields
+  (
+    int    ProductId;
+    string HotFlag        width=5
+    (
+      H : "H" : "Hot";
+      M : "M" : "Warm";
+      E : "E" : "Cold";
+    )
+    string Comment        width=32;
+    float  Rate           width=5    format="0.000";
+    decimal:5  Big                   format="#,##0.00";
+    date   LastUpdated               format="dd MMM yyyy";
+  )
+
+  pkey
+  (
+    fields(ProductId)
+  )
+}
+
+// A test tag function. It changes the content and tag name and
+// applies one attribute
+local function tagFunc(any node,
+                       any parent,
+                       any nodeName,
+                       any ordinal,
+                       any content,
+                       any last,
+                       any descend,
+                       any attributes)
+{
+  // print the stack to see the args that were passed
+  writeln($catalog.system.out, .);
+
+  // Send back some content
+  content = "Stuff on my cat";
+
+  // Establish an attribute: stuff="toys"
+  string attributes.stuff = "toys";
+
+  // Change the tag name by returning it
+  // Result will be <cat stuff="toys"...
+  "cat";
+}
+
+//
+// Test starts here
+//
+
+// Declare stream
+ioXMLX x;
+
+// Leave output formatted as indented lines
+//x.properties.formatOutput = false;
+
+// Root of structure we will write
+omap m;
+
+// Some strings under tag <x>
+string m.x.a = "String A";
+string m.x.a1 = "String A1";
+string m.x.a3.a = "String AA";
+string m.x.a2 = "String A2";
+// test node set attribute (xml) and arrays (json)
+setnodeset(m, "joe");
+setnodeset(m.x, "fred");
+
+// A float to format under <y>
+float m.y.b = 3.1415927;
+
+// something that requires separators
+float m.y.c = 1234567.89;
+
+// Another top level tag <z>
+string m.z.c = "String C";
+  
+// Test null (generates an empty tag)
+any m.z.a3 = null;
+
+// Put a typedef instance in to test implicit formatting
+// and enums
+any m.z.fooinstance = new(FooType);
+m.z.fooinstance.Rate = 1.23456;
+m.z.fooinstance.Big = "3456789.01234";
+m.z.fooinstance.Comment = "Comments & a ' character, überslackers of the world unite";
+m.z.fooinstance.HotFlag = enum(FooType.HotFlag, M);
+
+// Tell the stream to include the metadata in the output
+x.properties.writeMeta = true;
+
+// Test specifying a tag name by path match. Has the
+// effect of changing would would have been <root><y>...
+// to <root><FooTagName>...
+object p = path($this.y);  // To protect path from being evaluated by {}
+any tagNames.{p} = "FooTagName";
+x.properties.tagNames = tagNames;
+
+// Test specifying a format by path match
+object p = path($this.y.b);
+any tagNames.{p} = "pi";
+any formatters.{p} = "#.###";
+x.properties.formatters = formatters;
+
+// Call the above tag function for anything
+// ending in z.c. Has the effect of turning <c>
+// into <cat> and applying an attribute.
+object p = path($this*z.c);
+any tagFuncs.{p} = cfunc f = call tagFunc();
+x.properties.tagFuncs = tagFuncs;
+
+// Test include/exclude by path match. Try switching round incl/excl
+set matches = (path($this.x));
+//x.properties.includes = matches;
+//x.properties.excludesBelow = matches;
+
+set prune = (path($this*x.a), path($this*x.a1));
+x.properties.excludesAt = prune;
+
+// Uncomment this line to produce any enum values as their external form
+//x.properties.enumExt = true;
+
+// Ok please get on with it now...
+
+// Write single xml item
+open(x, "test.xml", OPEN_WRITE);
+writestream(x, m);
+close(x);
+
+// Try json. When changing the o/p format must do so
+// before opening the stream. Otherwise XML text is assumed
+// Write single json item
+x.properties.jsonOutput = true;
+open(x, "test.json", OPEN_WRITE);
+writestream(x, m);
+close(x);
+
+// Test writing multiple items
+x.properties.writeMultiple = true;
+x.properties.xmlOutput = true;
+open(x, "testm.xml", OPEN_WRITE);
+writestream(x, m);
+writestream(x, m);
+close(x);
+
+x.properties.jsonOutput = true;
+open(x, "testm.json", OPEN_WRITE);
+writestream(x, m);
+writestream(x, m);
+close(x);

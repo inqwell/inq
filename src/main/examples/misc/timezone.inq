@@ -1,0 +1,31 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+// Inq's "timezone" type
+
+local function dumpProperties(any tz)
+{
+  writeln($catalog.system.out, "display name: " + tz.properties.displayName);
+  writeln($catalog.system.out, "short display name: " + tz.properties.shortDisplayName);
+  writeln($catalog.system.out, "dst savings: " + tz.properties.DSTSavings);
+  writeln($catalog.system.out, "is dst in effect today: " + tz.properties.DSTToday);
+}
+
+// What happens depends on your locale
+writeln($catalog.system.out, "Your local timezone:");
+timezone tz;
+call dumpProperties(tz);
+
+tz = "EST";
+call dumpProperties(tz);
+
+tz = "CET";
+call dumpProperties(tz);
+
+

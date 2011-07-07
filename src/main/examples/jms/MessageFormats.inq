@@ -1,0 +1,148 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/*
+ * $Archive:  $
+ * $Author: sanderst $
+ * $Revision: 1.5 $
+ * $Date: 2011-04-10 22:19:25 $
+ */
+
+/**
+ * MessageFormats.inq
+ *
+ * Following the pattern of the GlassFish(tm) example
+ * of the same name, this example creates and manipulates
+ * the various message types of Bytes, Text and Map
+ * It does not send the messages.
+ */
+
+#include<SampleUtilities.inq>
+
+local function handleBytesOrStreamMessage(any fooMessage, any byteData)
+{
+  writeln($catalog.system.out, "Message type is " + fooMessage.properties.messageType);
+
+  ioMq mqStream;  // A stream for writing to a bytes or stream message
+
+  open(mqStream, "mq://fooMessage", OPEN_WRITE);
+  writestream(mqStream, byteData);
+
+  close(mqStream);
+
+  open(mqStream, "mq://fooMessage", OPEN_READ);
+  mqStream.properties.readTo = bytearray(16) bytesIn;
+  any in = readstream(mqStream);
+  writeln($catalog.system.out, in);
+
+  writeln($catalog.system.out, "Write and read an integer value 1234");
+
+  // Write an integer
+  open(mqStream, "mq://fooMessage", OPEN_WRITE);
+  writestream(mqStream, 1234);
+  close(mqStream);
+
+  // Read it back
+  open(mqStream, "mq://fooMessage", OPEN_READ);
+  mqStream.properties.readTo = int i;
+  any in = readstream(mqStream);
+  writeln($catalog.system.out, in);
+  close(mqStream);
+}
+
+any connFactory = call getConnectionFactory();
+any connection = mqcreateconnection(connFactory);
+
+// Create a session from the connection:
+//   auto-acknowledge mode
+//   not transacted
+any session = mqcreatesession(connection, false, AUTO_ACKNOWLEDGE);
+
+/*
+ * Create a BytesMessage, then write it from an array of
+ * bytes (signed 8-bit integers). 
+ * Reset the message for reading, then read the bytes into a
+ * second array.
+ * A BytesMessage is an undifferentiated stream of bytes that can
+ * be read in various formats.
+ *
+ * Inq note - bytes messages are not completely supported yet.
+ * We need a stream metaphor to allow read/write of the various
+ * value types as well, but this is low priority at the moment.
+ */
+
+// One way of getting bytes into a bytes message
+bytearray byteData = (-128, 127, -1, 0, 1, -64, 64);
+any bytesMessage = mqcreatebytesmessage(session, byteData);
+// Reset the message for reading
+mqresetmessage(bytesMessage);
+
+// One way to get bytes out is to fetch them according to the
+// message's current buffer size. This defaults to 128 bytes,
+// but we'll set it to 16 for this exercise. The length property
+// is valid after the bytes have been read.
+bytesMessage.properties.bufferSize = 16;
+any bytesIn = bytesMessage.properties.bytes;
+writeln($catalog.system.out, "Reading BytesMessage " +
+                             bytesMessage.properties.length +
+                             " bytes long:");
+writeln($catalog.system.out, bytesIn);
+
+// Another way to manage bytes messages more generally
+call handleBytesOrStreamMessage(fooMessage = bytesMessage, byteData);
+
+/*
+ * Inq treates bytes and stream messages the same
+ */
+any streamMessage = mqcreatestreammessage(session);
+call handleBytesOrStreamMessage(fooMessage = streamMessage, byteData);
+
+/* 
+ * Create, write, and display the contents of a TextMessage.
+ * A TextMessage contains a String of any length. 
+ */
+any textMessage = mqcreatetextmessage(session);
+textMessage.properties.text = "This is a text message.";
+writeln($catalog.system.out, "Reading TextMessage:");
+writeln($catalog.system.out, " " + textMessage.properties.text);
+
+/* 
+ * Create and write a MapMessage, then display its contents in
+ * a different order.
+ * A MapMessage contains a series of name/value pairs.
+ * The name is a string; the value can be of various types.
+ * The receiving program can read any or all of the values,
+ * in any order.
+ */
+any mapMessage = mqcreatemapmessage(session);
+// In the Java example the map keys have spaces in them.
+// Hmmm. We can do that using indirection
+any str = "Message type";
+any integer = "An Integer";
+any dbl = "A Double";
+
+any mapMessage.{str} = "Map";
+any mapMessage.{integer} =  3456;
+any mapMessage.{dbl} = 1.23456789d;
+writeln($catalog.system.out, "Reading MapMessage in a different order from the way it was generated:");
+writeln($catalog.system.out, " Type: " + mapMessage.{str});
+writeln($catalog.system.out, " Double: " + mapMessage.{dbl});
+writeln($catalog.system.out, " Integer: " + mapMessage.{integer});
+
+// Stream messages are supported but as of this release there is not
+// yet any scripting support to manipulate the message body. A url/stream
+// metaphor will likely be added in a future release. This will also
+// support the various fundamental types in a bytesmessage.
+
+writeln($catalog.system.out, "\i terminating.....");
+
+// Terminate. Must exit explicitly as (most likely) the
+// JMS runtime has started other threads
+exit(0);
+

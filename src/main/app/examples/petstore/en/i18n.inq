@@ -1,0 +1,134 @@
+/*
+ * i18n.inq
+ *
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * Petstore Internationalised Constants - English
+ */
+ 
+package examples.petstore;
+
+any at = path($catalog.en);
+
+// By using the form
+//   any <path> = "String Literal";
+// we are aliasing the string literal, which is a constant.
+
+any {at}.ps.button.OK = "OK";
+
+any {at}.ps.general.ITEM_STATUS     = "Status";
+any {at}.ps.general.ORDER_STATUS    = "Status";
+any {at}.ps.general.SUPPLIER_STATUS = "Status";
+any {at}.ps.general.ACCOUNT_STATUS  = "Status";
+any {at}.ps.general.CARD_TYPE       = "Card Type";
+any {at}.ps.general.FLAG            = "Flag";
+any {at}.ps.general.ITEMS           = "Items";
+any {at}.ps.general.ADD_ITEM        = "Add Item";
+any {at}.ps.general.LOOKUP          = "Lookup";
+any {at}.ps.general.EXPIRES         = "Expires";
+any {at}.ps.general.LAST_UPDATED    = "Last Updated";
+any {at}.ps.general.FROM_DATE       = "From";
+any {at}.ps.general.TO_DATE         = "To";
+any {at}.ps.general.ALL             = "All";
+any {at}.ps.general.MIN_PRICE       = "Min Price";
+any {at}.ps.general.MAX_PRICE       = "Max Price";
+any {at}.ps.general.CATEGORY        = "Category";
+
+any {at}.ps.title.DASHBOARD         = "Petstore Dashboard";
+any {at}.ps.title.MY_ACCOUNT        = "My Account";
+any {at}.ps.title.ACCOUNT_DETAILS   = "Account Details";
+any {at}.ps.title.NEW_ORDER         = "New Order";
+any {at}.ps.title.MY_ORDERS         = "My Orders";
+any {at}.ps.title.BROWSE_ITEMS      = "Browse Items";
+any {at}.ps.title.PLACE_ORDER       = "Place Order";
+any {at}.ps.title.CHOOSE_PET        = "Choose A Pet";
+any {at}.ps.title.COLOURS_VARY      = "Colour and Shade Will Vary";
+any {at}.ps.title.TOTAL             = "Total";
+any {at}.ps.title.SHIPPING          = "Shipping Address";
+any {at}.ps.title.BILLING           = "Billing Address";
+any {at}.ps.title.CARD_DETAILS      = "Card Details";
+any {at}.ps.title.FILTER            = "Filter";
+any {at}.ps.title.ITEMS             = "Items";
+any {at}.ps.title.ORDERS            = "Orders";
+any {at}.ps.title.FIRST_NAME        = "First Name";
+any {at}.ps.title.LAST_NAME         = "Last Name";
+any {at}.ps.title.CATEGORY          = "Category";
+any {at}.ps.title.DESCRIPTION       = "Description";
+any {at}.ps.title.NAME              = "Name";
+any {at}.ps.title.ADDR1             = "Address Line 1";
+any {at}.ps.title.ADDR2             = "Address Line 2";
+any {at}.ps.title.SHIP_ADDR1        = "Ship Addr Line 1";
+any {at}.ps.title.SHIP_ADDR2        = "Ship Addr Line 2";
+any {at}.ps.title.CITY              = "City";
+any {at}.ps.title.STATE             = "State";
+any {at}.ps.title.ZIP               = "ZIP";
+any {at}.ps.title.COUNTRY           = "Country";
+any {at}.ps.title.PHONE             = "Phone";
+any {at}.ps.title.CARD_NUMBER       = "Card Number";
+any {at}.ps.title.EXPIRY_DATE       = "Expiry Date";
+any {at}.ps.title.QUANTITY          = "Quantity";
+any {at}.ps.title.PRICE             = "Price";
+any {at}.ps.title.LAST_PRICE        = "Last Price";
+any {at}.ps.title.ITEM              = "Item";
+any {at}.ps.title.UNIT_PRICE        = "Unit Price";
+any {at}.ps.title.TOTAL_PRICE       = "Total Price";
+any {at}.ps.title.ORDER_NUMBER      = "Order Number";
+any {at}.ps.title.DATE              = "Date";
+any {at}.ps.title.PRODUCT           = "Product";
+any {at}.ps.title.EDIT_ITEMS        = "Edit Items";
+
+any {at}.ps.question.CANCEL         = "Cancel Order - Are You Sure?";
+any {at}.ps.question.PROCEED_BAD_CC = "Proceed with bad\ncredit card info?";
+
+any {at}.ps.message.ORDER_CONFIRMED = "Your order number {0} has been placed.\n\nThank you for your custom and enjoy your pets!";
+
+any {at}.ps.chooser.TOO_MANY_ROWS  = "The search for ''{0}'' matches on {1} items.\nPlease narrow your search";
+any {at}.ps.chooser.ITEM_NOT_FOUND = "There is no pet that matches on ''{0}''";
+any {at}.ps.chooser.CHOOSER        = "Chooser";
+
+any {at}.ps.button.OK              = "OK";
+any {at}.ps.button.CONFIRM         = "Confirm";
+any {at}.ps.button.CANCEL          = "Cancel";
+any {at}.ps.button.DISCARD         = "Discard";
+any {at}.ps.button.FILTER          = "Filter";
+any {at}.ps.button.RESET           = "Reset";
+any {at}.ps.button.USE_SHIPPING    = "Use Shipping Address";
+any {at}.ps.button.STATUS_ALL      = "All";
+any {at}.ps.button.MY_ACCOUNT      = "My Account";
+any {at}.ps.button.MY_ORDERS       = "My Orders";
+any {at}.ps.button.ITEMS           = "Items";
+any {at}.ps.button.EDIT_ITEMS      = "Edit Items";
+any {at}.ps.button.EXIT            = "Exit";
+any {at}.ps.button.NEW_ORDER       = "New Order";
+any {at}.ps.button.ADD_TO_ORDER    = "Add To Order";
+any {at}.ps.button.REMOVE_ITEM     = "Remove Item";
+any {at}.ps.button.PLACE_ORDER     = "Place Order";
+any {at}.ps.button.SAVE            = "Save";
+any {at}.ps.button.CANCEL          = "Cancel";
+any {at}.ps.button.NAME            = "Name";
+any {at}.ps.button.DESCR           = "Description";
+any {at}.ps.button.MISC            = "Misc";
+any {at}.ps.button.ITEM            = "Item";
+any {at}.ps.button.FILE            = "File";
+any {at}.ps.button.PRINT_SUMMARY   = "Print Summary";
+any {at}.ps.button.PRINT_ORDER     = "Print Order";
+any {at}.ps.button.CLOSE           = "Close";
+any {at}.ps.button.OPEN_ONLY       = "Open Orders Only";
+
+any {at}.ps.account.SAVED          = "Account saved";
+
+any {at}.ps.exception.ORDER_CREATION = "Error Creating Order";
+any {at}.ps.exception.EMPTY_ORDER    = "Order is empty";
+any {at}.ps.exception.STATE_CHANGE   = "Illeal Order state transition";
+any {at}.ps.exception.INVENTORY      = "Inventory Error";
+any {at}.ps.exception.INSUFFICIENT_INVENTORY = "Insufficient Inventory";
+any {at}.ps.exception.REG_REPORTING  = "Regulatory Reporting";
+any {at}.ps.exception.NOT_INIT       = "Not Initialised";
+
+currency {at}.ps.CURRENCY = "GBP";
+ 

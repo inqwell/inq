@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<root>
+  <x nodeset="fred">
+    <a3>
+      <a>String AA</a>
+    </a3>
+    <a2>String A2</a2>
+  </x>
+  <FooTagName>
+    <pi>3.142</pi>
+    <c>1234567.9</c>
+  </FooTagName>
+  <z>
+    <cat stuff="toys">Stuff on my cat</cat>
+    <a3></a3>
+    <fooinstance typedef="xmltest.types.FooType">
+      <Comment field="Comment">Comments &amp; a &#039; character, überslackers of the world unite</Comment>
+      <HotFlag field="HotFlag">M</HotFlag>
+      <LastUpdated field="LastUpdated"></LastUpdated>
+      <ProductId field="ProductId"></ProductId>
+      <Rate field="Rate">1.235</Rate>
+      <Big field="Big">3,456,789.01</Big>
+    </fooinstance>
+  </z>
+  <INQmetadata>
+    <INQtypedef INQfqname="xmltest.types.FooType">
+      <INQfield INQname="HotFlag">
+        <INQwidth INQname="HotFlag">5</INQwidth>
+        <INQlabel INQname="HotFlag">HotFlag</INQlabel>
+        <INQenum INQinternal="H">Hot</INQenum>
+        <INQenum INQinternal="M">Warm</INQenum>
+        <INQenum INQinternal="E">Cold</INQenum>
+      </INQfield>
+      <INQfield INQname="LastUpdated">
+        <INQwidth INQname="LastUpdated">10</INQwidth>
+        <INQlabel INQname="LastUpdated">LastUpdated</INQlabel>
+      </INQfield>
+      <INQfield INQname="Big">
+        <INQisnumeric>true</INQisnumeric>
+        <INQwidth INQname="Big">10</INQwidth>
+        <INQlabel INQname="Big">Big</INQlabel>
+      </INQfield>
+      <INQfield INQname="Comment">
+        <INQwidth INQname="Comment">32</INQwidth>
+        <INQlabel INQname="Comment">Comment</INQlabel>
+      </INQfield>
+      <INQfield INQname="Rate">
+        <INQisnumeric>true</INQisnumeric>
+        <INQwidth INQname="Rate">5</INQwidth>
+        <INQlabel INQname="Rate">Rate</INQlabel>
+      </INQfield>
+      <INQfield INQname="ProductId">
+        <INQisnumeric>true</INQisnumeric>
+        <INQwidth INQname="ProductId">10</INQwidth>
+        <INQlabel INQname="ProductId">ProductId</INQlabel>
+      </INQfield>
+    </INQtypedef>
+  </INQmetadata>
+</root>

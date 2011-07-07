@@ -1,0 +1,19 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * Client Functions for Meta Data Usage
+ *
+ */
+
+package inq.meta;
+
+syncgui service metaCallback(any args, any callback)
+{
+  xfunc(callback, args);
+}
+

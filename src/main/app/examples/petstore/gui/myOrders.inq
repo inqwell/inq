@@ -1,0 +1,433 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * PetStore Example
+ *
+ * My Orders GUI
+ */
+
+package examples.petstore;
+
+local function createGUI(any externals)
+{
+  // Set this up as a shorthand for later use
+  any i18n = path($catalog.{$root.i18n});
+  
+  // Create a window
+  gWindow myOrders;
+  myOrders.properties.contextNode = true;
+  myOrders.properties.title = {i18n}.ps.title.MY_ORDERS;
+  myOrders.properties.icon = $catalog.icons.my_orders16;
+  
+  // Save the given externals. These are func values that are
+  // gateways to other parts of the system, for example raising the
+  // newOrder window from this window.
+  any myOrders.externals = externals;  
+
+  // Menu Bar
+  myOrders.properties.menuBar = call createMenu(context=myOrders, i18n);
+
+  gSplit tables;
+  
+  gTable orderTable;
+  gTable itemTable;
+  // Include a totals table. We only need one row. This must be done prior
+  // to layout
+  gTable totalsTable;
+  totalsTable.properties.visibleRows  = 1;
+  totalsTable.properties.showGrid     = false;
+  itemTable.properties.totalsTable    = totalsTable;
+  
+  any filterBar = call createFilterBar(context = myOrders, i18n);
+  
+  // Perform the layout.
+  // Notes:
+  //   1. Complex components like tables must know their context before
+  //      properties (like columns and modelRoot) can be set up so we
+  //      must place it into the Inq node space beneath the node (the
+  //      window) that defines the context before setting those up.
+  //   2. In this example we open a brace after the gSplit "tables".
+  //      In general, this syntax causes descent in the component
+  //      hierarchy and is most commonly seen when laying out menus.
+  //      Here it adds the components orderTable and itemTable as the two
+  //      that gSplit accommodates.  
+  layout(., myOrders, "//Geometry xy:vf filterBar
+                       tables
+                       {
+                         Row
+                         {
+                           Geometry d:f filterBar
+                           Caption {i18n}.ps.title.ORDERS; orderTable
+                         }
+                         Caption {i18n}.ps.title.ITEMS; itemTable
+                       }
+                       ");
+
+  call setupOrderTable(context = myOrders,
+                       orderTable,
+                       i18n);
+  call setupItemTable(context = myOrders,
+                      itemTable,
+                      i18n);
+
+  // Place in the node space
+  any $this.myOrders = myOrders;
+}
+
+local function createFilterBar(any context, any i18n)
+{
+  // Create the data the filter bar components will operate on.
+  // This is an instance of Order.Filter
+  any context.vars.filter = new(Order.Filter);
+  
+  // A check box. Either all orders are returned or just those
+  // with a Status of Open. In the key implementation, null will
+  // return all statuses.
+  gCheck cStatus;
+  cStatus.properties.checkedValue = enum(OStatus, O);
+  cStatus.properties.uncheckedValue = null;
+  cStatus.properties.renderInfo = renderinfo($this.vars.filter.Status, label={i18n}.ps.button.OPEN_ONLY);
+  
+  // Two date choosers for the date range
+  gDateChooser dcFromDate;
+  gDateChooser dcToDate;
+  dcFromDate.properties.renderInfo = renderinfo($this.vars.filter.FromDate, typedef=Order.OrderDate, format="dd MMM yyyy", width=8, label={i18n}.ps.general.FROM_DATE);
+  dcToDate.properties.renderInfo   = renderinfo($this.vars.filter.ToDate, typedef=Order.OrderDate, format="dd MMM yyyy", width=8, label={i18n}.ps.general.TO_DATE);
+  
+  // The from date cannot be null (which referring to Order.Filter
+  // means the field is ignored) so we are preventing the user from going
+  // back to the beginning of time.
+  dcFromDate.properties.nullText   = null;
+  
+  // There is not currently any direct support for (e.g.) preventing the
+  // to-date being less than the from-date. That would be useful. It could
+  // always be explicitly scripted but useful features like that should
+  // be part of the Inq runtime.... to be done!
+  
+  call resetFilter(context.vars.filter);
+  
+  gButton bFilter;
+  bFilter.properties.text = {i18n}.ps.button.FILTER;
+  bFilter.properties.icon = $catalog.icons.query;
+
+  gButton bReset;
+  bReset.properties.text = {i18n}.ps.button.RESET;
+  bReset.properties.icon = $catalog.icons.reset;
+
+  // Something to lay out the filter bar components in
+  gBox filterBar;
+  
+  // We can only decorate components with things like captions and
+  // borders within the layout, so here we do "filterBar { <contents> }"
+  // The alternative would have been layout(,. context, filterBar, "<contents>"); 
+  layout(., context,
+         "Caption tl {i18n}.ps.title.FILTER; filterBar
+          {
+            Table  Gap 5 Columns dateFrom=GRID_PREF, dateTo=GRID_PREF, reset=GRID_PREF, GRID_FILL, filter=GRID_PREF
+              Rows GRID_PREF,
+                   GRID_PREF;
+            {
+              Row 0
+              {
+                // A Caption is an alternative to using Label foo in a separate
+                // Row as other layout examples do in the petstore example. In
+                // some ways this is perhaps a little more clumsy and because
+                // the Caption contributes to the size of the component we
+                // need to use Align on the buttons to make them look right.
+                // You decide....
+                // The None keyword suppresses the default border that otherwise
+                // comes with a Caption.
+                Caption {i18n}.ps.general.FROM_DATE; None dcFromDate
+                Caption {i18n}.ps.general.TO_DATE;   None dcToDate
+                Align b bReset
+                ~
+                Align b bFilter
+              }
+              Cell 0 1 0 1 cStatus
+            }
+          }
+          ");
+
+  gEvent(bFilter, call doFilter());
+  gEvent(bReset,  call resetFilter($this.vars.filter));
+  
+  // When our context is known, perform any further initialisation required
+  // within it.
+  gEvent(bReset,  call contextEstablished(), event=(gContext));
+
+  // Return the parent filter bar container
+  filterBar;
+}
+
+local function createMenu(any context, any i18n)
+{
+  // Set up the menu bar
+  gMenuBar menuBar;
+
+  gMenu fileMenu;
+  fileMenu.properties.text={i18n}.ps.button.FILE;
+
+  // We can go to the New Order screen from My Orders
+  gMenuButton fileNew;
+  fileNew.properties.text={i18n}.ps.button.NEW_ORDER;
+  fileNew.properties.icon  = $catalog.icons.new_order16;
+  gEvent(fileNew, call newOrder());
+
+  // Generate a printable of the filtered orders
+  gMenuButton filePrintSummary;
+  filePrintSummary.properties.text={i18n}.ps.button.PRINT_SUMMARY;
+  filePrintSummary.properties.icon = $catalog.icons.pdf16;
+  gEvent(filePrintSummary, call printSummary());
+
+  // Generate a printable of the selected order
+  gMenuButton filePrintOrder;
+  filePrintOrder.properties.text={i18n}.ps.button.PRINT_ORDER;
+  filePrintOrder.properties.icon = $catalog.icons.pdf16;
+  gEvent(filePrintOrder, call printOrder());
+
+  // Close the window
+  gMenuButton fileClose;
+  fileClose.properties.text={i18n}.ps.button.CLOSE;
+  gEvent(fileClose, call menuClose());
+
+  // Layout the menus
+  layout(., context, menuBar,
+         "fileMenu
+          {
+            fileNew
+            Separator
+            filePrintSummary
+            filePrintOrder
+            Separator
+            fileClose
+          }
+          ");
+
+  // Bind properties
+  gProperty(filePrintOrder, enabled, renderinfo($this.orderTable.model.selectCount));
+  gProperty(filePrintSummary, enabled, renderinfo($this.orderTable.model.rowCount));
+
+  // Return value
+  menuBar;
+}
+
+local function setupOrderTable(any context, any orderTable, any i18n)
+{
+  // Specify the columns to render. An ordered map is used, columns
+  // can later be referenced by their map key.
+  // All column definitions use a renderinfo. The simplest case just
+  // specifies the meta-data, which assumes a path of $this.<type>.<field>
+  // beneath the table's data root. 
+  omap columns;
+  any columns.orderid      = renderinfo(typedef=Order.Order);
+  any columns.orderdate    = renderinfo(typedef=Order.OrderDate, format="dd MMM yyyy");
+  any columns.totalprice   = renderinfo(typedef=Order.TotalPrice);
+  any columns.orderstatus  = renderinfo(typedef=Order.Status);
+  
+  orderTable.properties.columns = columns;
+  orderTable.properties.modelRoot      = path($this.vars.orders);
+  orderTable.properties.visibleRows    = 6;
+  orderTable.properties.visibleColumns = 0;  // Ensures container will show all columns
+
+  // We can select one order at a time, showing its details.
+  orderTable.properties.selectionMode = SINGLE_SELECTION;
+  
+  // Put stripes on the table rows
+  orderTable.properties.rowStyle = $catalog.guiFuncs.tableStripe;
+
+  gEvent(orderTable, call orderSelected(), event=(gSelection), firemodel=true);
+  
+  // return the table
+  orderTable;
+}
+
+local function doFilter()
+{
+  send filterOrders($this.vars.filter, at=path($this.vars.orders));
+}
+
+local function resetFilter(any filter)
+{
+  // Default the from date to today minus one month. Default
+  // the end date to open
+  filter.FromDate = dateadd(MONTH, -1, getdate());
+  filter.ToDate   = null;
+}
+
+local function contextEstablished()
+{
+  // We need our account to lookup orders against, so use the service
+  // we use in myAccount.inq to achieve this.
+  send initAccount();
+
+  // listen to $this.itemTable.properties.modelRoot so that when
+  // the items list is replaced the order total is displayed
+  listen ($this,
+          func f = 
+          {
+            call calcOrderTotal();
+          },
+          event  = (add, remove, replace),
+          path   = $this.vars.items  // NB listen path must be literal at the moment
+         );
+}
+
+local function orderSelected()
+{
+  if (!@event.isAdjusting)
+  {
+    // Using [@first] instead of [0] means null is returned if the vector is
+    // empty instead of throwing an exception. In the server, not receiving
+    // the Order argument means clear the list.
+    send getItems(@component.model.selection[@first].Order, at=$this.itemTable.properties.modelRoot);
+  }
+}
+
+local function newOrder()
+{
+  // Call the function (given in externals) to raise the newOrder window
+  xfunc($this.externals.newOrder);
+}
+
+local function printSummary()
+{
+  send orderSummary($this.vars.filter,
+                    ack = func f =
+                    {
+                      // Unglass the GUI
+                      $this.properties.disabledText = null;
+                      
+                      // From the invocation of updateOk (see updateOk
+                      // in gui/userStart.inq) and the report (in
+                      // psReports.inq) the item passed back is the
+                      // path to the generated output file.
+                      writeln($catalog.system.out, item);
+                      
+                      // All is OK, the report has been generated on the server.
+                      // Fetch the file back.
+                      call getReportFile(pdf = item);
+                    },
+                    @exception = func f =
+                    {
+                      // Unglass the GUI
+                      $this.properties.disabledText = null;
+                      
+                      // Alert the user something has gone wrong.
+                      // In an exception handling function stack contents TODO.... 
+                      call inq.gui.util:messageDialog
+                        (dialog       = $root.dialogs.ps.message,
+                         messageText  = msg + "\n" + stackTrace);
+                    }
+                    );
+  $this.properties.disabledText = "Generating order summary report...";
+}
+
+local function printOrder()
+{
+  // TODO avoid repetition from above
+  
+  $this.properties.disabledText = "Generating order detail report...";
+  send orderDetail($this.orderTable.model.selection[0].Order,
+                    ack = func f =
+                    {
+                      // Unglass the GUI
+                      $this.properties.disabledText = null;
+                      
+                      // From the invocation of updateOk (see updateOk
+                      // in gui/userStart.inq) and the report (in
+                      // psReports.inq) the item passed back is the
+                      // path to the generated output file.
+                      writeln($catalog.system.out, item);
+                      
+                      // All is OK, the report has been generated on the server.
+                      // Fetch the file back.
+                      call getReportFile(pdf = item);
+                    },
+                    @exception = func f =
+                    {
+                      // Unglass the GUI
+                      $this.properties.disabledText = null;
+                      
+                      // Alert the user something has gone wrong.
+                      // In an exception handling function stack contents TODO.... 
+                      call inq.gui.util:messageDialog
+                        (dialog       = $root.dialogs.ps.message,
+                         messageText  = msg + "\n" + stackTrace);
+                    }
+                    );
+}
+
+local function menuClose()
+{
+  hide($this);
+}
+
+local function getReportFile(any pdf)
+{
+  // TODO: explain
+  send inq.filexfer:requestFile
+         (filename = pdf,
+          ackFunc = func f =
+          {
+            switch
+            {
+              when (ack)
+              {
+                // $stack.queued tells us whether the request is waiting or
+                // has been started
+                writeln($catalog.system.out, "Ack: " + filename);
+              }
+
+              when (fileStart)
+              {
+                writeln($catalog.system.out, "Starting: " + filename);
+                
+                any $this.vars.reportFile = createtmpfile($process.loginName, ".pdf");
+                ioByte $this.vars.strm;
+                open($this.vars.strm, $this.vars.reportFile, OPEN_WRITE);
+              }
+
+              when (chunk)
+              {
+                writestream($catalog.system.out, filename + ": Chunk: " +
+                                                 counter + " of " + numChunks + " " +
+                                                 count(chunk) + " bytes received      \r");
+                writestream($this.vars.strm, chunk);
+              }
+
+              when (fileEnd)
+              {
+                writeln($catalog.system.out, "\nDone: " + filename);
+                close($this.vars.strm);
+                remove($this.vars.strm);
+                sysopen($this.vars.reportFile);
+              }
+            } // switch
+          },
+          excFunc = func f =
+          { 
+            // In fact the exception has had its contents
+            // split out into separate stack arguments. Should
+            // we include @exception as well for consistency?
+            //writeln($catalog.system.out, "\l " + @exception);
+            writeln($catalog.system.out, "\l " + msg);
+            writeln($catalog.system.out, "\l " + exInfo);
+            //throw(@exception);
+          });
+  
+}
+
+
+function showMyOrders(any externals)
+{
+  if (!$this.myOrders)
+    call createGUI(externals);
+
+  show($this.myOrders);
+}
+

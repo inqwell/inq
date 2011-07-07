@@ -1,0 +1,175 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * PetStore Example
+ *
+ * Login/authentication functionality.
+ */
+
+package examples.petstore;
+
+/**
+ * The login service for examples.petstore
+ *
+ * Every package that will accept logins must define a service
+ * called 'Login'. It typically performs authentication of the
+ * user. For this example we just proceed with the login. Inq
+ * has a users/roles/permissions package for a later release.
+ * Petstore will be updated to use it at some future time.
+ */
+service Login(string loginName, string passwd, string .package)
+{
+  // Leave compression off for now
+  //setcompressed($root.ochannel, true);
+  
+  // Check we are logging in as a known account
+  if (!call getAccount())
+  {
+    logwarning($catalog.ps.logger, "Unknown user {0}", $process.loginName);
+    call system:LoginDenied(reason="Unknown User", denied=true);
+  }
+  else
+  {
+    // Increment the number of users logged-in to petstore. The
+    // demo invites people to connect to a web-hosted server, so
+    // we limit the number of users to 30
+    lock("petstore__");
+  
+    if ($catalog.ps.vars.numUsers >= 50)
+    {
+      logwarning($catalog.ps.logger, "Login limit reached");
+
+      // Call an internal routine to reject the login.
+      call system:LoginDenied(reason="Too Many Users", denied=true);
+    }
+    else
+    {
+      loginfo($catalog.ps.logger,
+              "Login from {0} {1} {2}",
+              $process.address.properties.hostAddress,
+              $process.address.properties.canonicalHostName,
+              $process.localhostname);
+
+      // Declare a timer to run the idle timeout. Inq client/server
+      // maintains a connection and we extend the invitation
+      // to run this demo using the Inwell host, so there is a
+      // scripted timer to terminate the connection.
+      call initWebTimeout();
+      
+      // Call an internal routine to proceed with the login sequence,
+      // specifying the initial gui screen to be shown.
+      call system:LoginOK(url="gui/userStart.inq");
+
+      $catalog.ps.vars.numUsers++;
+    }
+  }
+}
+
+service Logout()
+{
+  // Decrement the number of users logged-in to petstore.
+  lock("petstore__");
+  $catalog.ps.vars.numUsers--;
+  
+  loginfo($catalog.ps.logger,
+          "Logged out: {0} {1} {2}",
+          $process.address.properties.hostAddress,
+          $process.address.properties.canonicalHostName,
+          $process.localhostname);
+}
+
+/**
+ * Any initialisation that the gui client requires.
+ */ 
+service initialise()
+{
+  // fetch the images
+  any icons.petstore     = image("gui/images/ps.png");
+  any icons.my_account   = image("gui/images/my_account_button.gif");
+  any icons.my_account16 = image("gui/images/my_account16.gif");
+  any icons.my_orders    = image("gui/images/my_orders.gif");
+  any icons.my_orders16  = image("gui/images/my_orders16.gif");
+  any icons.items        = image("gui/images/items.png");
+  any icons.exit         = image("gui/images/petexit.png");
+  any icons.items16      = image("gui/images/items16.png");
+  any icons.new_order    = image("gui/images/new_order.gif");
+  any icons.new_order16  = image("gui/images/new_order16.gif");
+  any icons.delete       = image("gui/images/delete.gif");
+  any icons.discard      = image("gui/images/trash.gif");
+  any icons.save         = image("gui/images/SaveDB.gif");
+  any icons.plus         = image("gui/images/Plus.png");
+  any icons.minus        = image("gui/images/Minus.png");
+  any icons.tick         = image("gui/images/Check.gif");
+  any icons.rightmouse   = image("gui/images/rightmouse.png");
+  any icons.badfield     = image("gui/images/badfield.gif");
+  any icons.query        = image("gui/images/DataExtract.gif");
+  any icons.reset        = image("gui/images/reset.gif");
+  any icons.pdf16        = image("gui/images/pdf16.jpeg");
+  any icons.cxlItem      = image("gui/images/deleteitem.png");
+  any icons.clear16      = image("gui/images/clear16.gif");
+  any icons.arrowup      = image("gui/images/arrow_up.png");
+  any icons.arrowdown    = image("gui/images/arrow_down.png");
+  
+  // Set up locale - actually hard-coded at the moment
+  any $root.i18n = "en";
+
+  // May be we should read the Product table and do this programatically!
+  // Hard code for now...
+  any icons.bird4 = image("gui/images/bird4.gif");
+  any icons.bird1 = image("gui/images/bird1.gif");
+  any icons.fish3 = image("gui/images/fish3.gif");
+  any icons.fish2 = image("gui/images/fish2.gif");
+  any icons.fish1 = image("gui/images/fish1.jpg");
+  any icons.fish4 = image("gui/images/fish4.gif");
+  any icons.cat1 = image("gui/images/cat1.gif");
+  any icons.cat3 = image("gui/images/cat3.gif");
+  any icons.dog2 = image("gui/images/dog2.gif");
+  any icons.dog4 = image("gui/images/dog4.gif");
+  any icons.dog5 = image("gui/images/dog5.gif");
+  any icons.dog6 = image("gui/images/dog6.gif");
+  any icons.dog1 = image("gui/images/dog1.gif");
+  any icons.lizard2 = image("gui/images/lizard2.gif");
+  any icons.lizard3 = image("gui/images/lizard3.gif");
+  
+  // Send the initialisation response to the client
+  send initResponse(icons, ccy = $catalog.{$root.i18n}.ps.CURRENCY);
+  //send initResponse(icons);
+}
+
+/**
+ * If running on the demo web host inqwell.com start a timer to
+ * check for client activity. If idle for too long terminate the
+ * connection
+ */
+local function initWebTimeout()
+{
+  any localhost = getlocalhost();
+  if (localhost.properties.hostName == "inqwell.com")
+  {
+    // Create and start the timer. The same thing is achieved here using
+    // properties as createtimer does in psProcessOrders.inq
+    timer $process.idleTimer;
+    $process.idleTimer.properties.period = 60000;  // check every minute
+    $process.idleTimer.properties.func = cfunc f =
+      {
+        if (datediff(MINUTE, $process.lastFromClient, getdate()) >= 10)
+        {
+          call system.server:logoutSession(message = "Terminating on idle timeout");  // TODO i18n
+          canceltimer(fromTimer);
+          loginfo($catalog.ps.logger,
+                  "Timed out: {0} {1} {2}",
+                  $process.address.properties.hostAddress,
+                  $process.address.properties.canonicalHostName,
+                  $process.localhostname);
+        }
+        
+        // Timer has a period, so there is no need to restart it.
+      };
+    starttimer($process.idleTimer, 60000);
+  }
+}

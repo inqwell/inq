@@ -1,0 +1,288 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * PetStore Example
+ *
+ * Spoof order processing functionality. Uses a timer to wake up a
+ * detached process periodically to 'process' outstanding orders.
+ *
+ * Items that are not yet shipped are randomly selected and progressed
+ * through their various states. Anyone viewing their orders in the
+ * client will see these state transitions in the GUI.
+ *
+ * Demonstrates starting processes, timers, read using merge, groupby
+ * and random numbers.
+ */
+
+package examples.petstore;
+
+/**
+ * When creating a process it is common to specify a 'start' function.
+ * A start function runs in the thread of the invoking process but at
+ * a context ($this) of the root of the node space of the new process.
+ * It is therefore possible to place data into the new process's node
+ * space prior to it being started.
+ *
+ * The start function completes before the new process runs. In this
+ * example we send the new process a service request. Immediately
+ * the new process runs, it will find the service request on its input
+ * channel.
+ */
+local function spoofStart(any process)
+{
+  // Just send the service request to the new process.
+  send doSpoof(@channel = process.ichannel);
+}
+
+service doSpoof()
+{
+  // Log uncaught exceptions
+  setexceptionhandler(cfunc f = {
+                                  // Just log the whole stack
+                                  logsevere($catalog.ps.logger, "{0}", .);
+                                }
+                     );
+
+  // Set up $root.i18n in case anyone references it. Assume en
+  any $root.i18n = "en";
+  
+  // Initialise the Regulatory Reporting system. See psRegulatory.inq
+  try
+  {
+    call initRegulatoryReporting();
+    call initSendPrices();
+  }
+  catch
+  {
+    logsevere($catalog.ps.logger, @exception);
+    logsevere($catalog.ps.logger, @stackTrace);
+  }
+  
+  // Create the timer.
+  // Notes:
+  //   1. The function processOrders() will be called after 10 seconds.
+  //   2. This timer does not specify a period so it will not restart automatically.
+  //      It is restarted in the handler function.
+  //   3. The optional 'start' argument defaults to true. We don't want to start the
+  //      timer before we have set its userInfo property, which is used to pass
+  //      the state of the items to be processed and their desired new state.
+  //   4. Start the timer - it will fire after a 10 second delay 
+  any $this.timer = createtimer(cfunc f = call processOrders(fromTimer), 10000, start=false);
+  any userInfo.oldState = new(OStatus, enum(OStatus, O));
+  any userInfo.newState = new(OStatus, enum(OStatus, A));
+  $this.timer.properties.userInfo = userInfo;
+  starttimer($this.timer, 10000);
+
+  // Tell the invoking process we are up and running. 
+  notify("spoof");
+  
+  loginfo($catalog.ps.logger, "Spoof order processor started");
+}
+
+// TODO: explain
+local function processOrders(any fromTimer)
+{
+  // Check all available OrderStatus instances whose Status is that carried
+  // in the timer.
+  any states = fromTimer.properties.userInfo;
+  try
+  {
+    any k = new(OrderStatus.ByStatus);
+    k.Status = states.oldState;
+    read(OrderStatus, k, setname="items");
+    
+    // When processing the Allocated items we also need to know if there
+    // are any remaining Open ones. We can only set status to Shipped when
+    // all items in the order are Allocated. Merge any Open items into
+    // the set
+    if (states.oldState == enum(OStatus, A))
+    {
+      k.Status = enum(OStatus, O);
+      read(OrderStatus, k, setname="items", merge=true);
+    }
+  
+    // Process any selected items to states.newState
+    if (count(items))
+      call progressOrders(items, states.newState);
+  }
+  catch
+  {
+    logsevere($catalog.ps.logger, @exception + @stackTrace);
+  }
+  finally
+  {
+    // We must always restart the timer.
+
+    // Alternate between Allocated and Shipped as the target state.
+    // Note that the map variable 'states' is still in the timer so
+    // just set its contents.
+    if (states.oldState == enum(OStatus, O))
+    {
+      states.oldState = enum(OStatus, A);
+      states.newState = enum(OStatus, S);
+    }
+    else
+    {
+      states.oldState = enum(OStatus, O);
+      states.newState = enum(OStatus, A);
+    }
+    starttimer(fromTimer, 10000);
+  }
+}
+
+local function progressOrders(any items, any newState)
+{
+  // Progress the OrderStatus by either
+  //   a. choosing one instance from each distinct order and set its Status
+  //      Allocated.
+  //   b. if all items in an order have been allocated then set all items
+  //      to Shipped
+  
+  // First, group the OrderStatus instances by their Order field
+  // Notes:
+  //   1. Create the root of the grouped structure
+  //   2. Perform the grouping using the groupby() function. Mandatory arguments
+  //      are 1) the structure to group, 2) a function that yields a value that
+  //      defines the grouping criteria, 3) a function that is called when
+  //      each new group is discovered and 4) a function called for each item being
+  //      grouped. A further optional argument is 'end' called for each distinct
+  //      value when grouping is complete.
+  smap grouped;
+  groupby(items,
+          cfunc distinctF = {
+                              // Return the value that defines the grouping
+                              // criteria. This is available as @name in startF
+                              // and foreachF. In this example this is the Order
+                              // field.
+                              $loop.OrderStatus.Order;
+                            },
+          cfunc startF    = {
+                              // Create a child container for the items that will
+                              // reside in this group, defined by @name. Later, when
+                              // accessing an individual item we require vector access
+                              // so use an omap.
+                              omap grouped.{@name};
+                            },
+          foreach = cfunc foreachF  =
+                            {
+                              // Place the current child in the group. Managed
+                              // typedef instances carry their primary key, which
+                              // is used as a path element in the grouped structure.
+                              // For any iteration, if the Order field is 12345 then
+                              // the result is a structure like
+                              //     grouped.12345.{k}.OrderStatus
+                              any k = getprimarykey($loop.OrderStatus);
+                              any grouped.{@name}.{k} = $loop;
+                            }
+         );
+
+  // If the new state is Allocated choose one instance in each Order and
+  // set its Status. If the new state is Shipped and all items in the
+  // Order are Allocated, set them to Shipped.
+
+  switch
+  {
+    when(newState == enum(OStatus, A))
+    {
+      foreach(grouped)
+        call allocateOne(items = $loop);
+    }
+    
+    when(newState == enum(OStatus, S))
+    {
+      foreach(grouped)
+        call shipAll(items = $loop);
+    }
+    
+    otherwise
+    {
+      // Log a warning message. The formatted message will contain the external
+      // value for the enumerated value (for example "Cancelled"). The enumext()
+      // function accepts one argument for dynamic reference to a field that is
+      // an enum or two arguments - a static type and a symbol or expression. To
+      // differentiate the latter we need the $stack. prefix 
+      logwarning($catalog.ps.logger,
+                 "Unexpected order status {0}",
+                 enumext(OStatus, $stack.newState));
+    }
+  }
+}
+
+local function allocateOne(any items)
+{
+  // Choose one item to allocate by generating a random integer in the
+  // range 0..#items-1 and set its Status to Allocated
+  random(int i, count(items));
+  
+  any OrderStatus = items[i].OrderStatus;
+  
+  // See psOrders.inq
+  // Note that this could throw if the item has been cancelled between
+  // reading the OrderStatus set and getting to this point. That is OK,
+  // the exception will be logged and the timer restarted. 
+  call modOrderStatus(OrderStatus, newState = enum(OStatus, A));
+  
+  loginfo($catalog.ps.logger, "Order {0} Item {1} has been allocated",
+          OrderStatus.Order, OrderStatus.LineItem);
+}
+
+local function shipAll(any items)
+{
+  // If all items have status Allocated then set their Status to Shipped
+  
+  // foreach returns true if the loop was executed at least once and
+  // in the absence of any break(<expr>) statement.
+  // Illustrate the use of the abort() function to discard the work
+  // pending in the explicit transaction.
+  transaction
+  {
+    any shipped =
+    foreach(items)
+    {
+      if ($loop.OrderStatus.Status == enum(OStatus, A))
+        $loop.OrderStatus.Status = enum(OStatus, S);
+      else
+        break(false);
+    };
+    
+    if (shipped)
+    {
+      // Set the parent Order status to shipped
+      read(Order, items[0].OrderStatus);
+      Order.Status = enum(OStatus, S);
+    }
+    else
+      abort();
+  }
+  
+  // Notice there is no block-level scoping of local variables.
+  if (shipped)
+    loginfo($catalog.ps.logger, "Order {0} has been shipped", Order.Order);
+  
+}
+
+// Start the spoof processor.
+// Notes:
+//   1. Wait for the new process to start - it will notify on the
+//      monitor "spoof". We give it 5 seconds to start before logging
+//      a severe message. 
+lock("spoof");
+if (!$catalog.ps.spoofProcessor)
+{
+  // TODO: Explain
+  any spoofProcessor = spawn("SpoofProcessor",
+                             type  = PROCESS_DETACHED,
+                             start = call spoofStart(),
+                             syncext = true);
+  
+  if (wait("spoof", 5000))  // If all ok - lodge process id in $catalog
+    any $catalog.ps.spoofProcessor = spoofProcessor.id;
+  else
+    logsevere($catalog.ps.logger, "Spoof order processor not started after 5 seconds, may be");
+  
+}

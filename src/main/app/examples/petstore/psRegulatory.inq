@@ -1,0 +1,186 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * PetStore Example
+ *
+ * Regulatory reporting functionality.
+ */
+
+package examples.petstore;
+
+/**
+ * Initialise Regulatory Reporting in the server.
+ *
+ * Gets a connection factory by calling a static method in a Java helper
+ * class. If you run the demo yourself you may want to change this. JNDI
+ * will be supported in a later release.
+ */   
+function initRegulatoryReporting()
+{
+  // The \i escape expands to the source module. It is a suitable
+  // lock monitor.
+  lock("\i");
+  
+  if (!$catalog.ps.mq.connection)
+  {
+    any connFactory = callmethod("getJMSConnectionFactory", class="com.inqwell.any.jms.JMSHelper", $catalog.argsMap);
+    
+    any connection = mqcreateconnection(connFactory);
+    
+    // Set an exception handler.
+    // All we do is log a message but this is pretty terminal. We could
+    // send a mail may be, and start periodic reconnection attempts...
+    connection.properties.exceptionHandler = func f =
+      {
+        logsevere($catalog.ps.logger, msg + stackTrace);
+      };
+    
+    // If all is well place the connection in the catalog
+    any $catalog.ps.mq.connection = connection;
+  }
+}
+
+/**
+ * Perform initialisation for sending details of shipped orders.
+ */
+function initSendPrices()
+{
+  if (!$catalog.ps.mq.connection)
+    throw($catalog.{$root.i18n}.ps.exception.REG_REPORTING,
+          $catalog.{$root.i18n}.ps.exception.NOT_INIT);
+  
+  // Create a transacted session. Such a session has its produced messages
+  // dispatched (and its consumed messages acknowledged) during the
+  // transaction commit process. If a session is transacted then Inq
+  // manages it henceforth and there is no need to retain it in the node
+  // space.
+  any session = mqcreatesession($catalog.ps.mq.connection, true);
+  
+  // Create the well-known queue to which shipped orders are reported.
+  any regQueue = mqcreatequeue(session, "FILL.PIE");
+  
+  // Create a reusable message
+  any $process.ps.txtMsg = mqcreatetextmessage(session);
+  
+  // Create the destination. Put this somewhere for future use
+  any $process.ps.toExchange = mqcreateproducer(session, regQueue);
+  
+  // The exchange has 2 minutes to process messages, otherwise they
+  // are discarded
+  $process.ps.toExchange.properties.timeToLive = 120000;
+  
+  // For receiving price updates create an asynchronous listener
+  cfunc priceReceived = call priceReceived();
+  any priceTopic = mqcreatetopic(session, "FEED.PIE");
+  any $process.ps.priceFeed = mqcreateconsumer(session, priceTopic);
+  mqsetmessagelistener($process.ps.priceFeed, priceReceived);
+  
+  // Create a working Price variable for use in the Exchange price feed
+  any $process.ps.price = new(Price);
+
+  mqstart($catalog.ps.mq.connection);
+}
+
+/**
+ * Report a shipped order to Pets International Exchange. An order
+ * report is an anonymous Order (the client's fields are stripped
+ * out), the number of items and the items themselves (again only
+ * relevant fields are sent).
+ * 
+ */
+function reportOrder(any Order)
+{
+  // Create the Inq structure that will make the XML message
+  any xml.Order = Order;
+  
+  // Aggregate this Order's LineItem instances and double-check
+  // there are some.
+  aggregate(LineItem, xml.Order, setname="items", keyname="ByOrder");
+  
+  if (count(xml.items) > 0)
+  {
+    // Prepend root element. Rename root child
+    any root.reportorder = xml;
+    
+    // Prepare the stream to create the XML.
+    
+    // Set up those paths we wish to be included in the XML production.
+    // Other paths that would have been generated in the traversal to
+    // produce the XML structure will not be output.
+    set includes = (path($this*Order.Order),
+                    path($this*LineItem.Item),
+                    path($this*LineItem.Qty),
+                    path($this*LineItem.UnitPrice));
+    
+    // Declare the stream
+    ioXMLX xmlStrm;
+    
+    // Apply the includes created above
+    xmlStrm.properties.includes = includes;
+
+    // Other properties
+    xmlStrm.properties.writeMeta     = false;
+    xmlStrm.properties.inqAttributes = false;
+    xmlStrm.properties.childName     = "item";
+    
+    string msg;
+    open(xmlStrm, "string://msg", OPEN_WRITE);
+    writestream(xmlStrm, root);
+    close(xmlStrm);
+    
+    // Send to the Exchange
+    $process.ps.txtMsg.properties.text= msg;
+    mqsend($process.ps.toExchange, $process.ps.txtMsg);
+    
+    loginfo($catalog.ps.logger, "Reporting Order as {0}", msg);
+  }
+}
+
+local function priceReceived(any message)
+{
+  // Extract the xml text
+  any xmlMsg = message.properties.text;
+  
+  // Parse it
+  ioXMLX xmlStrm;
+  open(xmlStrm, "string://xmlMsg", OPEN_READ);
+  any priceMsg = readstream(xmlStrm);
+  close(xmlStrm);
+  
+  loginfo($catalog.ps.logger, "PriceFeed {0}", priceMsg);
+  
+  // Update the LastPrice of the given Item
+  // Read the server's instance
+  read(Item, priceMsg.itemsold.item);
+  
+  // The received price in the XML is a string so convert it
+  $process.ps.price = priceMsg.itemsold.item.UnitPrice;
+  
+  // Check the price change and update the LastPriceMove field too.
+  // We cannot do this in Item.<mutate> because the mutator is
+  // not run if no fields have actually changed.
+  if (isnull(Item.LastPrice))
+  {
+    Item.LastPriceMove = enum(LastPriceMove, SAME);
+    Item.LastPrice = $process.ps.price;
+  }
+  else
+  {
+    if (Item.LastPrice != $process.ps.price)
+    {
+      if (Item.LastPrice > $process.ps.price)
+        Item.LastPriceMove = enum(LastPriceMove, DOWN);
+      else
+        Item.LastPriceMove = enum(LastPriceMove, UP);
+
+      Item.LastPrice = $process.ps.price;
+    }
+    else
+      Item.LastPriceMove = enum(LastPriceMove, SAME);
+  }
+}

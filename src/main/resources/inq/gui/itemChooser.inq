@@ -1,0 +1,414 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * The Item Chooser
+ *
+ */
+
+package inq.gui.util;
+
+/**
+ * Explanation of Item Chooser: TODO
+ * TODO: test item chooser on server-lost because windows are held in
+ * various places...
+ * unregisterComponent
+ */
+
+/**
+ * Create an item chooser placing it at the specified path.
+ * An item chooser (in the GUI sense) is a dialog that may
+ * be shown if a user-defined service returns more than one
+ * possible result for a given input string.
+ *
+ * @param parent the window parent for the dialog, if any
+ * @param title the dialog title
+ * @param table a gTable that the dialog will lay out and use
+ * to show result choices. The table must be configured by the
+ * client as follows:
+ * <ul>
+ * <li>columns - as required to render the data set that the
+ * client defines</li>
+ * <li>any special rendering requirements like icons etc</li>
+ * </ul>
+ * The item chooser sets up the table as follows
+ * <ul>
+ * <li>establishes the modelRoot property (the item chooser
+ * manages the choices list)</li>
+ * <li>sets up single selection (only one choice can be made
+ * at present)</li>
+ * <li>establishes a double-click event handler as a way to
+ * affirm selection</li>.
+ * </ul>
+ * @param at where in the node space to put the dialog. This
+ * argument must be provided.
+ * @param ok text for the OK button, defaults to "OK"
+ * @param cancel text for the Cancel button, defaults to "Cancel"
+ * @param items text for the items table, defaults to "Items"
+ */   
+function createItemChooser(any    parent,
+                           any    title,
+                           any    table,
+                           any    at,
+                           string ok     = "OK",
+                           string cancel = "Cancel",
+                           string items  = "Items")
+{
+  if (!at)
+    throw("must provide \"at\" argument");
+
+  // Protect against being called twice with the same path
+  if (!$this.{at})
+  {
+    // Create the dialog using the given parent
+    gDialog(parent) dialog;
+
+    // In Inq, dialogs themselves define an OK and Cancel
+    // event and these are given Inq functions to execute.
+    // Any event raised by components within the dialog, like
+    // the OK button, can be designated as dialog OK or Cancel
+    // events (see 
+    gEvent(dialog, call chooseOk(),     event=(gDialogok));
+    gEvent(dialog, call chooseCancel(), event=(gDialogcancel));
+    
+    // Establish some properties
+    dialog.properties.hideOnOk     = true;
+    dialog.properties.hideOnCancel = true;
+    dialog.properties.contextNode  = true;
+    dialog.properties.resizable    = true;
+    dialog.properties.title        = title;
+
+    // Create a simple map to store the component the
+    // caller passes us. The simple map has the same
+    // semantics as a stack frame - it does not
+    // establish itself as the parent of its content
+    smap dialog.svars;
+
+    // Declare the remaining dialog contents
+    gButton bOk;
+    gButton bCancel;
+    bOk.properties.text     = ok;
+    bOk.properties.icon     = image("images/16/GreenCircle.gif");
+    //bOk.properties.iconTextGap = 30;
+    bCancel.properties.text = cancel;
+    bCancel.properties.icon = image("images/16/RedCircle.gif");
+    //bCancel.properties.iconTextGap = 30;
+
+    // Designate the OK button's default event to be a dialog OK
+    // event. The event function attached to the dialog's gDialogok
+    // is then run.
+    gEvent (bOk, gDialog=gDialogok);
+    
+    // Similarly the cancel button
+    gEvent(bCancel, gDialog=gDialogcancel);
+    
+    // Actually this doesn't work properly at the moment - when
+    // the table has the focus, as it usually does, it consumes
+    // the event. Access to action maps not yet available in Inq.
+    dialog.properties.defaultButton = bOk;
+  
+    // Raise an event when the OK button is put into the context.
+    // We use this to setup our function variable, which must be in
+    // our context
+    gEvent(bOk, call contextEstablished(), event=(gContext));
+
+    // TODO revisit to see if this should be expressed better
+    layout (., dialog,
+            "Table  Columns 3, table=GRID_FILL, ok=0.2, 5, cancel=0.2, 3
+                     Rows table=GRID_FILL,
+                          5,
+                          buttons=GRID_PREF;
+                          {
+                            Cell table table cancel table
+                              Caption $stack.items; table
+                            Cell ok buttons bOk
+                            Cell cancel buttons bCancel
+                          }");
+
+    // Tweak the table properties
+    table.properties.visibleRows = 10;
+    table.properties.selectionMode = SINGLE_SELECTION;
+    table.properties.modelRoot     = path($this.vars.list);
+    
+    // Place in the node space at the specified path.
+    any $this.{at} = dialog;
+    
+    // Enable the OK button according to the table selection.
+    // 1) Tell the table to fire events from its selection model data and...
+    gEvent(table, event=(gSelection), firemodel=true);
+    
+    // 2) ...bind the OK button's enabled property to the table's
+    // selection count
+    gProperty(bOk, enabled, renderinfo($this.table.model.selectCount));
+
+    // Setup table double-click also as gDialogok)
+    gEvent(table, gDialog=gDialogok, event=(gMclicked), gModify=(count=2));
+  }
+  
+  // Return the item chooser
+  $this.{at};
+}
+
+
+/**
+ * Register a component for use with the given item chooser. The
+ * component's rendered value will be used as the search value, subject
+ * to successful validation.
+ *
+ * @param component the component to register. The registration process
+ * attaches a default and focus-lost event handlers. These events kick off
+ * the search.
+ *
+ * @param itemChooser the item chooser this component is being registered
+ * with.
+ *
+ * @param validateF a function that will be called (from the event handlers)
+ * to validate the search value. It is available as $stack.value. This
+ * function should return true if the value is valid or flase if it is not.
+ * As a reminder, the event handlers run in the context of the component, so
+ * this function need only be a cfunc.
+ *
+ * @param searchF a function that is called if validation passes (returns
+ * null). The value to search with is available as $stack.value.
+ *
+ * @param foundF The function called if, some time later, the search is
+ * successful. The search result is a map whose content should be
+ * understood by foundF
+ *
+ * @param notFoundF The function called if, some time later, the search is
+ * unsuccessful. This parameter is optional.
+ *
+ * @param valuePath The path, within the node returned as the result,
+ * that resolves to the value to set as the component's rendered value.
+ * See chooserResult.
+ */
+function registerItemChooserComponent(any component,
+                                      any itemChooser,
+                                      any validateF,
+                                      any searchF,
+                                      any foundF,
+                                      any notFoundF,
+                                      any valuePath)
+{
+  // Overall, it is convenient to store the various things relating to
+  // the Item Chooser under the component we are registering. We store
+  // everything under a child called "ic" (item chooser).
+  
+  // Does the component appear to have been registered already?
+  if (component.ic)
+    throw("Component already registered");
+  
+  if (!(component &&
+        itemChooser &&
+        validateF &&
+        searchF &&
+        foundF &&
+        itemChooser &&
+        valuePath))
+    throw("One or more mandatory arguments not supplied");
+  
+  // Since we're going to put the item chooser here do not violate
+  // the fact it is parented in the node-space elsewhere. Using
+  // an smap prevents this.
+  smap component.ic;
+  
+  // Lodge the item chooser under the component we are registering it with
+  any component.ic.itemChooser = itemChooser;
+  
+  // The gEvent function returns a token that represents the event
+  // binding. We can use it later in the "gRemoveEvent" function.
+  any component.ic.eh.default   = gEvent(component, call maybeSearch());
+
+  // Set up the escape key to restore the chooser to the last searched.
+  // key-pressed event to be replaced with an action when these are
+  // implemented in Inq.
+  gEvent(component, call restoreState(), event=(gKpressed), gModify=(keycode=VK_ESCAPE));
+
+  
+  // TODO explain
+  component.properties.inputVerifier = cfunc f = call inputVerifier();
+
+  // Just save the callbacks
+  any component.ic.funcs.validateF = validateF;
+  
+  // It is important that searchF runs in the context of the item chooser,
+  // that is it does not define one itself. Assign it to a cfunc variable
+  // to make sure this is so, just to protect us should the caller pass
+  // a func. 
+  cfunc component.ic.funcs.searchF;
+  component.ic.funcs.searchF = searchF;
+  
+  any   component.ic.funcs.foundF    = foundF;
+  any   component.ic.funcs.notFoundF = notFoundF;
+  
+  // Save the valuePath
+  any component.ic.valuePath = valuePath;
+  
+  // Create a variable to store the last thing successfully found.
+  // We use this to avoid repeated searches
+  any component.ic.previousFound = clone(component.renderedValue);
+}
+
+local function contextEstablished()
+{
+  func $this.funcs.searchItem =
+    {
+      // On the stack we have @component, value and vars. Call the
+      // client's searchF function whose responsibility it is to
+      // make a request to the server to perform the search. That
+      // search then invokes our chooserResult service to handle
+      // the response.
+      
+      // Save the input component for use in chooserResult. $this.svars.component
+      // should remain stable between sending off to to the search (via
+      // funcs.searchF) and receiving the results at chooserResult (and any
+      // further choice the user may make via the dialog).
+      any $this.svars.component = @component;
+      
+      // Call the client's cfunc. The context remains that of the
+      // item chooser so that chooserResult runs in it too.
+      // The identity of the component that kicked us off is passed
+      // down and back as part of the contract between the client's
+      // search service and chooserResult, just so we can discard
+      // any stale responses intended for other components.
+      xfunc(@component.ic.funcs.searchF,
+            id=identity(@component),
+            value,
+            vars);
+    };
+}
+
+local function inputVerifier()
+{
+  // Note - in an input verifier function, the component is always
+  // available as @component. The maybeSearch function is being called
+  // here (as well as itself being an event handler function) so we
+  // pass @component on. 
+  call maybeSearch(@component);
+  
+  true;
+}
+
+// Call the validate function. If it returns (converts-to) boolean true
+// then we can proceed
+local function maybeSearch(any @component)
+{
+  // Note - in event handlers the component is always available
+  // as @component. Get the value it is rendering
+  any value = @component.renderedValue;
+  
+  // If nothing has changed then don't do the search
+  if (value != @component.ic.previousFound)
+  {
+    // As an event handler of the client's component, execution will be in
+    // the context of that component (so it doesn't matter whether validateF
+    // is a func or a cfunc in this case). However, searchF will run in the
+    // context of the item chooser, so validateF is passed a map into which it
+    // can place any data from the client's context that searchF may require. 
+    smap vars;
+    any v = xfunc(@component.ic.funcs.validateF,
+                  value,
+                  vars);
+    if (v)
+    {
+      // Validation was ok, vector through to the item chooser
+      // this component was registered with, from where we
+      // call the search function.
+      xfunc(@component.ic.itemChooser.funcs.searchItem,
+            @component,
+            value,
+            vars);
+    }
+  }
+}
+
+local function restoreState(any @component)
+{
+  // If we found something then restore it to the component on the
+  // escape key, otherwise do nothing.
+  if (@component.ic.previousFound)
+    @component.renderedValue = @component.ic.previousFound;
+}
+
+local function chooseOk()
+{
+  $this.svars.component.ic.previousFound = $this.table.model.selection[0].{$this.svars.component.ic.valuePath};
+
+  // TODO: where is value coming from?
+  xfunc($this.svars.component.ic.funcs.foundF,
+        $this.svars.component,
+        value,
+        result = $this.table.model.selection[0]);
+}
+
+local function chooseCancel()
+{
+}
+
+/**
+ * Receive the results of the last search. It is the responsibility of
+ * the search service (invoked by the client's searchF function) to
+ * reply on this service with the results. The itemChooser either
+ *
+ * <ol><li>Single item - calls the foundF function</li>
+ * <li>No items - calls any notFoundF function</li>
+ * <li>Two or more items - presents the item chooser's GUI for
+ * the user to select amongst those available.</li></ol> 
+ *
+ * If the foundF function is called (either because a single item
+ * was returned or because the user chooses one of the number available)
+ * the list child is the node passed as the argument "result".
+ *
+ * @param id the id send to the client's search service
+ * @param value the value sent to the client's search service
+ * @param list a list of results. The format of the list is not of
+ * interest to the item chooser.
+ */
+service chooserResult(any id, any value, any list)
+{
+  // Check the id is that of the last component we were called by. Ignore
+  // the response if not
+  if (id == identity($this.svars.component))
+  {
+    any numItems = count(list);
+    
+    switch
+    {
+      when(numItems == 0)
+        xfunc($this.svars.component.ic.funcs.notFoundF,
+              value);
+              
+      when(numItems == 1)
+      {
+        // We have found something, so
+        // 1. remember the designated value for what we have found 
+        $this.svars.component.ic.previousFound = list[0].{$this.svars.component.ic.valuePath};
+        
+        // 2. Call the client's found function
+        xfunc($this.svars.component.ic.funcs.foundF,
+              $this.svars.component,
+              value,
+              result = list[0]);
+      }
+      
+      otherwise
+      {
+        // Place the list at $this.vars.list so the table will display it.
+        // The use of add() generates an event, whereas any <declaration> does
+        // not
+        add(list, path($this.vars.list));
+        
+        // Remember the search value
+        // TODO: do we need this?
+        any $this.vars.value = value;
+        
+        // Popup the dialog
+        show($this);
+      }
+    }
+  }
+}

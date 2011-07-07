@@ -1,0 +1,301 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+// Demonstrates
+//   1. File Chooser
+//   2. Lists
+//   3. Split pane
+//   4. Using file instances as map keys
+
+local function createGui()
+{
+  // Create the GUI
+
+  gWindow win;
+  win.properties.contextNode           = true;
+  win.properties.title                 = "File Chooser Demo";
+  win.properties.defaultCloseOperation = EXIT_ON_CLOSE;
+  win.properties.size = array a = (600, 350);
+  
+  win.properties.menuBar = call createMenu(win);
+
+  gSplit top;
+  top.properties.axis = X_AXIS; // components appear left and right
+  top.properties.resizeWeight = 0;
+  
+  gTextArea taFile;
+  
+  gList lOpen;
+  gEvent(lOpen, call changeSel(), event=(gSelection), firemodel=true);
+  
+  // File contents
+  string win.vars.fileTxt;
+  taFile.properties.renderInfo = renderinfo($this.vars.fileTxt);
+  
+  // Open files. A hmap because will be used as the list root
+  hmap win.vars.open;
+
+  // Selection history is held in an ordered map. It is used
+  // to maintain the order open files were selected in, so
+  // that when a file is closed the most recently selected
+  // one is used.
+  omap win.vars.selections;
+  
+  // The list root must be marked as a nodeset for dynamic
+  // ordering to work. When Inq builds node sets starting
+  // with read() this happens automatically. In this case
+  // we are building the structure ourselves so we have
+  // to mark it explicitly. Inq uses a typedef as the node
+  // set marker, so it knows what the primary typedef of
+  // the structure is. Here we have no typedefs, so we just
+  // use a string.
+  setnodeset(win.vars.open, "openfiles");
+  
+  // Setup context established event handler prior to layout,
+  // of course.
+  gEvent(taFile, call contextEstablished(), event=(gContext));
+  
+  // The layout. The contents of "top" are lOpen and taFile.
+  // Because "top" is a gSplit it contains at most two children.
+  layout(., win, "top
+                  {
+                    Caption \"Files\"; lOpen
+                    Caption \"Text\"; taFile
+                  }
+                  ");
+  
+  // returns
+  any $this.win = win;
+}
+
+// Create the window's menu bar
+local function createMenu(any win)
+{
+  gMenuBar menuBar;
+  
+  gMenu fileMenu;
+  fileMenu.properties.text = "File";
+  
+  gMenuButton mbOpen;
+  mbOpen.properties.text = "Open...";
+  gEvent(mbOpen, call openFileCB());
+  
+  gMenuButton mbClose;
+  mbClose.properties.text = "Close";
+  gEvent(mbClose, call closeFileCB());
+  
+  gMenuButton mbExit;
+  mbExit.properties.text = "Exit";
+  gEvent(mbExit, call Exit());
+  
+  layout(., win, menuBar,
+         "fileMenu
+         {
+           mbOpen
+           mbClose
+           Separator
+           mbExit
+         }
+         ");
+  
+  gProperty(mbClose, enabled, renderinfo($this.lOpen.model.selectCount && $this.lOpen.model.rowCount));
+  
+  menuBar;
+}
+
+local function contextEstablished()
+{
+  any $this.vars.filters = call createFileFilters();
+  
+  call setupList(list = $this.lOpen);
+}
+
+local function createFileFilters()
+{
+  // Create a file filter and set up its properties
+  filefilter f1;
+  f1.properties.description = "*.inq - Inq Source";
+  f1.properties.accept      = func f = call isINQ();
+  
+  // Make a file variable - the comparison in isINQ()
+  // will then be in terms of the platform file system,
+  // not just strings.
+  // inqFile is fixed; selectedExtension is set to the
+  // extension of the candidate file (see isINQ() )
+  file $this.vars.inqFile = "inq";
+  file $this.vars.selectedExtension;
+  
+  // Return an array of filters (there is only one but
+  // the built-in file dialog uses an array of them
+  // to filter multiple file types
+  array a = (f1);
+}
+
+local function setupList(any list)
+{
+  // Set up the list model. In fact, the internal/external
+  // idea is a bit lame. The style function stuff (see
+  // petstore) hasn't quite made it yet to gList.
+  any model.internal = renderinfo($this.file.int);
+  any model.external = renderinfo($this.file.ext);
+
+  list.properties.model     = model;
+
+  // Tell the list where the the list data is
+  list.properties.modelRoot = path($this.vars.open);
+
+  // Establish the modelSort property. The list elements
+  // will be maintained to the specified order. Sorting
+  // is quite comprehensive and any of the options
+  // at www.inqwell.com/primer/structures.html#sort
+  // are possible. The first argument to sort() is not
+  // used when it is passed as a function to the
+  // modelSort property.
+  cfunc order = sort($loop, $loop.file.ext, ignorecase=true);
+
+  // This is the simple way, but only supports the natural
+  // order
+  //array order = ( path($loop.file.ext) );
+  list.properties.modelSort = order;
+}
+
+// A filter function
+local function isINQ(any selection)
+{
+  $this.vars.selectedExtension = selection.properties.extension;
+  
+  // True if the file is *.inq; false otherwise
+  $this.vars.selectedExtension == $this.vars.inqFile;
+}
+
+local function openFileCB()
+{
+  call inq.gui.util:fileDialog(title = "Open File",
+                               okExpr = func f = {
+                                                   call openFile(selection);
+                                                 },
+                               $this.vars.filters);
+}
+
+local function closeFileCB()
+{
+  // Remove all list entries by using the list's keySelection.
+  // Take out any selection history as well
+  foreach($this.lOpen.model.keySelection)
+  {
+    remove($this.vars.open.{$loop});
+    remove($this.vars.selections.{$loop});
+  }
+
+  // If there is any selection history left select the most
+  // recently used file
+  if (count($this.vars.selections) > 0)
+  {
+    array a = ($this.vars.selections[@last]);
+    $this.lOpen.properties.itemSelection = a;
+  }
+  else
+  {
+    $this.vars.fileTxt = null;
+    $this.properties.title = "File Chooser Demo";
+  }
+}
+
+local function openFile(any selection)
+{
+  if (!contains($this.vars.open, selection) && selection.properties.exists)
+  {
+    ioByte bi;
+    open(bi, selection, OPEN_READ);
+
+    string txt;
+    ioByte bo;
+    open(bo, "string://txt", OPEN_WRITE);
+
+    while (any by = readstream(bi))
+      writestream(bo, by);
+
+    close(bo);
+    close(bi);
+
+    call addToList(selection, txt);
+  }
+  else
+  {
+    // Just select the already open file
+    $this.lOpen.properties.itemSelection = selection;
+  }
+}
+
+local function addToList(any selection, any txt)
+{
+  hmap .file;
+  
+  // Make the data for this list element: the text,
+  // the file itself and its name
+  any file.txt = txt;
+  any file.int = selection;
+  any file.ext = selection.properties.name;
+  
+  // The file is used as the node set child name.
+  // This is a handy way of easily checking the file
+  // is already open.
+  add(.file, path($this.vars.open.{selection}.file));
+
+  // Make the new file the selected one. The itemSelection
+  // property is an array of node set child names:
+  //    array a = (selection, ...);
+  // but if selecting a single item (as here) then an
+  // array is not necessary
+  $this.lOpen.properties.itemSelection = selection;
+}
+
+local function changeSel()
+{
+  if (!@event.isAdjusting && @component.model.selectCount == 1)
+  {
+    // Get the name of the selected item using the keySelection
+    // property
+    any k = @component.model.keySelection[0];
+
+    // Put the file text into the variable being viewed
+    // by the text area
+    //$this.vars.fileTxt = $this.vars.open.{k}.file.txt;
+    // In fact, node events go out at the end pf the event
+    // loop, so setting the caret position (see below)
+    // has no effect. If we set the text directly now
+    // then it does.
+    $this.taFile.properties.text = $this.vars.open.{k}.file.txt;
+
+    // k is an instance of file. Remove it from the
+    // selection history (regardless of whether it was
+    // previously there) and add back in (which places
+    // it at the end)
+    remove($this.vars.selections.{k});
+    any $this.vars.selections.{k} = k;
+
+    $this.properties.title = k;
+    $this.taFile.properties.caretPosition = 0;
+  }
+}
+
+local function Exit()
+{
+  exit(0);
+}
+
+// Parse the source of the file chooser and message dialogs
+exec("cp:///inq/gui/filedialog.inq");
+call inq.gui.util:createFileDialog(directory = file f = ".");
+
+exec("cp:///inq/gui/messagedialog.inq");
+
+any win = show(call createGui());
+call inq.gui.util:createMessageDialogAt(parent=win);
+

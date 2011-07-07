@@ -1,0 +1,37 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * PetStore Example
+ *
+ * A type that acts as a helper, supporting a (integer) counter, a string
+ * and a Price within a typedef.
+ *
+ * As a typedef, when used in the client events will be emitted as fields
+ * are mutated. Helpers like this are useful to
+ *  1) take advantage of the formatting information they carry
+ *  2) act as as-hoc MVC data for GUI components.
+ * Such instances are ever managed in the server.
+ */
+
+package examples.petstore;
+
+typedef ValueHelper
+{
+  fields
+  (
+    int         Dummy;
+    int         Count;
+    Price;
+    string      String;
+  )
+  
+  pkey
+  (
+    fields (Dummy)
+  )
+}

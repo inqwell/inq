@@ -1,0 +1,87 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * ChatChannel typedef.  This represents a chat point.  If the channel
+ * represents a public chat room then the instance is created on
+ * server startup and remains in existence.  Otherwise the
+ * instance is a private channel, for person-to-person or a conference,
+ * created and destroyed as required.
+ *
+ * A ChatChannel instance acts as a grouping object for all this
+ * channel's participants. The ChatChannel field is the primary key.  It
+ * will be a readable name for public chat rooms and generated from the
+ * object's VM identity if dynamically created.
+ *
+ * Copyright Inqwell Ltd 2002-2008 All Rights Reserved
+ */
+
+package examples.chat;
+
+typedef ChatChannel
+{
+  fields
+  (
+    string  ChatChannel;
+    boolean IsPublic;
+    boolean IsConference;
+    int     PartyCount = 0;
+    int     BackChatCount = 0;
+  )
+
+  construct(
+  {
+    $this = $stack;
+
+    if (!$this.IsPublic)
+      $this.ChatChannel = identity($this);
+
+    // If BackChatCount has not been set and this is a 1-1 conversation
+    // then set it to one. This means that when the opposite correspondent
+    // is forcibly joined as the first message is sent that message
+    // will be sent also
+    if (!($this.IsPublic || $this.IsConference || $this.BackChatCount))
+      $this.BackChatCount = 1;
+  })
+
+  destroy(
+  {
+    // delete any BackChat
+    call deleteBackChat(ChatChannel = $this);
+
+    // delete any participants in this channel
+    read(ChannelParticipant,
+         $this,
+         setname = "participantsList",
+         keyname = "ByChatChannel");
+    foreach(participantsList)
+      delete($loop.ChannelParticipant);
+
+  })
+
+  pkey
+  (
+    fields(ChatChannel)
+  )
+
+  key ByIsPublic
+  (
+    fields(IsPublic)
+  )
+}
+
+local function deleteBackChat(any ChatChannel)
+{
+  // Create the key to use and initialise it from the given ChatChannel instance
+  any k = new(BackChat.ByChatChannel, ChatChannel);
+
+  // Read the BackChat messages
+  read(BackChat, k, setname="backChat");
+
+  foreach(backChat)
+    delete($loop.BackChat);
+}

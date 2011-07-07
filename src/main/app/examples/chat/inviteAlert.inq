@@ -1,0 +1,78 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+package examples.chat;
+
+/**
+ * The inviteAlert windows are indeed windows, so they
+ * can float free and not affect other parts of the
+ * application.  They could be non-modal dialogs but
+ * windows are friendlier for the user's interaction
+ * via the host windowing system.
+ */
+
+function inviteAlert(any parent,
+                     any ChatChannel,
+                     any ChannelParticipant,
+                     func acceptExpr,
+                     func declineExpr)
+{
+  gWindow topLevel;
+
+  topLevel.properties.contextNode = true;
+  topLevel.properties.title = "Invitation from " + ChannelParticipant.OnLine;
+
+  // Save required items for call backs
+  any topLevel.funcs.acceptExpr = acceptExpr;
+  any topLevel.funcs.declineExpr = declineExpr;
+  any topLevel.vars.ChatChannel = ChatChannel;
+  any topLevel.vars.ChannelParticipant = ChannelParticipant;
+
+  gEvent(topLevel, call cbDeclineInvite(), event=(gWclosing));
+
+  gLabel message;
+  message.properties.text = ChannelParticipant.OnLine + " invites you to join conference " + ChannelParticipant.DisplayName;
+
+  gButton bAccept;
+  gButton bDecline;
+  bAccept.properties.text  = "Accept";
+  bDecline.properties.text = "Decline";
+
+  gEvent(bAccept, call cbAcceptInvite());
+  gEvent(bDecline, call cbDeclineInvite());
+
+  layout($stack, topLevel, "Margin d:10 message
+                            Geometry xy:vf Margin d:10 Row
+                            {
+                              <>
+                              Geometry d:f bAccept
+                              ~~~~
+                              Geometry d:f bDecline
+                              <>
+                            }");
+
+  // Add the window to the parent with the name of the Channel
+  add(topLevel, path(parent.{ChatChannel.ChatChannel}));
+  show(topLevel);
+}
+
+/**
+ * Gui callback from inviteAlert.  Runs in
+ * the context of the alert window.  Call the
+ * acceptInvite expression through/passing the
+ * saved gui-root
+ */
+local function cbAcceptInvite()
+{
+  writeln($catalog.system.out, "0000000000000000000000" +  $this.vars);
+  xfunc ($this.funcs.acceptExpr, $this.vars.ChatChannel, $this.vars.ChannelParticipant);
+}
+
+local function cbDeclineInvite()
+{
+  xfunc ($this.funcs.declineExpr, $this.vars.ChatChannel, $this.vars.ChannelParticipant);
+}

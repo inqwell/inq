@@ -1,0 +1,45 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+// I wrote this to test the resizing of the message dialog
+
+exec("classpath:///inq/gui/messagedialog.inq");
+
+local function msg()
+{
+  switch
+  {
+    when($this.vars.counter == 0)
+      call inq.gui.util:messageDialog(messageText = "Some small message");
+    when($this.vars.counter == 1)
+      call inq.gui.util:messageDialog(messageText = "Long message longer than before you see");
+    when($this.vars.counter == 2)
+      call inq.gui.util:messageDialog(messageText = "Small message");
+    when($this.vars.counter == 3)
+      call inq.gui.util:messageDialog(messageText = "This is\na multi-line message\n\nincluding blank lines");
+    when($this.vars.counter == 4)
+      call inq.gui.util:messageDialog(messageText = "This is\na multi-line message\n\nincluding blank lines\nand lots\nmore\nlines\nas\nwell.", maxLines=5);
+  }
+  $this.vars.counter = ++$this.vars.counter % 5;
+  $root.messageDialog.message.properties.basicUI = $this.vars.counter % 2;
+}
+
+gWindow w;
+w.properties.contextNode = true;
+w.properties.defaultCloseOperation = EXIT_ON_CLOSE;
+any $this.w = w;
+int w.vars.counter;
+gButton b;
+gEvent(b, call msg());
+b.properties.text = "Press";
+layout(., w, "b");
+show(w);
+
+call inq.gui.util:createMessageDialogAt(parent=w);
+

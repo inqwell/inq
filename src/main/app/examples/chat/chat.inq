@@ -1,0 +1,684 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+
+package examples.chat;
+
+function chatWindow(any chat, any topLevelWindow)
+{
+  // We need a top-level window to pop up the dialogs against. If this
+  // function is called externally and the GUI container "chat" is not
+  // a window then topLevelWindow must be provided. We put it in a
+  // smap in our node space.
+  smap chat.simple;
+  if (topLevelWindow)
+    any chat.simple.dialogParent = topLevelWindow;
+  else
+    any chat.simple.dialogParent = chat;
+
+  // The chat top-level GUI container is a context node. It becomes $this
+  // in any component event callbacks. See gContext event handler below.
+  chat.properties.contextNode = true;
+
+  chat.properties.title       = "ChatInq";
+  chat.properties.size        = array size = (450,250);
+
+  // Relates to the fact that we decide what to do in confirmExit()
+  chat.properties.defaultCloseOperation  = DO_NOTHING_ON_CLOSE;
+
+  // TODO: flash the window icon when chat is received
+  timer chat.vars.blinktimer;
+  chat.vars.blinktimer.properties.period       = 1000;
+
+  // Window Closing event handler
+  gEvent(chat, call confirmExit(), event=(gWclosing));
+
+
+  // Create a menu bar and apply it to the window
+  gMenuBar menuBar;
+  chat.properties.menuBar = menuBar;
+
+  // Menus
+  gMenu fileMenu;
+  fileMenu.properties.text = "File";
+
+  gMenu tabsMenu;
+  tabsMenu.properties.text = "Tabs";
+
+  gMenu helpMenu;
+  helpMenu.properties.text = "Help";
+
+  // Menu buttons
+  gMenuButton fileNewPrivate;
+  fileNewPrivate.properties.text="New Private...";
+  gEvent(fileNewPrivate, call askPrivate());
+
+  gMenuButton fileNewGroup;
+  fileNewGroup.properties.text="New Group...";
+  gEvent(fileNewGroup, call askNewGroup());
+
+  gMenuButton fileNewPublic;
+  fileNewPublic.properties.text="New Public...";
+  gEvent(fileNewPublic, call askNewPublic());
+
+  gMenuButton fileJoinPublic;
+  fileJoinPublic.properties.text="Join Public...";
+  gEvent(fileJoinPublic, call askJoinPublic());
+
+  gMenuButton fileInvite;
+  fileInvite.properties.text="Invite...";
+  gEvent(fileInvite, call invite()); // see also bound property below
+
+  gMenuButton fileClearChannel;
+  fileClearChannel.properties.text="Clear Channel";
+  gEvent(fileClearChannel, call cbClearChannel()); // see also bound property below
+
+  gMenuButton fileLeaveChannel;
+  fileLeaveChannel.properties.text="Leave Channel";
+  gEvent(fileLeaveChannel, call cbLeaveChannel()); // see also bound property below
+
+  gMenuButton fileExit;
+  fileExit.properties.text="Exit";
+  gEvent(fileExit, call confirmExit());
+
+  // Tab menu - example of button group
+  // Menu radio items
+  gMenuRadio tTop;
+  gMenuRadio tRight;
+  gMenuRadio tLeft;
+  gMenuRadio tBottom;
+
+  // A button group
+  gButtonGroup tGroup;
+
+  // Set the buttonGroup property of each of the radio items
+  tTop.properties.buttonGroup    = tGroup;
+  tRight.properties.buttonGroup  = tGroup;
+  tLeft.properties.buttonGroup   = tGroup;
+  tBottom.properties.buttonGroup = tGroup;
+
+  // One more menu item
+  gMenuButton helpAbout;
+  helpAbout.properties.text="About...";
+  gEvent(helpAbout, call about());
+
+  // A tab pane to hold chat sessions
+  gTab channels;
+
+  // Maintain the tab's gui ordering according to the inq node order
+  // Note that the only tabXXX properties of the tab children that will be
+  // preseserved are those that have been bound to variables.
+  // TODO
+  channels.properties.keepOrder = true;
+
+  // When the selected tab changes tabChanged is called
+  gEvent(channels, call tabChanged());
+
+  // As the layout is performed and the GUI node structure added to
+  // the node space, contextEstablished() is called with $this as $root.chat
+  gEvent(channels, call contextEstablished(), event=(gContext));
+
+  // $this is currently $root. Add the chat window to the node space
+  // Hmmm, integration with xylinq
+  if (!topLevelWindow)
+    any $this.chat = chat;
+
+  // Layout the window - only the tab to add
+  layout(., chat, "channels");
+
+  // Layout the menus
+  layout(., chat, menuBar, "fileMenu
+                            {
+                              fileNewPrivate fileNewGroup fileNewPublic
+                              Separator
+                              fileJoinPublic fileInvite
+                              Separator
+                              fileClearChannel fileLeaveChannel
+                              Separator
+                              fileExit
+                            }
+                            tabsMenu
+                            {
+                              tTop
+                              tRight
+                              tLeft
+                              tBottom
+                            }
+                            <>
+                            helpMenu
+                            {
+                              helpAbout
+                            }
+                            tGroup // for context
+                            ");
+
+  // Create variables in the node space under chat (which when the node space
+  // is built becomes $this). We bind them to GUI component properties.
+
+  // Sensitise the invite menu item according to the type of chat channel
+  // selected
+  boolean chat.vars.inviteEnabled;
+  gProperty (fileInvite, enabled, renderinfo($this.vars.inviteEnabled));
+
+  // These property bindings result in the components being enabled
+  // when there is at least one channel, meaning the path will resolve.
+  gProperty (fileClearChannel, enabled, renderinfo($this.channels*chatInsts.participantsList));
+  gProperty (fileLeaveChannel, enabled, renderinfo($this.channels*chatInsts.participantsList));
+
+  // Just something to move the tab placement. These are predefined constants
+  // in Inq. Default to TAB_BOTTOM
+  int chat.vars.placement = TAB_BOTTOM;
+  gProperty (channels, tabPlacement, renderinfo($this.vars.placement), false);
+
+  // The value a radio button is rendering is set into the rendered value
+  // of the button group when it is selected. Radio buttons therefore
+  // typically render a constant value.
+  tTop.properties.renderInfo    = renderinfo(TAB_TOP, label="Top");
+  tRight.properties.renderInfo  = renderinfo(TAB_RIGHT, label="Right");
+  tLeft.properties.renderInfo   = renderinfo(TAB_LEFT, label="Left");
+  tBottom.properties.renderInfo = renderinfo(TAB_BOTTOM, label="Bottom");
+
+  // The button group renders the same variable that is bound to the
+  // gTab's tabPlacement property. When $this.vars.tabPlacement is
+  // changed by radio selection the button group fires its default
+  // event so we just have use firemodel to cause the gTab to pick
+  // up the new property value.
+  tGroup.properties.renderInfo  = renderinfo($this.vars.placement);
+  gEvent(tGroup, firemodel=true);
+
+  // Set up some styles for rendering the chat.
+  // First set up some maps with well-known keys describing the style
+  // properties...
+  string baseStyleDescr.@fontFamily = "Tahoma";   // basic style
+  colour unameStyleDescr.@fg        = "#0000FF";  // username has blue added
+
+  // ...then create the styles themselves from the above descriptions.
+  // First the base style...
+  style chat.vars.baseStyle = baseStyleDescr;
+
+  // ...then the base style with added blue by creating the style
+  // hierarchy baseStyle ---> unameStyle
+  style chat.vars.baseStyle.unameStyle = unameStyleDescr;
+
+  // Reuse blue for urls too.
+  style chat.vars.baseStyle.urlStyle   = unameStyleDescr;
+
+  // Set up a regex for parsing out urls when rendering chat
+  // Hat Tip to http://geekswithblogs.net/casualjim/archive/2005/12/01/61722.aspx
+  regex chat.vars.urlRE;
+  chat.vars.urlRE.properties.pattern  =
+    "(((ht|f)tp(s?)\\:\\/\\/|~/|/)|mailto:)?([\\w]+:\\w+@)?([a-zA-Z]{1}([\\w\\-]+\\.)+([\\w]{2,5}))(:[\\d]{1,5})?((/?\\w+/)+|/?)(\\w+\\.[\\w]{3,4})?((\\?\\w+=\\w+)?(&\\w+=\\w+)*)?";
+
+  // Load up the rest of the application and utilities
+  loadclient("chattab.inq");
+  loadclient("inviteAlert.inq");
+  loadclient("joinChannel.inq");
+
+}
+
+local function contextEstablished()
+{
+  // $this is now $root.chat
+
+  // Initialise with the server
+  send initChat();
+}
+
+local function confirmExit()
+{
+  if ($process.package == "\p")
+  {
+    func okCallback = call Exit();
+    call inq.gui.util:questionDialog(questionText  = "Are you sure you want to exit?",
+                                     questionTitle = "Confirm exit",
+                                     okExpr        = okCallback);
+  }
+  else
+    hide($this);
+}
+
+local function Exit()
+{
+  exit();
+}
+
+/**
+ * Callback when tab selection changes.
+ */
+local function tabChanged()
+{
+  //writeln ($catalog.system.out, "\e \l " + @component.model);
+
+  // Correctly sensitise menu item(s)
+  call channelMenu();
+
+  // Clear the icon of the current and previous selections and
+  // set the window title.
+  if($this.channels.{$this.channels.model.selection}) // there may be no channels at all
+  {
+
+    // Keep the focus on the input field
+    setfocus($this.channels.{$this.channels.model.selection}.taSend);
+
+    // Set a blank icon in the tab
+    $this.channels.{$this.channels.model.selection}.vars.tabIcon = $this.vars.icons.clear;
+
+    $this.properties.title = "Chatinq " + $this.channels.{$this.channels.model.selection}.vars.ChannelParticipant.DisplayName;
+    $this.vars.inviteEnabled = $this.channels.{$this.channels.model.selection}.vars.ChatChannel.IsConference;
+  }
+  else
+  {
+    $this.properties.title = "Chatinq";
+    $this.vars.inviteEnabled = false;
+  }
+
+  if($this.channels.{$this.channels.model.prev})
+  {
+    $this.channels.{$this.channels.model.prev}.vars.tabIcon = $this.vars.icons.clear;
+  }
+
+  canceltimer($this.vars.blinktimer);
+  $this.simple.dialogParent.properties.icon = $this.vars.topLevelIcon;
+}
+
+local function cancelBlinkTimer()
+{
+}
+
+/**
+ * Invoked in top-level window context when the application
+ * receives the focus.  Provides a hook to clear the currently
+ * selected tab's icon in case new chat arrived in the mean
+ * time.  We also ensure that focus is on the text entry
+ * field, just for a warmer user experience!
+ */
+local function focusGained()
+{
+  if($this.channels.{$this.channels.model.selection})
+  {
+    $this.channels.{$this.channels.model.selection}.vars.tabIcon = $this.vars.icons.clear;
+    setfocus($this.channels.{$this.channels.model.selection}.taSend);
+  }
+  canceltimer($this.vars.blinktimer);
+
+  $this.simple.dialogParent.properties.icon = $this.vars.topLevelIcon;
+}
+
+/**
+ * We have ourselves created a new, are being told, or have
+ * accepted to join the given channel.
+ * Hence we create the appropriate GUI  and invoke the
+ * necessary server-side service to perform the
+ * remaining setup.
+ * This service runs with the top level window as its context
+ * node.  See alertWindow() also.
+ */
+service joinChannelConfirm(any ChatChannel, any ChannelParticipant)
+{
+  // Create the GUI and set up the structures for this
+  // chat session.
+
+  smap tabFuncs;   // funcs into the channel context
+  smap chatFuncs;  // funcs into the chat context
+
+  func chatFuncs.spawnPrivate = call newPrivate(OnLine);
+
+
+  any newTab = call chatTab(ChatChannel,
+                            ChannelParticipant,
+                            parent=$this.channels,
+                            tabFuncs,
+                            chatFuncs,
+                            $this.vars.icons);
+
+  // Save the (now filled in) tabFuncs map in our context using the
+  // unique key of the given ChatChannel instance. Then we can use
+  // the appropriate set of tabFuncs to vector to the appropriate
+  // context
+  any k = getuniquekey(ChatChannel);
+  any $this.vars.{k}.tabFuncs = tabFuncs;
+}
+
+local function about()
+{
+  call inq.gui.util:messageDialog(messageText="ChatInq Copyright � Inqwell Ltd 2002-2008");
+}
+
+local function askPrivate()
+{
+  call newPrivate();  // no args passed - see function newPrivate
+}
+
+local function askJoinPublic()
+{
+  call joinPublic();
+}
+
+local function joinPublic (any ChatChannel)
+{
+  if(ChatChannel)
+    call requestPublic(ChatChannel);
+  else
+  {
+    func okExpr = call requestPublic(ChatChannel=item);
+    call joinDialog(parent=$this.simple.dialogParent,
+                    isPublic=true,
+                    modelRootPath=path($this.vars.publicList),
+                    okExpr);
+  }
+}
+
+/**
+ * When no correspondent is supplied, raise the joinChannel
+ * dialog passing the private list, that is the list of
+ * individual users of the Chat system, and
+ * directing the ok callback to the requestPrivate expression.
+ * Otherwise take the name as read and just call.
+ */
+local function newPrivate(any OnLine)
+{
+  if(OnLine)
+    call requestPrivate(OnLine);
+  else
+  {
+    // TODO: Comment better
+    // The dialog xfunc passes the argument as "name". Here we know we are
+    // dealing with a 1-1 chat.
+    func okExpr = call requestPrivate(OnLine=item);
+    call joinDialog(parent=$this.simple.dialogParent,
+                    isPublic=false,
+                    modelRootPath=path($this.vars.privateList),
+                    okExpr);
+  }
+}
+
+/**
+ * Raise the joinChannel dialog passing the private list, that
+ * is the list of individual users of the Chat system, and
+ * directing the ok callback to the invite expression
+ */
+local function invite()
+{
+  func okExpr = call inviteSelection(OnLine=item);
+  call joinDialog(parent=$this.simple.dialogParent,
+                  isPublic=false,
+                  title="Invite User",
+                  modelRootPath=path($this.vars.privateList),
+                  okExpr);
+}
+
+local function inviteSelection(any OnLine)
+{
+  writeln($catalog.system.out, "\e \l " + OnLine);
+  xfunc ($this.channels.{$this.channels.model.selection}.vars.tabFuncs.inviteChannel, OnLine);
+}
+
+/**
+ * Raise the newGroup dialog to prompt for the conference
+ * name and directing the ok callback to the newGroup
+ * expression
+ */
+local function askNewGroup()
+{
+  func okExpr = call newGroup(name);
+  call inq.gui.util:textPrompt(okExpr);
+}
+
+local function askNewPublic()
+{
+  func okExpr = call newPublic(ChatChannel = name);
+  call inq.gui.util:textPrompt(okExpr);
+}
+
+// TODO: cf. newPublic
+local function newGroup(string name)
+{
+  send newConference(name=name);
+}
+
+local function newPublic(ChatChannel)
+{
+  send newPublic(ChatChannel);
+}
+
+local function cbLeaveChannel()
+{
+  xfunc ($this.channels.{$this.channels.model.selection}.vars.tabFuncs.leaveChannel);
+}
+
+local function cbClearChannel()
+{
+  xfunc ($this.channels.{$this.channels.model.selection}.vars.tabFuncs.clearChannel);
+}
+
+/**
+ * Invoked by initChat (from the server side).  Just sets up the
+ * sort order of the chat correspondents lists.  After this has
+ * been done a list will remain sorted by the specified criteria
+ * as items are inserted and deleted.
+ */
+syncgui service initResponse(any icons, any OnLine)
+{
+  // The private list was set up on the server when initChat service was
+  // invoked. In order to make sure it is already here by now
+  // this service is declared to run in the graphocs thread using
+  // syncgui.
+  // Sort the private list. We don't sort it in the server as ordering
+  // is not preserved between client and server. Once sorted here the
+  // list remains ordered as new elements are added.
+  sort ($this.vars.privateList, $loop.OnLine.OnLine, ignorecase=true);
+
+  // Save the icons for later use
+  any $this.vars.icons = icons;
+
+  // Save OnLine for later use
+  any $this.vars.OnLine = OnLine;
+
+  // Relies on the icons being present so established here rather than
+  // when created.
+  gEvent($this, call focusGained(), event=(gWactivated));
+
+  // Set the initial window icon state
+  $this.properties.icon = icons.win;
+
+  // Save the top level window icon so we can flash it by
+  // blanking it sometimes.  Note dialogParent may be the same
+  // as $this if we are a self-contained application.
+  any $this.vars.topLevelIcon = $this.simple.dialogParent.properties.icon;
+
+  func $this.vars.flashIcon = call flashIcon();
+  $this.vars.blinktimer.properties.func = $this.vars.flashIcon;
+}
+
+local function requestPrivate(any OnLine)
+{
+  // correspondent. If so, select it
+  if (!call findPrivate(OnLine, select=true))
+    send newPrivate(OnLine);
+}
+
+local function requestPublic(any ChatChannel)
+{
+  // Check if we are already in the given Channel. If not then join
+  if (!call findChannel(ChatChannel, select = true))
+    send joinChannel(ChatChannel, DisplayName=ChatChannel.ChatChannel);
+}
+
+local function clearChannel()
+{
+  call clearChannelInContext();
+}
+
+/**
+ * Invoked from the server to notify us of an invite.
+ * Pop up an alert window to offer the invitation.
+ * If there is an alert window already showing for this
+ * channel then use that.  Otherwise create one.  In
+ * this way, we don't get a limitless stack of alert
+ * windows popping up.
+ * @param ChatChannel the channel to join
+ * @param ChannelParticipant the invitor participant
+ */
+service inviteChannel(any ChatChannel, any ChannelParticipant)
+{
+  // The name of the alert window is the name of the chat channel
+
+// TODO:
+  writeln($catalog.system.out, "\e \l " + $stack);
+  writeln($catalog.system.out, "\e \l " + $path);
+  if ($this.{ChatChannel.ChatChannel})
+    show ($this.{ChatChannel.ChatChannel});
+  else
+    call inviteAlert(parent = $this,
+                     ChatChannel,
+                     ChannelParticipant,
+                     acceptExpr = func f0 = call acceptInvite(ChatChannel, ChannelParticipant),
+                     declineExpr = func f1 = call declineInvite(ChatChannel, ChannelParticipant));
+}
+
+/**
+ * To actually accept the invite we just have to
+ * invoke the joinChannel service in the server.
+ * Runs in the context of the main chat window.
+ * TODO
+ */
+local function acceptInvite(any ChatChannel, any ChannelParticipant)
+{
+  send joinChannel(ChatChannel, DisplayName=ChannelParticipant.DisplayName);
+
+  // Dispose of the alert window by removing it. Recall it has the name
+  // of the ChatChannel
+  remove($this.{ChatChannel.ChatChannel});
+}
+
+/**
+ * To decline the invite we only need to get rid
+ * of the alert window and the variables held
+ * for it.  If we wanted to, we could send a
+ * chat message saying we declined.
+ */
+local function declineInvite(any ChatChannel, any ChannelParticipant)
+{
+  //send declineInvite(name);
+  writeln($catalog.system.out, "\e \l " + $path);
+  writeln($catalog.system.out, "\e \l " + $this.{ChatChannel.ChatChannel});
+  remove($this.{ChatChannel.ChatChannel});
+}
+
+/**
+ * Check if the given ChatChannel is active (that is we are already
+ * joined) by looking for it in our sub-contexts. If the channel
+ * is found and select is true then make it the current tab selection.
+ * @param ChatChannel the channel to find
+ * @param select when true, select the channel if found
+ * @return true if the channel was found, false otherwise
+ */
+local function findChannel(any ChatChannel, boolean select)
+{
+  boolean ret; // defaults to false
+
+  // By iterating over the gTab children we are looking at each GUI
+  // subtree in turn. Note that we are careful not to put anything else
+  // into $this.channels (like say a vars child) or the iteration would
+  // include this as well.
+  foreach($this.channels)
+  {
+    if ($loop.chatInsts.ChatChannel == ChatChannel)
+    {
+      ret = true;
+
+      // A gTab supports the "selected" property as write-only. It takes
+      // the gui child that should become the active tab, which is $loop
+      // while we are iterating.
+      if (select)
+        $loop.properties.tabSelect = true;
+
+      // No point in continuing
+      break();
+    }
+  }
+  ret;
+}
+
+/**
+ * Check we have a private chat channel open with the given user
+ * by looking for it in our sub-contexts. If the channel
+ * is found and select is true then make it the current tab selection.
+ * @param OnLine the user to find
+ * @param select when true, select the channel if found
+ * @return true if the channel was found, false otherwise
+ */
+local function findPrivate(any OnLine, boolean select)
+{
+  boolean ret; // defaults to false
+
+  // By iterating over the gTab children we are looking at each GUI
+  // subtree in turn. Note that we are careful not to put anything else
+  // into $this.channels (like say a vars child) or the iteration would
+  // include that as well.
+  foreach($this.channels)
+  {
+    if ($loop.chatInsts.ChannelParticipant.OtherUser == OnLine.OnLine)
+    {
+      ret = true;
+
+      // A gTab supports the "selected" property as write-only. It takes
+      // the gui child that should become the active tab, which is $loop
+      // while we are iterating.
+      if (select)
+        $loop.properties.tabSelect = true;
+
+      // No point in continuing
+      break();
+    }
+  }
+  ret;
+}
+
+local function flashIcon()
+{
+  any i = $this.simple.dialogParent.properties.icon;
+  if (isnull(i) || i != $this.vars.topLevelIcon)
+    $this.simple.dialogParent.properties.icon = $this.vars.topLevelIcon;
+  else
+    $this.simple.dialogParent.properties.icon = $this.vars.icons.clear;
+
+  if (!$this.vars.blinktimer.properties.scheduled)
+    starttimer($this.vars.blinktimer, 500);
+}
+
+
+local function channelMenu()
+{
+  // Use ternary to avoid null reference in assignment
+  $this.vars.inviteEnabled = $this.channels.{$this.channels.model.selection}.chatInsts.ChatChannel.IsConference ? true : false;
+
+}
+
+if ($process.package == "\p")
+{
+  // When running as the chat package itself, create a top-level window
+  // and create the GUI within it.
+  // Alternatively, the chatWindow function can be called by other
+  // applications providing a container for the GUI.
+  gWindow chat;
+  call chatWindow(chat);
+
+  // Load utility dialogs
+  exec("classpath:///inq/gui/questiondialog.inq");
+  exec("classpath:///inq/gui/messagedialog.inq");
+  exec("classpath:///inq/gui/textPrompt.inq");
+
+  // Create the utility dialogs for later use
+  call inq.gui.util:createMessageDialog(parent = chat);
+  call inq.gui.util:createTextPromptDialog(parent = chat);
+  call inq.gui.util:createQuestionDialog(parent = chat);
+
+  // Pop up the window
+  show (chat);
+}
+

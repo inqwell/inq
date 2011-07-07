@@ -1,0 +1,69 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+// Hello World as Inq Client-Server
+//   - server side
+
+package examples.helloworld;
+
+// Define an in-memory type. It has a string field and
+// an integer primary key field
+typedef Hello
+{
+  fields
+  (
+    int    Hello = 0;
+    string HelloWorld = "Hello, world";
+  )
+
+  construct(
+  {
+    if ($this.Hello != 0)
+      throw("Hello is a singleton");
+  })
+
+  pkey
+  (
+    fields(Hello)
+  )
+}
+
+/**
+ * The Login service for the examples.helloworld package is run
+ * when the client logs in as this package.
+ *
+ * For demo purposes it doesn't do anything other
+ * than respond with the client source.
+ */
+service Login(string loginName, string passwd)
+{
+  call system:LoginOK(url="helloClient.inq");
+}
+
+/**
+ * Similarly the Logout service. Nothing to do.
+ */
+service Logout()
+{
+}
+
+service initHello()
+{
+  any k = new(Hello.pkey);
+  k.Hello = 0;
+  read(Hello, k);
+  add(Hello, path($this.vars.Hello));
+}
+
+service sayHello(any Hello)
+{
+  $this.vars.Hello = Hello;
+}
+
+
+// Create the one and only Hello instance.
+create(new(Hello));

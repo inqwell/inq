@@ -1,0 +1,17 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * Inqwell Server Startup
+ *
+ */
+
+#include <ValidateEnvironment.inq>
+#include <DefaultExceptionHandler.inq>
+#include <AdminSrv.inq>
+#include <Meta.inq>
+#include <GuiUtils.inq>

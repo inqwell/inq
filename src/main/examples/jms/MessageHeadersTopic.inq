@@ -1,0 +1,287 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/*
+ * $Archive:  $
+ * $Author: sanderst $
+ * $Revision: 1.5 $
+ * $Date: 2011-04-10 22:19:25 $
+ */
+
+/**
+ * MessageHeadersTopic.inq
+ *
+ * The setup of destinations etc is as for AnynchTopicExample.inq
+ * so please see comments there also.
+ * Following the Sun GlassFish(tm) example, this script
+ * demonstrates the use of message header fields.
+ *
+ * It starts two processes - one that produces messages
+ * and the other that consumes them. The program displays
+ * the message headers just before the send call and just
+ * after the receive, so that you can see which ones
+ * are set by the send function.
+ * 
+ * Specify the queue name (for the control messages) and
+ * topic used to exchange the test messages on the command line.
+ */
+
+#include<SampleUtilities.inq>
+
+local function usage()
+{
+  writeln($catalog.system.err, "usage: \i:");
+  writeln($catalog.system.err, "  -topic <topic-name>");
+  writeln($catalog.system.err, "  -queue <queue-name>");
+  writeln($catalog.system.err, " [-num  <number of msgs>]");
+  exit(1);
+}
+
+local function displayHeaders(any prefix, any message)
+{
+  writeln($catalog.system.out, "Headers set by send method:");
+
+  // Display the destination (topic, in this case).
+  any dest = message.properties.JMSDestination;
+  writeln($catalog.system.out, prefix + " JMSDestination: " + dest);
+
+  // Display the delivery mode.
+  int delMode = message.properties.JMSDeliveryMode;
+  // Inq has predefined constants for the mq delivery modes
+  if (delMode == NON_PERSISTENT)
+    writeln($catalog.system.out, " JMSDeliveryMode: non-persistent");
+  else if (delMode == PERSISTENT)
+    writeln($catalog.system.out, " JMSDeliveryMode: persistent");
+  else
+    writeln($catalog.system.out, " JMSDeliveryMode: neither persistent nor non-persistent; error");
+
+  /*
+   * Display the expiration time.  If value is 0 (the default),
+   * the message never expires.  Otherwise, cast the value
+   * to a Time object for display.
+   */
+  long expiration = message.properties.JMSExpiration;
+  if (expiration != 0)
+  {
+    // Inq allows dates to be assigned from longs, assuming them to
+    // be an epoch offset.
+    date expDate = expiration;
+    writeln($catalog.system.out, " JMSExpiration: " + render(expDate, format="HH:mm:ss"));
+  }
+  else
+    writeln($catalog.system.out, " JMSExpiration: " + expiration);
+
+  // Display the priority.
+  int priority = message.properties.JMSPriority;
+  writeln($catalog.system.out, " JMSPriority: " + priority);
+
+  // Display the message ID.
+  string messageId = message.properties.JMSMessageID;
+  writeln($catalog.system.out, " JMSMessageID: " + messageId);
+
+  long timestamp = message.properties.JMSTimestamp;
+  if (timestamp != 0)
+  {
+    date timestampDate = timestamp;
+    writeln($catalog.system.out, " JMSTimestamp: " + format("HH:mm:ss", timestampDate));
+  }
+  else
+    writeln($catalog.system.out, " JMSTimestamp: " + timestamp);
+
+  // Display the correlation ID.
+  string correlID = message.properties.JMSCorrelationID;
+  writeln($catalog.system.out, " JMSCorrelationID: " + correlID);
+
+  // Display the ReplyTo destination.
+  any replyTo = message.properties.JMSReplyTo;
+  writeln($catalog.system.out, " JMSReplyTo: " + replyTo);
+
+  // Display the Redelivered value (usually false).
+  boolean redelivered = message.properties.JMSRedelivered;
+  writeln($catalog.system.out, " JMSRedelivered: " + redelivered);
+
+  writeln($catalog.system.out, prefix + " Headers set by client program:");
+
+  // Display the JMSType.
+  string jmsType = message.properties.JMSType;
+  writeln($catalog.system.out, " JMSType: " + jmsType);
+
+  // Display any client properties.
+  // The clientProperties property returns a
+  // Map having the property names as the keys and
+  // their values as the values. The values are
+  // all strings, regardless of how the properties
+  // were originally written to the message. If
+  // desired they can be assigned or parsed to
+  // the appropriate data type.
+  any props = message.properties.clientProperties;
+  foreach(props)
+  {
+    writeln($catalog.system.out, " Client property " + @name + ": " + $loop);
+  }
+}
+
+local function producerStart(any process, // always provided by Inq
+                             any topic,
+                             any queue)
+{
+  writeln($catalog.system.out, "\e \l Starting: " + process.processName);
+
+  // Just send a service request to the process
+  // to run the demo
+  send doProducer(@channel = process.ichannel, topic, queue);
+}
+
+local function consumerStart(any process, // always provided by Inq
+                             any topic,
+                             any queue)
+{
+  writeln($catalog.system.out, "\e \l Starting: " + process.processName);
+
+  // Just send a service request to the process
+  // to run the demo
+  send doConsumer(@channel = process.ichannel, topic, queue);
+}
+
+local function jmsEnd()
+{
+  writeln($catalog.system.out, "\e \l Ended: " + $process.processName);
+}
+
+service doProducer(any topic, any queue, any msgCount)
+{
+  any $this.jms = call getTopic(topic);
+
+  /*
+   * After synchronizing with consumer, create producer.
+   * Create text message.
+   * Send messages, varying text slightly.
+   * Send end-of-messages message.
+   * Finally, close connection.
+   */
+
+  /*
+   * Synchronize with consumer.  Wait for message indicating 
+   * that consumer is ready to receive messages.
+   */
+  call receiveSynchronizeMessages(prefix = $process.processName, queue, counter = 1);
+
+  any topicProducer = mqcreateproducer($this.jms.session, $this.jms.topic);
+
+  // First message: simplest form of send method
+  any txtmsg = mqcreatetextmessage($this.jms.session);
+  txtmsg.properties.JMSType = "Simple";
+  writeln($catalog.system.out, $process.processName + " Setting JMSType to: " + txtmsg.properties.JMSType);
+  // To set arbitrary client properties use the special child "client".
+  // The "client" child accepts any child name which is established as
+  // the property name in the message.
+  txtmsg.client.messageNumber = 1;
+  writeln($catalog.system.out, $process.processName + " Setting client property messageNumber to: " + txtmsg.client.messageNumber);
+  any text = "Read My Headers";
+  txtmsg.properties.text = text;
+  writeln($catalog.system.out, $process.processName + " Setting message text to: " + txtmsg.properties.text);
+  writeln($catalog.system.out, $process.processName + " Headers before message is sent: ");
+  call displayHeaders(prefix = $process.processName, message = txtmsg);
+  mqsend(topicProducer, txtmsg);
+
+  /* 
+   * Second message: 3-argument form of send method;
+   * explicit setting of delivery mode, priority, and
+   * expiration (time to live)
+   */
+  any txtmsg = mqcreatetextmessage($this.jms.session);
+  txtmsg.properties.JMSType = "Less Simple";
+  writeln($catalog.system.out, $process.processName + " Setting JMSType to: " + txtmsg.properties.JMSType);
+  txtmsg.client.messageNumber = 2;
+  writeln($catalog.system.out, $process.processName + " Setting client property messageNumber to: " + txtmsg.client.messageNumber);
+  txtmsg.properties.text = text + " Again";
+  writeln($catalog.system.out, $process.processName + " Setting message text to: " + txtmsg.properties.text);
+  mqsend(topicProducer, txtmsg, NON_PERSISTENT, 3, 10000l);
+
+  /* 
+   * Third message: 
+   * MessageID and Timestamp disabled
+   */
+  any txtmsg = mqcreatetextmessage($this.jms.session);
+  txtmsg.properties.JMSType = "Disable Test";
+  writeln($catalog.system.out, $process.processName + " Setting JMSType to: " + txtmsg.properties.JMSType);
+  txtmsg.client.messageNumber = 3;
+  writeln($catalog.system.out, $process.processName + " Setting client property messageNumber to: " + txtmsg.client.messageNumber);
+  txtmsg.properties.text = text + " with MessageID and Timestamp disabled";
+  writeln($catalog.system.out, $process.processName + " Setting message text to: " + txtmsg.properties.text);
+  topicProducer.properties.disableMessageID = true;
+  topicProducer.properties.disableMessageTimestamp = true;
+  writeln($catalog.system.out, $process.processName + " Disabling Message ID and Timestamp");
+  call displayHeaders(prefix = $process.processName, message = txtmsg);
+  mqsend(topicProducer, txtmsg);
+
+  exit(0);
+}
+
+service doConsumer(any topic, any queue)
+{
+  any $this.jms = call getTopic(topic);
+
+  /*
+   * Create consumer.
+   * Register message listener (TextListener).
+   * Start message delivery.
+   * Send synchronize message to producer, then wait till all
+   * messages have arrived.
+   * Listener displays the messages obtained.
+   */
+  any topicConsumer = mqcreateconsumer($this.jms.session, $this.jms.topic);
+  mqstart($this.jms.connection);
+
+  // Let producer know that consumer is ready.
+  call sendSynchronizeMessage(prefix = $process.processName, controlQueueName = queue);
+
+  int i = 0;
+  while (i < 3)
+  {
+    any msg = mqreceive(topicConsumer);
+    writeln($catalog.system.out, $process.processName + " Message received: " + msg.properties.text);
+    writeln($catalog.system.out, "Headers after message is received:");
+    call displayHeaders(prefix = $process.processName, message = msg);
+    i++;
+  }
+
+  exit(0);
+}
+
+// Must supply -topic and -queue command line arguments
+if (!$catalog.argsMap.topic || !$catalog.argsMap.queue)
+  call usage();
+
+int msgCount = $catalog.argsMap.num ? $catalog.argsMap.num : 10;
+
+// Start the processes
+any multipleProducer = spawn("PRODUCER",
+                             type  = PROCESS_DETACHED,
+                             start = call producerStart($catalog.argsMap.topic,
+                                                        $catalog.argsMap.queue,
+                                                        msgCount),
+                             end   = call jmsEnd());
+
+any asynchConsumer  = spawn("CONSUMER",
+                            type  = PROCESS_DETACHED,
+                            start = call consumerStart($catalog.argsMap.topic,
+                                                       $catalog.argsMap.queue),
+                            end   = call jmsEnd(),
+                            syncext = true);
+
+waitproc(multipleProducer);
+waitproc(asynchConsumer);
+
+writeln($catalog.system.out, "\i terminating.....");
+
+// Terminate. Must exit explicitly as (most likely) the
+// JMS runtime has started other threads
+exit(0);
+

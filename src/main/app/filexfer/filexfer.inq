@@ -1,0 +1,530 @@
+/**
+ * Inqwell File Transfer Package
+ *
+ * Server-side code for a file transfer service
+ *
+ * Copyright <A9> Inqwell Ltd 2010.
+ * All rights reserved.
+ *
+ * The File Transfer package allows asynchronous (that is Inq GUI)
+ * clients to retrieve files from their connected server.
+ *
+ * Clients request a file ...
+ *
+ */
+package inq.filexfer;
+
+// TODO: Xfer processes should always run at $root. Does Inq need extending for this?
+
+function initialise()
+{
+  if (!call getGlobalData())
+  {
+    // Create a node under the global $catalog space and place
+    // filexfer's stuff under there. Use the package name as the
+    // root for this data.
+    any m = call getGlobalData(m = smap m);
+    lock("\p");
+
+    // Establish the logger
+    any $catalog.inq.filexfer.logger = getlogger("\p");
+
+    // Establish an ordered map that will act as the queue
+    // when the maximum number of transfer requests are
+    // in progress.
+    omap m.vars.queue;
+  
+    // A map where the Processes that are
+    // handling transfer requests are held.
+    smap m.vars.procs;
+  
+    // Read filexfer.properties which we expect to find at inq_home/etc
+    
+    // inq_home is a system property, available at $properties
+    string s = $properties.inq_home + 
+                 $properties.file_separator +
+                 "etc" +
+                 $properties.file_separator +
+                 "filexfer.properties";
+  
+    ioProps p;
+  
+    if (open(p, s, OPEN_READ))
+    {
+      any m.props = readstream(p);
+      close(p);
+    }
+    
+    // Establish default values for our properties
+    if (!m.props.fileroot)
+      any m.props.fileroot = $properties.inq_home +
+                                   $properties.file_separator +
+                                   "fileroot";
+
+    // Canonicalise fileroot in case its path is ugly
+    file f = m.props.fileroot;
+    any m.props.fileroot = f.properties.canonicalPath;
+    
+    if (!m.props.maxxfer)
+      any m.props.maxxfer  = 5;
+    
+    // Make sure the file root ends with the path separator
+    if (!endswith(m.props.fileroot, $properties.file_separator))
+      any m.props.fileroot  = m.props.fileroot + $properties.file_separator;
+  
+    loginfo($catalog.inq.filexfer.logger, "Initialised");
+    logconfig($catalog.inq.filexfer.logger, m.props);
+  }
+  else
+  {
+    loginfo($catalog.inq.filexfer.logger, "Already initialised");
+  }
+}
+
+/**
+ * Convert the given filename, which must be absolute and a descendant of
+ * the fileroot, to one relative to the fileroot. If the preconditions are
+ * not met then throw an exception.
+ * @param filename the file name to convert. Must be a string, not a file.
+ */ 
+function makeRelativeToRoot(any filename)
+{
+  any m = call getGlobalData();
+  if (!startswith(filename, m.props.fileroot))
+  {
+    any s = "Not a descendant file " + filename;
+    logsevere($catalog.inq.filexfer.logger, s);
+    throw(s);
+  }
+  
+  rightstring(filename, length(filename) - length(m.props.fileroot));
+}
+
+/**
+ * Convert the given filename, which is or is made to be relative, to
+ * a descendant of the fileroot by prepending it.
+ *
+ * May be used by callers to acquire a file that can subsequently be
+ * requested by remote clients because it is a descendant of fileroot
+ * 
+ * @param filename the file name to convert. Must be a string, not a file.
+ * @return a string (not a file) that is the absolute path
+ */ 
+function makeAbsoluteFromRoot(any filename, func excFunc)
+{
+  if (length(filename) == 0)  // also does for null
+    throw("Bad file", filename, excFunc);
+
+  // Strip off any leading path separator
+  if (startswith(filename, "/") || startswith(filename, $properties.file_separator))
+  {
+    if (length(filename) == 1)
+      throw("Bad file", filename, excFunc);
+
+    filename = midstring(filename, 1, length(filename) - 1);
+  }
+
+
+  // Prepend the fileroot
+  any m = call getGlobalData();
+  
+  string ff = m.props.fileroot + filename;  // returns
+}
+
+local function validateProperties(any props)
+{
+  // Must have fileroot
+  if (!props.fileroot)
+    throw("No property fileroot");
+
+  // If there is no maxxfer then default it to 5
+  if (!props.maxxfer)
+    any props.maxxfer = 5;
+}
+
+
+/**
+ * Get (or establish) the root map where filexfer stores its global
+ * data. This data comprises properties that configure the
+ * service and variable data to manage any transfers in progress.
+ * <p/>
+ *
+ */
+local function getGlobalData(any m)
+{
+  any s = "\p";
+  if (m)
+  {
+    // Given a map - put it in place if there isn't one there already
+    lock(s);
+    if ($catalog.{s}.data)
+      throw("filexfer is already initialised");
+
+    any $catalog.{s}.data = m;
+  }
+  else
+    $catalog.{s}.data;
+}
+
+
+/**
+ * Check if the requested file exists.
+ *
+ *   filename - the file's path. Taken as relative from $this.props.fileroot
+ *   ackFunc - client-supplied function for positive results, like
+ *             chunks of file
+ *   excFunc - client-supplied function for any exceptions
+ *
+ *   return a file if all ok, throws otherwise
+ */
+local function checkFile(any filename, any excFunc)
+{
+  file ff = call makeAbsoluteFromRoot(filename, excFunc);
+
+  // Is the file readable?
+  if (!ff.properties.readable)
+  {
+    logwarning($catalog.inq.filexfer.logger, "Cannot read {0}", ff);
+    throw("Cannot read", filename, excFunc);
+  }
+
+  // Is it a regular file?
+  if (!ff.properties.regularFile)
+  {
+    logwarning($catalog.inq.filexfer.logger, "{0} not a regular file", ff);
+    throw("Not a regular file", filename, excFunc);
+  }
+
+  // return
+  ff;
+}
+
+/**
+ * Send a file in chunks to the requesting process.
+ *
+ * @param the request token, containing
+ * <ul>
+ * <li>filename The file name as supplied by the requesting process</li>
+ * <li> ff The file in the local file system</li>
+ * <li> ackFunc The acknowledge function, passed back to the requesting
+ * process to process the chunk</li>
+ * <li> excFunc The requesting process's exception handler function</li>
+ * </ul>
+ */
+local function sendFile(any reqToken, any clientToken)
+{
+  // Open the file and send as chunks. Default
+  // Inq ioByte buffer size is 1024.
+
+  ioByte i;
+
+  // The process to send to
+  any process = getprocess(reqToken.id);
+
+  // Length of the file and work out how many chunks
+  // will be required to send it
+  any fileLen = reqToken.ff.properties.length;
+  long numChunks = fileLen / i.properties.bufferSize + 1;
+  long counter;
+
+  // Open the file before the try block
+  open(i, reqToken.ff, OPEN_READ);
+
+  try
+  {
+    // Send to the (external) requesting process the client
+    // token. The client can use it to track multiple outstanding
+    // transfers or whatever.
+    send startOfFile(@channel = process.ochannel,
+                     reqToken.filename,
+                     clientToken,
+                     numChunks,
+                     reqToken.ackFunc);
+
+    while (any chunk = readstream(i))
+      send chunkReceived(@channel = process.ochannel,
+                         reqToken.filename,
+                         chunk,
+                         counter = ++counter,
+                         numChunks,
+                         clientToken,
+                         reqToken.ackFunc);
+
+    send endOfFile(@channel = process.ochannel,
+                   reqToken.filename,
+                   clientToken,
+                   reqToken.ackFunc);
+  }
+  finally
+  {
+    close(i);
+  }
+}
+
+/**
+ * Makes a token that represents this transfer request.
+ * <p/>
+ * The token is a map containing the filename (that is
+ * the path relative to props.fileroot), the resolved
+ * file and the id of the requesting process.
+ * <p/>
+ * This token can be used to queue up requests when
+ * the maximum number of Processes are active and
+ * to detect duplicate requests.
+ */
+local function makeXferToken(any filename,
+                             any ff,
+                             any id,
+                             any processName,
+                             any hostAddress,
+                             any canonicalHostName,
+                             any localhostname,
+                             any ackFunc,
+                             any excFunc)
+{
+  // Slight trick here - the current stack frame contains
+  // everything we need already (and btw it is a simple
+  // map - smap). Just return it. This is ok as it otherwise
+  // gets discarded.
+  // So we're just using the parameter stack as a way to
+  // create the token map. For extra safety we could
+  // validate all parameters have been passed.
+
+  $stack;
+}
+
+/**
+ * Start or queue the request. If there are already
+ * the configured maximum number of transfers in
+ * progress then queue the request for when a transfer
+ * process becomes available. Otherwise start a
+ * process to handle the request.
+ * <p/>
+ * This function returns a token that the client can
+ * use to manage the request from its end, including
+ * cancelling the request (either while still queued
+ * or in progress).
+ */
+local function startRequest(any reqToken)
+{
+  any m = call getGlobalData();
+  lock("\p");
+
+  // The client token is the requested file name and the
+  // id of the requesting User Process.
+  any clientToken.id = reqToken.id;
+  any clientToken.filename = reqToken.filename;
+
+  // If the clientToken is queued or already being processed
+  // then this is a duplicate request
+  if (m.vars.queue.{clientToken} ||
+      m.vars.procs.{clientToken})
+  {
+    logwarning($catalog.inq.filexfer.logger, "Duplicate request {0} for {1} from {2} on {3}",
+                                          reqToken.ff,
+                                          reqToken.processName,
+                                          reqToken.canonicalHostName,
+                                          reqToken.localhostname);
+    throw("Duplicate request", reqToken.filename, reqToken.excFunc);
+  }
+  
+  any numProcs = count(m.vars.procs);
+  if (numProcs == m.props.maxxfer)
+  {
+    // The maximum number of transfers are in progress.
+    // Queue the request and one of the Processes
+    // currently running will pick it up when it has
+    // finished the one it is currently handling.
+    //
+    // [Inq note: vars.queue is an ordered map. When no
+    // explicit ordering has been established, new
+    // entries will be added to the end of the ordering,
+    // when accessed by vector.]
+    any m.vars.queue.{clientToken} = reqToken;
+    loginfo($catalog.inq.filexfer.logger, "Queuing {0} for {1} from {2} on {3}",
+                                          reqToken.ff,
+                                          reqToken.processName,
+                                          reqToken.canonicalHostName,
+                                          reqToken.localhostname);
+    send reqAck(reqToken.filename, clientToken, reqToken.ackFunc, queued = true);
+  }
+  else
+  {
+    // Create a process to handle the transfer
+    any proc = spawn("filexfer_" + numProcs,
+                     type  = PROCESS_DETACHED,
+                     end   = call xferEnd());
+
+    send reqAck(reqToken.filename, clientToken, reqToken.ackFunc, queued = false);
+
+    // Send it the transfer request details. Include the @exception
+    // argument. This means that exceptions incurred in the transfer
+    // process will be handled in this, the invoking process.
+    send runXfer(@channel = proc.ichannel,
+                 reqToken,
+                 clientToken,
+                 @exception=$process.id);
+
+    // Put the process into the active list. Do it after we've successfully
+    // sent the transfer request to the process.
+    any m.vars.procs.{clientToken} = proc.id;
+  }
+
+  // Return the client token
+  clientToken;
+}
+
+local function xferEnd()
+{
+  lock ("\p");
+  any m = call getGlobalData();
+  remove (m.vars.procs.{$process.vars.clientToken});
+  loginfo($catalog.inq.filexfer.logger, "Terminating....");
+}
+
+/**
+ * Examine the queue and if there is a pending request
+ * dequeue it and send it as a new service request to
+ * the executing Process.
+ */
+local function doQueuedRequest(any clientToken)
+{
+  // Take out the lock while we check to see if there are
+  // any queued requests. If there are then take the oldest
+  // and send it to ourselves for processing.
+  lock ("\p");
+
+  // In case anything goes wrong here, ensure process terminates
+  try
+  {
+    any m = call getGlobalData();
+
+    // Inq technique - the result of the foreach statement is 
+    //   1) the last expression it executed
+    //   2) the value of any break(<expr>) it executed
+    //   3) false if the loop never executed
+    // So... the return value of this function is true
+    // if we started another transfer or false if we did not.
+    // Also note: because the loop body alters the root
+    // of the iteration we use the optional second argument
+    // to foreach which specifies concurrent-safe
+    // iteration
+    foreach (m.vars.queue, true)
+    {
+      any newClientToken = @name;
+      any reqToken = remove(m.vars.queue[0]);
+      // We could equally have ^^ done remove(m.vars.queue.{newClientToken})
+      // but this does work because the queue is an omap, which supports
+      // vector access.
+
+      // Check if the client's process is still alive. Ignore
+      // the request if not
+      if (getprocess(reqToken.id))
+      {
+        // Send to self
+        send runXfer(@channel = $process.ichannel,
+                     reqToken,
+                     clientToken = newClientToken,
+                     @exception=reqToken.id);
+
+        // Replace the executing process id in vars.procs as
+        // the new client token. Do it after we've successfully
+        // sent the request to the process.
+        any m.vars.procs.{newClientToken} = remove(m.vars.procs.{clientToken});
+
+        break(true);
+      }
+
+      false;
+    }
+  }
+  catch
+  {
+    logsevere($catalog.inq.filexfer.logger, @exception);
+    false;
+  }
+}
+
+service runXfer(any reqToken, any clientToken)
+{
+  try
+  {
+    loginfo($catalog.inq.filexfer.logger, "Starting {0} for {1} from {2} on {3}",
+                                          reqToken.ff,
+                                          reqToken.processName,
+                                          reqToken.canonicalHostName,
+                                          reqToken.localhostname);
+
+    // Remember the client token so when we terminate we can remove
+    // ourselves from the active processes.
+    any $process.vars.clientToken = clientToken;
+
+    call sendFile(reqToken, clientToken);
+
+    loginfo($catalog.inq.filexfer.logger, "Completed {0} for {1} from {2} on {3}",
+                                          reqToken.ff,
+                                          reqToken.processName,
+                                          reqToken.canonicalHostName,
+                                          reqToken.localhostname);
+  }
+  catch
+  {
+    // TODO Check Inq and can we offer a short-cut when the argument is an exception?
+    logsevere($catalog.inq.filexfer.logger, @exception);
+  }
+
+  // Check for any queued requests. If there aren't any then
+  // just terminate
+  if (!call doQueuedRequest(clientToken))
+    exit(0);
+  
+}
+
+/**
+ * Request a file. The filename is taken relative to the configured root
+ * of the filexfer package.
+ * <p/>
+ * This function assumes it is being run by a User Process (that is the
+ * process of a connected client).
+ */
+local function requestFile(any filename, any ackFunc, any excFunc)
+{
+  // Check the file exists and is readable. We can do this in
+  // the User Process thread, that is we don't start the process
+  // to handle the transfer before the file is checked and
+  // any exception is incurred in the more appropriate thread.
+  any ff = call checkFile(filename, excFunc);
+
+  // What to do if we've reached the maximum number of
+  // outstanding xfers? We'll queue the request.
+  // Do or queue the request
+  any reqToken = call makeXferToken(filename,
+                                    ff,
+                                    $process.id,
+                                    $process.processName,
+                                    $process.address.properties.hostAddress,
+                                    $process.address.properties.canonicalHostName,
+                                    $process.localhostname,
+                                    ackFunc,
+                                    excFunc);
+  call startRequest(reqToken);
+}
+
+service requestFile(any filename, any ackFunc, any excFunc)
+{
+  call requestFile(filename, ackFunc, excFunc);
+}
+
+// Test login service
+service Login(string loginName, string passwd, string .package, boolean ignoreExpiring)
+{
+  //setcompressed($root.ochannel, true);
+
+  call system:LoginOK(url="fileXferTestClient.inq");
+}
+
+// Test logout service
+service Logout()
+{
+}
+

@@ -1,0 +1,131 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+
+/**
+ * Inq - General purpose message dialog
+ */
+
+package inq.gui.util;
+
+// Older - to be removed when apps like xylinq have been modified. Do not use.
+function createMessageDialog(string dialogName = "messageDialog", any parent)
+{
+  if ($this.{dialogName})
+    return();
+
+
+	gDialog(parent) dialog;
+
+  call createDialog(dialog);
+
+  add(dialog, path($this.{dialogName}));
+  dialog;
+}
+
+// Use this one, as it allows the dialog to be placed anywhere rather than
+// assuming it will be placed at $this.
+function createMessageDialogAt(any dialogPath, any parent)
+{
+  if (!dialogPath)
+    any dialogPath = path($root.messageDialog);
+
+	gDialog(parent) dialog;
+
+  call createDialog(dialog);
+
+  add(dialog, dialogPath);
+
+  dialog;
+}
+
+/**
+ * Show a message dialog and initialise with the given parameters.
+ * If the okText is null then the OK button won't be visible.
+ */
+function messageDialog(any    dialog,
+                       string messageText  = "No Message!",
+                       string messageTitle = "Message",
+                       string okText       = "OK",
+                       any    icon,
+                       func   okExpr,
+                       int    maxLines,
+                       boolean resize = true)
+{
+	any dialog = dialog ? dialog : $root.messageDialog;
+
+	dialog.ok.properties.text       = okText;
+	dialog.ok.properties.visible    = !isnull(okText);
+	dialog.message.properties.maxLineHeight  = maxLines;
+	dialog.message.properties.text  = messageText;
+	dialog.message.properties.caretPosition  = 0;
+	//dialog.message.properties.fitColumnsTo  = messageText;
+	//dialog.message.properties.fitRowsTo     = messageText;
+	dialog.icon.properties.icon  = icon ? icon : $uidefaults.OptionPane.informationIcon;
+	dialog.properties.title         = messageTitle;
+	dialog.vars.okExpr              = okExpr;
+
+	show(dialog, resize);
+}
+
+function hideMessageDialog(any dialog)
+{
+	any dialog = dialog ? dialog : $root.messageDialog;
+	hide(dialog);
+}
+
+local function dialogOK()
+{
+	xfunc($this.vars.okExpr);
+	setnull($this.vars.okExpr);
+}
+
+local function createDialog(any dialog)
+{
+  dialog.properties.hideOnOk     = true;
+  dialog.properties.hideOnCancel = true;
+  dialog.properties.contextNode  = true;
+  dialog.properties.resizable    = true;
+  dialog.properties.minSize = array s = (200, 100);
+
+  func dialog.vars.okExpr;
+
+  // Declare dialog contents
+  gTextArea  message;
+  message.properties.lineWrap = true;
+  message.properties.fitText  = true;
+  message.properties.editable = false;
+  message.properties.wrapStyleWord = true;
+  message.properties.opaque = false;
+  message.properties.font = $uidefaults.Label.font;
+  message.properties.border = null;
+  gLabel     icon;
+  gButton ok;
+  gEvent (ok, gDialog=gDialogok);
+  message.properties.text="MESSAGE";
+  ok.properties.text="OK";
+  dialog.properties.defaultButton = ok;
+
+  // Set up the button's default (action) event to be
+  // the dialogOK  event
+  gEvent(dialog, call dialogOK(),     event=(gDialogok));
+
+  layout ($stack, dialog,
+          "
+					 Table  Columns 5, icon=GRID_PREF, 5, msg1=GRID_FILL, button=GRID_PREF, msg2=GRID_FILL, 5
+					   Rows 5,
+						      icon=GRID_FILL,
+									5,
+						      button=GRID_PREF,
+									5;
+           {
+               Cell icon icon icon button Align c icon
+               Cell msg1 icon msg2 icon message
+               Cell icon button msg2 button Align c ok
+           }
+           ");
+}

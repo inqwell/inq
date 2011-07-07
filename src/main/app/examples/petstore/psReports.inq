@@ -1,0 +1,505 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * PetStore Example
+ *
+ * Report generation.
+ */
+
+package examples.petstore;
+
+local function orderSummary(any filter, any ack)
+{
+  // Create the xml report file.
+  any xml = call createSummaryXML(filter);
+  
+  // Generate the pdf report
+  any pdf = call generatePdf(xml); 
+
+  // Return the generated file name to client. It then performs
+  // a file transfer request  
+  send updateOk(item = pdf, ack);
+}
+
+local function orderDetail(any Order, any ack)
+{
+  // Create the xml report file.
+  any xml = call createDetailXML(Order);
+  
+  // Generate the pdf report
+  any pdf = call generatePdf(xml); 
+
+  // Return the generated file name to client. It then performs
+  // a file transfer request  
+  send updateOk(item = pdf, ack);
+  
+}
+
+local function createSummaryXML(any filter)
+{
+  // Create an Inq structure containing the data we want rendered
+  // in the report.
+  
+  // Notes
+  //   1. Reuse filterOrders() - see psOrders.inq
+  //   2. Seed the structure with an ordered map, so we can
+  //      later sort it
+  omap m;
+  any root.data.orders  = call filterOrders(filter, root = m);
+
+  //   3. Create an Order to hold the total price of the set
+  //      and calculate it.
+  any total = new(Order);
+  total.TotalPrice = sum(root.data.orders, $loop.Order.TotalPrice);
+  
+  //   4. Add the total Order to the set
+  any root.data.orders.total.Order = total;
+  
+  // Sort the orders by OrderDate and Order fields. These will be null
+  // in the total row, which we want to make the last item. We do this
+  // by specifying that null sorts higher than anything non-null.
+  sort(root.data.orders, $loop.Order.OrderDate, $loop.Order.Order, null=NULL_HIGH);
+  
+  // Put the Account into the structure - it is used in the report header
+  any root.data.Account = call getAccount();
+  
+  any root.report.title        = "Order Summary"; // TODO i18n
+  any root.report.disclaimer   = call disclaimer();
+  
+  // Create a ReportHelper instance and initialise with various
+  // things we want in the report. In this case we just want the
+  // dates formatted by Inq in the produced xml.
+  any helper = new(ReportHelper, filter);
+  
+  // The tags generated beneath <summarytable> must come out in the declared
+  // sequence (caption and data not so much), so use an omap to ensure they do!
+  omap root.summarytable;
+  
+  // The caption for the order summary table
+  any root.summarytable.caption = renderf("Your orders between {0} and {1}:",
+                                          helper.FromDate,
+                                          isnull(helper.ToDate, "Today"));
+  
+  // The columns that will appear in the order summary table.
+  // Each of these nodes is produced with the tag name <column> and
+  // appear in the table in the order they are declared here (hence
+  // the need for the omap). Attributes are used by the xslt to select
+  // the required nodes from the children of the selected nodeset.
+  any root.summarytable.OrderNumber = null;
+  any root.summarytable.OrderDate   = null;
+  any root.summarytable.NumItems    = 3;    // TODO count of LineItems
+  any root.summarytable.OrderTotal  = null;
+  
+  // What data from the root/data section to use for the
+  // order summary table. The nodeset attribute, put on by the
+  // tag function, is used by the xslt to access the appropriate
+  // node under root/data
+  any root.summarytable.from        = null;
+  
+  // Now write the xml out. Declare a stream
+  ioXMLX strm;
+
+  // TODO: explain
+  object p = path($this.summarytable.%);
+  any tagFuncs.{p} = cfunc f = call orderSummaryChild(nodeset = getnodeset(root.data.orders));
+  strm.properties.tagFuncs = tagFuncs;
+
+  // TODO: explain
+  object p = path($this*total.Order.TotalPrice);
+  any formatters.{p} = "¤#,##0.00";
+  strm.properties.formatters = formatters;
+
+  call writeXMLFile(strm, root, rootElementName = "ordersummary");
+}
+
+local function createDetailXML(any Order)
+{
+  any root.data.items  = call getItems(Order);
+  sort(root.data.items, $loop.Item.Item);
+  
+  // Put the order in the structure for the summary line
+  any root.data.Order = Order;
+  
+  // Put the Account into the structure - it is used in the report header
+  any root.data.Account = $this.vars.Account;
+
+  any root.report.title        = "Order Summary"; // TODO i18n
+  any root.report.disclaimer   = call disclaimer();
+  
+  // The tags generated beneath <itemstable> must come out in the declared
+  // sequence (caption and data not so much), so use an omap to ensure they do!
+  omap root.itemstable;
+  
+  // The caption for the order summary table
+  any root.itemstable.caption = "Items:";
+  
+  // What data from the root/data section to use for the
+  // order items table. The nodeset attribute, put on by the
+  // tag function, is used by the xslt to access the appropriate
+  // node under root/data
+  any root.itemstable.data = null;
+  
+  // The columns that will appear in the order items table.
+  // Each of these nodes is produced with the tag name <column> and
+  // appear in the table in the order they are declared here (hence
+  // the need for the omap). Attributes are used by the xslt to select
+  // the required nodes from the children of the selected nodeset.
+  any root.itemstable.from = null;
+  any root.itemstable.Item = null;
+  any root.itemstable.Category   = null;
+  any root.itemstable.Name       = null;
+  any root.itemstable.Qty        = null;
+  any root.itemstable.Price      = null;
+  any root.itemstable.Total      = null;
+  
+  // Similarly for the one-line summary of the order in question. There is
+  // no <from> child because the xslt does not reference a node set, only
+  // single instances.
+  // The nodes that get transformed into <column> tags are given the same
+  // name as in createSummaryXML() so the tag function orderSummaryChild()
+  // can be reused.
+  omap root.order;
+  any root.order.caption     = "Order Summary:";
+  any root.order.OrderNumber = null;
+  any root.order.OrderDate   = null;
+  any root.order.NumItems    = count(root.data.items);
+  any root.order.OrderTotal  = null;
+  
+  // Now write the xml out. Declare a stream
+  ioXMLX strm;
+
+  // TODO: explain
+  object p1 = path($this.order.%);
+  any tagFuncs.{p1} = cfunc f = call orderSummaryChild();
+  
+  object p2 = path($this.itemstable.%);
+  any tagFuncs.{p2} = cfunc f = call itemsChild(nodeset = getnodeset(root.data.items));
+
+  strm.properties.tagFuncs = tagFuncs;
+
+  // TODO: explain
+  object p3 = path($this.data.Order.TotalPrice);
+  any priceFormatter = format("¤#,##0.00", Order.TotalPrice);
+  any formatters.{p3} = priceFormatter;
+  strm.properties.formatters = formatters;
+
+  call writeXMLFile(strm,
+                    root,
+                    rootElementName = "orderdetail");
+}
+
+local function orderSummaryChild(any nodeset,   // <- argument(s) from script
+                                 any node,      // <- arguments Inq supplies
+                                 any parent,    // v
+                                 any nodeName,
+                                 any ordinal,
+                                 any content,
+                                 any last,
+                                 any descend,
+                                 any attributes)
+{
+  // Control how the various table child tags come out
+  // TODO: Explain
+  
+  any ret = "column";
+  
+  switch
+  {
+    when(nodeName == "from")
+    {
+      any attributes.nodeset = nodeset;
+      
+      // Leave the tag name as it is
+      any ret = nodeName;
+    }
+
+    when(nodeName == "caption")
+    {
+      // Leave the tag name as it is
+      any ret = nodeName;
+    }
+    
+    when(nodeName == "OrderNumber")
+    {
+      any attributes.typedef = fqname(typedef(Order));
+      any attributes.field   = "Order";
+      any attributes.halign  = "center";  // used by table cell generation
+    }
+
+    when(nodeName == "OrderDate")
+    {
+      any attributes.typedef = fqname(typedef(Order));
+      any attributes.field   = "OrderDate";
+    }
+
+    when(nodeName == "OrderTotal")
+    {
+      any attributes.typedef = fqname(typedef(Order));
+      any attributes.field   = "TotalPrice";
+    }
+    
+    // Don't produce a tag for anything we were not expecting
+    otherwise
+      any ret = null;
+
+  }
+  
+  // The return value is used as the tag name. All of the table
+  // columns are called <column...> (unless skipped as above)
+  ret;
+}
+
+local function itemsChild(any nodeset,   // <- arguments we supply
+                          any node,      // <- arguments Inq supplies
+                          any parent,    // v
+                          any nodeName,
+                          any ordinal,
+                          any content,
+                          any last,
+                          any descend,
+                          any attributes)
+{
+  // Control how the various table child tags come out
+  // TODO: Explain
+  
+  any ret = "column";
+  
+  switch
+  {
+    when(nodeName == "from")
+    {
+      any attributes.nodeset = nodeset;
+      
+      // Leave the tag name as it is
+      any ret = nodeName;
+    }
+
+    when(nodeName == "caption")
+    {
+      // Leave the tag name as it is
+      any ret = nodeName;
+    }
+    
+    when(nodeName == "Item")
+    {
+      any attributes.typedef = fqname(typedef(Item));
+      any attributes.field   = "Item";
+    }
+
+    when(nodeName == "Category")
+    {
+      any attributes.typedef = fqname(typedef(Product));
+      any attributes.field   = "Category";
+    }
+
+    when(nodeName == "Name")
+    {
+      any attributes.typedef = fqname(typedef(Product));
+      any attributes.field   = "Name";
+    }
+    
+    when(nodeName == "Qty")
+    {
+      any attributes.typedef = fqname(typedef(LineItem));
+      any attributes.field   = "Qty";
+    }
+    
+    when(nodeName == "Price")
+    {
+      any attributes.typedef = fqname(typedef(LineItem));
+      any attributes.field   = "UnitPrice";
+    }
+    
+    when(nodeName == "Total")
+    {
+      any attributes.typedef = fqname(typedef(ValueHelper));
+      any attributes.field   = "Price";
+    }
+    
+    // Don't produce a tag for anything we were not expecting
+    otherwise
+      any ret = null;
+
+  }
+  
+  // The return value is used as the tag name. All of the table
+  // columns are called <column...> (unless skipped as above)
+  ret;
+}
+
+local function metaTags(any priceCurrency,  // <- argument(s) from script
+                        any Typedef,         // <- arguments Inq supplies
+                        any Field,           // v
+                        any Label,
+                        any Width)
+{
+  // TODO: explain
+  switch
+  {
+    when (Typedef == typedef(Order) && Field == "ShipCity")
+    {
+      //writeln($catalog.system.out, Label);
+      Label = "Shipping\nCity";
+      //writeln($catalog.system.out, Label);
+    }
+    
+    when (Typedef == typedef(LineItem) && Field == "UnitPrice")
+    {
+      Label = "Unit Price\n" + priceCurrency.properties.symbol;
+    }
+    
+    when(Typedef == typedef(ValueHelper) && Field == "Price")
+    {
+      Label = "Total Price\n" + priceCurrency.properties.symbol;
+    }
+  }
+}
+
+local function makeXslFile()
+{
+  // Expecting to find a directory ./reports relative to this inq source
+  // file, where the reports are scripted as xslt.
+  file xsl = absurl("reports" +
+                    $properties.file_separator +
+                    "psreports.xsl");
+                      
+  xsl.properties.canonicalPath;
+}
+
+local function generatePdf(any xml)
+{
+  // xsl scripted report transform
+  any xsl = call makeXslFile();
+  
+  // Where the result will end up
+  any pdf = call makeOutputFile();
+                      
+  // Make a command line
+  // Bit of windows nastiness here
+  if (startswith($properties.os_name, "Windows"))
+  {
+    any fop = "fop.bat";
+    any xml = "\"" + xml + "\"";  // In case of spaces...
+  }
+  else
+  {
+    any fop = "fop";
+  }
+  
+  any c = "{0} -xml {1} -xsl {2} -pdf {3}";
+  string cmd = renderf(c, fop, xml, xsl, pdf);
+
+  // Put stderr in a string stream and if fop's exit status is not
+  // zero throw the string content.
+  string err;
+  ioPrint perr;
+  open(perr, "string://err", OPEN_WRITE);
+  
+  // syscmd closes any streams it is given so we don't have to
+  if (syscmd(cmd, stdout=$catalog.system.out, stderr=perr) && err)
+    throw(cmd + err);
+
+  // Returns
+  call inq.filexfer:makeRelativeToRoot(filename = pdf);
+}
+
+local function writeXMLFile(any strm,
+                            any root,
+                            any rootElementName)
+{
+  any repXml = createtmpfile($process.loginName, ".xml");
+  try
+  {
+    // TODO: explain
+    strm.properties.rootName = rootElementName;
+
+    // TODO: explain
+    strm.properties.metaFunc = cfunc f = call metaTags(priceCurrency = $catalog.{$root.i18n}.ps.CURRENCY);
+    
+    // Open the stream and write the Inq structure. Xml representative
+    // of the Inq structure and modified by the tag function(s) will
+    // be produced. 
+    open(strm, repXml, OPEN_WRITE);
+    writestream(strm, root);
+  }
+  finally
+  {
+    close(strm);
+    
+    // returns
+    // Note: the Inq "file" type yields a URL syntax when converted to a string.
+    // We want the file system's path instead. 
+    repXml.properties.canonicalPath;
+  }
+}
+
+local function makeOutputFile()
+{
+  // The three-argument version of createtmpfile takes prefix, suffix
+  // and directory. We are expecting to find inq_home/tmp as the
+  // output directory.
+  any f = createtmpfile($process.loginName,
+                        ".pdf",
+                        call inq.filexfer:makeAbsoluteFromRoot(filename = "tmp"));
+
+  f.properties.canonicalPath;
+}
+
+local function getItems(any Order)
+{
+  omap root;
+  
+  // Create a key suitable for looking up an Order's associated
+  // LineItem instances. The matching fields in the key ByOrder
+  // are copied from the initialising value Order. This is just
+  // the field Order.Order. 
+  any k = new(LineItem.ByOrder, Order);
+
+  read(LineItem, k, setname="list", target=root);
+  
+  // TODO: explain
+  any k = new(Product.pkey);
+  aggregate(Item,
+            root.list[@first].LineItem,
+            foreach = cfunc f = {
+                                  k.Product = $loop.Item.Product;
+                                  read(Product, k, target=$loop);
+                                  
+                                  // Not actually used in the report but leave
+                                  // for now.
+                                  read(OrderStatus, $loop.LineItem, target=$loop);
+                                  
+                                  any $loop.OrderTotal = new(ValueHelper);
+                                  $loop.OrderTotal.Price = $loop.LineItem.Qty * $loop.LineItem.UnitPrice;
+                                }
+           );
+
+  // TODO: Explain
+  remove(root.list);
+}
+
+local function disclaimer()
+{
+  "Petstore UK plc lorem ipsum dolor sit amet, consectetuer adipiscing elit,
+sed diam nonummy nibh euismod tincidunt ut laoreet dolore magna aliquam erat volutpat. Ut
+wisi enim ad minim veniam, quis nostrud exerci tation ullamcorper suscipit lobortis nisl
+ut aliquip ex ea commodo consequat. Duis autem vel eum iriure dolor in hendrerit in
+vulputate velit esse molestie consequat, vel illum dolore eu feugiat nulla facilisis
+at vero eros et accumsan et iusto odio dignissim qui blandit praesent luptatum zzril
+delenit augue duis dolore te feugait nulla facilisi.";
+}
+
+service orderSummary(any filter, any ack)
+{
+  call orderSummary(filter, ack);
+}
+
+service orderDetail(any Order, any ack)
+{
+  call orderDetail(Order, ack);
+}

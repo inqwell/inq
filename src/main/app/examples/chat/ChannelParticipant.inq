@@ -1,0 +1,75 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * Channel Participant.  One instance per ChatChannel, per
+ * correspondent in that channel (FK fields ChatChannel and OnLine).
+ *
+ * The OtherUser field is only used for 1-1 private chats when joining
+ * the opposite participant. DisplayName is for GUI rendering of the
+ * name of the chat session. For 1-1 private chats it is the same
+ * as OtherUser. For private conferences it is the name given by
+ * when the conference is created and for public chatrooms it
+ * is the value of ChatChannel.ChatChannel.
+ *
+ * This typedef has a manufactured unique ID (we use the VM identity)
+ * OtherUser - TODO.
+ *
+ * Copyright Inqwell Ltd 2002-2008 All Rights Reserved
+ */
+
+package examples.chat;
+
+typedef ChannelParticipant
+{
+  fields
+  (
+    string  ChannelParticipant;
+    ChatChannel;
+    OnLine;
+    OnLine  OtherUser;
+    string  DisplayName;
+    // TODO remove string  Context;
+  )
+
+  construct(
+    {
+      // Assume the stack contains the required arguments.
+      $this = .;
+
+      // We always use the VM identity as the unique key.
+      $this.ChannelParticipant = identity($this);
+    }
+  )
+
+  pkey
+  (
+    fields(ChannelParticipant)
+  )
+
+  key ByChannelUser unique
+  (
+    fields(ChatChannel, OnLine)
+  )
+
+  // This key allows us to list the participants in the given channel.
+  // From the UserName we can then join with the corresponding
+  // OnLine instances
+  key ByChatChannel
+  (
+    fields(ChatChannel)
+  )
+
+  // This key allows us to list all the channels a user is currently
+  // a member of.  If a user is abnormally terminated then this
+  // list can be used to remove that user's participation in
+  // all such channels.
+  key ByOnLine
+  (
+    fields(OnLine)
+  )
+}

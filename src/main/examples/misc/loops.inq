@@ -1,0 +1,51 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+package loops;
+
+writeln($catalog.system.out, "do...while");
+int x.y=10;
+do
+{
+  writeln($catalog.system.out, x.y);
+  x.y = x.y - 1;
+}
+while (x.y > 0);
+writeln($catalog.system.out, "");
+
+writeln($catalog.system.out, "while...");
+x.y = 10;
+while (x.y > 0)
+{
+  writeln($catalog.system.out, x.y);
+  --x.y;
+}
+writeln($catalog.system.out, "");
+
+writeln($catalog.system.out, "traditional for(...)");
+for (int i = 0; i < 10; i++)
+{
+  writeln($catalog.system.out, i);
+}
+writeln($catalog.system.out, "");
+
+writeln($catalog.system.out, "foreach(...)");
+int x.a = 1;
+int x.b = 2;
+int x.c = 3;
+foreach(x)
+{
+  writeln($catalog.system.out, "@first = " + @first);
+  writeln($catalog.system.out, "@last = " + @last);
+  writeln($catalog.system.out, "@count = " + @count);
+  writeln($catalog.system.out, "@name = " + @name);
+  writeln($catalog.system.out, "$loop = " + $loop);
+  writeln($catalog.system.out, "");
+}
+

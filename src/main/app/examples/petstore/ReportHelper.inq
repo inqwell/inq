@@ -1,0 +1,30 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * PetStore Example
+ *
+ * A type that acts as a helper, carrying data used in printed reports.
+ * TODO: Never managed etc just to get formatting
+ */
+
+package examples.petstore;
+
+typedef ReportHelper
+{
+  fields
+  (
+    int         Dummy;
+    Date        FromDate;
+    Date        ToDate;
+  )
+  
+  pkey
+  (
+    fields (Dummy)
+  )
+}

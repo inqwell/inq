@@ -1,0 +1,14 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+
+string i18n = "fr";
+
+string $catalog.{i18n}.celcius = "Celcius";
+string $catalog.{i18n}.fahrenheit = "Fahrenheit";
+string $catalog.{i18n}.title = "Conversion De la Temp�rature";
+

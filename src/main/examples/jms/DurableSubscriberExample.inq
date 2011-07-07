@@ -1,0 +1,319 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/*
+ * $Archive:  $
+ * $Author: sanderst $
+ * $Revision: 1.5 $
+ * $Date: 2011-04-10 22:19:25 $
+ */
+
+/**
+ * DurableSubscriberExample.inq
+ *
+ * The DurableSubscriberExample demonstrates that a durable subscription
+ * is active even when the subscriber is not active.
+ *
+ * The program starts a DurableSubscriber and MultiplePublisher processes, 
+ *
+ * The program begins like any publish/subscribe script: the subscriber starts,
+ * the publisher publishes some messages, and the subscriber receives them.
+ *
+ * At this point the subscriber is closed.  The publisher then publishes 
+ * some messages while the subscriber is not active.  The subscriber is then 
+ * restarted and receives the messages.
+ *
+ * Specify a topic name on the command line when you run the script.
+ * 
+ * Inq Implementation Notes:
+ * It is useful to understand the Inq threading model when comparing this
+ * script to the GlassFish DurableSubscriberExample.java example. In the
+ * Java case, execution is driven from the main thread and this synchronises
+ * with the JMS listener thread via the monitor. In Inq, the unit of
+ * execution is a Process and its associated Transaction. A Process has a
+ * thread that waits on the Process's input channel for requests (received
+ * from other Processes, possibly in other VMs). Things like locks, waits
+ * and notifys are performed on behalf of the *Process*.
+ *
+ * When an external system like JMS (or client Java code via the Inq
+ * AbstractPlugin mechanism) starts its own threads that call back into
+ * the Process environment, these threads require the Process for themselves,
+ * so they can access its node space and Transaction. Thus, the common
+ * case is that a Process is only ever associated with one thread (its own).
+ * However, when callbacks occur from other threads these take on their
+ * associated Process and run mutually exclusive to the Process's own.
+ * This can be put more succinctly by saying that a Process can be
+ * shared amongst several threads at different times.
+ * If we followed the model used in DurableSubscriberExample.java there
+ * would be no cooperation between publisher (main thread) and
+ * subscriber (JMS callback thread) because these two things would share
+ * the same Process - in the Inq environment this makes them the same thing.
+ *
+ * In this example, the publisher and subscriber are created as separate
+ * Processes. As in DurableSubscriberExample.java the subscriber notifies
+ * the publisher when it has received all of the current published
+ * batch. To get the desired behaviour and respecting the thread-safety
+ * of JMS entities, some of the analogous functions (which are all called
+ * in the publisher thread) are dispatched to the subscriber thread
+ * and made synchronous with lock/wait/notify. If nothing else, this
+ * illustrates Inq explicit locking.
+ *
+ * Finally, note that when running script with the interactive parser (as
+ * we do for these examples) the "main" Process is unable to perform
+ * the operations lock, wait and notify. It is only suitable for parsing
+ * the file and launching the other processes.
+ */
+
+#include<SampleUtilities.inq>
+
+local function usage()
+{
+  writeln($catalog.system.err, "usage: \i:");
+  writeln($catalog.system.err, "  -topic <topic-name>");
+  writeln($catalog.system.err, " [-num  <number of msgs>]");
+  exit(1);
+}
+
+// Process-start function for the publisher.
+local function publisherStart(any process, // always provided by Inq
+                              any topic)
+{
+  writeln($catalog.system.out, "\e \l Starting: " + process.processName);
+
+  // Just send a service request to the process
+  // to run the demo
+  send doPublisher(@channel = process.ichannel, topic);
+}
+
+// Process-start function for the subscriber.
+local function subscriberStart(any    process, // always provided by Inq
+                               any    topic,
+                               any    connection)
+{
+  writeln($catalog.system.out, "\e \l Starting: " + process.processName);
+
+  // Just send a service request to the process
+  // to run the demo
+  send doSubscriber(@channel = process.ichannel, topic, connection);
+}
+
+local function jmsTopicListen(any message)
+{
+  if (message.properties.text)
+    writeln($catalog.system.out, "SUBSCRIBER: Reading message: " + message.properties.text);
+  else
+  {
+    // The DoneLatch (see DurableSubscriberExample.java) uses
+    // a lock (on the arbitrary string "foo") and notify. The
+    // notify() function takes an optional expression that is
+    // executed as the notify is performed, thus implementing
+    // monitor state. See "foo" elsewhere for the opposite
+    // side's condition test.
+    lock("foo");
+    notify("foo", cfunc f = $catalog.jmstest.latch = true);
+  }
+}
+
+local function jmsEnd()
+{
+  mqclose($this.jms.session);
+  mqclose($this.jms.connection);
+
+  writeln($catalog.system.out, "\e \l Ended: " + $process.processName);
+}
+
+local function publishMessages(any topicPublisher, int NUMMSGS)
+{
+  /**
+   * Creates text message.
+   * Sends some messages, varying text slightly.
+   * Messages must be persistent.
+   */
+
+  any txtmsg = mqcreatetextmessage($this.jms.session);
+
+  while(NUMMSGS--)
+  {
+    txtmsg.properties.text = "Here is a message " + ++$this.vars.startindex;
+    writeln($catalog.system.out, "PUBLISHER: Publishing message: " +
+                                 txtmsg.properties.text);
+    mqsend(topicPublisher, txtmsg);
+  }
+
+  // Send a non-text control message indicating end of messages.
+  mqsend(topicPublisher, mqcreatemessage($this.jms.session));
+}
+
+// Publisher process startup
+service doPublisher(any topic)
+{
+  any $this.jms = call getTopic(topic);
+  int $this.vars.startindex;
+  any topicPublisher = mqcreateproducer($this.jms.session, $this.jms.topic);
+
+  // Create a second connection used by the subscriber process
+  // but which we hold a reference to so we can start and stop it
+  any subscriberConn = call getConnection();
+
+  any subscriber = spawn("DurableSubscriber",
+                         type  = PROCESS_DETACHED,
+                         start = call subscriberStart($catalog.argsMap.topic, connection = subscriberConn),
+                         end   = call jmsEnd(),
+                         syncext = true);
+
+  call startSubscriber(subscriber, connection = subscriberConn);
+  call publishMessages(topicPublisher, NUMMSGS = 3);
+  call closeSubscriber(subscriber);
+  call publishMessages(topicPublisher, NUMMSGS = 3);
+  call startSubscriber(subscriber, connection = subscriberConn);
+  call closeSubscriber(subscriber);
+
+  call finishPublisher();
+  call finishSubscriber(subscriber);
+
+  // Terminate the subscriber process...
+  kill(subscriber);
+
+  // ...and exit the publisher process
+  // In both cases the end call jmsEnd
+  // tidies up the JMS connections.
+  exit(0);
+}
+
+local function startSubscriber(any subscriber, any connection)
+{
+  mqstop(connection);
+
+  // Make this function synchronous with the subscriber process
+  // using a simple wait/notify
+  lock("waitSubscriber");
+
+  send startSubscriber(@channel = subscriber.ichannel);
+
+  wait("waitSubscriber");
+  mqstart(connection);
+}
+
+local function closeSubscriber(any subscriber)
+{
+  // While in the publisher thread (from where this function is
+  // called) wait for the latch to be set telling us that
+  // the subscriber has processed all its messages.
+  // The lock() function accepts an optional (timeout and)
+  // expression. If the expression is false then lock()
+  // waits until a notify() takes place that includes an
+  // expression that makes the test true. See "foo" elsewhere
+  // for the opposite side's condition set.
+  lock("foo", -1, cfunc f = $catalog.jmstest.latch);
+
+  // Ok we've seen the latch get set to true. Set it
+  // back to false for next run while we have the
+  // lock on the monitor "foo"
+  $catalog.jmstest.latch = false;
+
+  // Make this function synchronous with the subscriber process
+  // using a simple wait/notify
+  lock("waitSubscriber");
+
+  send closeSubscriber(@channel = subscriber.ichannel);
+
+  wait("waitSubscriber");
+}
+
+local function finishSubscriber(any subscriber)
+{
+  // Make this function synchronous with the subscriber process
+  // using a simple wait/notify
+  lock("waitSubscriber");
+
+  send finishSubscriber(@channel = subscriber.ichannel);
+
+  wait("waitSubscriber");
+}
+
+local function finishPublisher()
+{
+  mqclose($this.jms.connection);
+}
+
+// Subscriber process startup
+service doSubscriber(any topic, any connection)
+{
+  connection.properties.clientID = "DurableSubscriberExample";
+
+  any $this.jms = call getTopic(topic, connection);
+}
+
+// (re)start the subscriber in it's process environment.
+service startSubscriber()
+{
+  writeln($catalog.system.out, "Starting subscriber");
+
+  // Declare a func variable that is the callback for asynchronously
+  // received messages
+  cfunc topicListener = call jmsTopicListen();
+
+  any $this.jms.topicSubscriber = mqcreatedurablesubscriber($this.jms.session,
+                                                            $this.jms.topic,
+                                                            "MakeItLast");
+
+  mqsetmessagelistener($this.jms.topicSubscriber, topicListener);
+
+  // Synchronise with the publisher process
+  lock("waitSubscriber");
+  notify("waitSubscriber");
+
+  // Messages subsequently published by the publisher process
+  // will be handled in jmsTopicListen
+}
+
+// (re)start the subscriber in it's process environment.
+service closeSubscriber()
+{
+  writeln($catalog.system.out, "Closing subscriber");
+
+  mqclose($this.jms.topicSubscriber);
+
+  // Synchronise with the publisher process
+  lock("waitSubscriber");
+  notify("waitSubscriber");
+}
+
+// unsubscribe in the subscriber's process environment.
+service finishSubscriber()
+{
+  mqunsubscribe($this.jms.session, "MakeItLast");
+  mqclose($this.jms.connection);
+
+  // Synchronise with the publisher process
+  lock("waitSubscriber");
+  notify("waitSubscriber");
+}
+
+// Must supply -topic command line argument
+if (!$catalog.argsMap.topic)
+  call usage();
+
+// Place a latch variable in the global $catalog space
+// The producer/subscriber processes use this to
+// synchronise with each other. Local variable booleans
+// are initially false
+boolean $catalog.jmstest.latch;
+
+// Start the publisher
+any publisher = spawn("MultiplePublisher",
+                      type  = PROCESS_DETACHED,
+                      start = call publisherStart($catalog.argsMap.topic),
+                      end   = call jmsEnd());
+
+//waitproc(subscriber);
+//waitproc(producer);
+
+//writeln($catalog.system.out, "\i terminating.....");
+

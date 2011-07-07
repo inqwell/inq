@@ -1,0 +1,225 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * Inqwell Admin Password Tool
+ *
+ * Reset the password in $properties.inq_home/etc/adminpasswd.
+ *
+ * A command-line utility that runs on the server host to set up
+ * its admin password. Until the admin password has been established it
+ * is not possible to login as the pre-defined system.server
+ * package and load server entities. Distribution password defaults
+ * to "inqwell".
+ */
+
+package system.client;
+
+local function createGui()
+{
+  gWindow win;
+  win.properties.contextNode = true;
+  win.properties.title = "Reset Inq Admin Password";
+
+  gPasswdField pPwd;
+  gPasswdField pConfPwd;
+  gLabel       lPwd;
+  gLabel       lConfPwd;
+  gButton      bApply;
+  gButton      bClose;
+  gTextField   tfStatus;
+
+  // Events
+  gEvent(tfStatus, call contextEstablished(), event=(gContext));
+  call setupCheckOk(component = pPwd);
+  call setupCheckOk(component = pConfPwd);
+
+  // Properties
+  bApply.properties.text       = "Apply";
+  bClose.properties.text       = "Close";
+  bApply.properties.mnemonic   = keycode(VK_A);
+  bClose.properties.mnemonic   = keycode(VK_C);
+  lPwd.properties.text         = "New Password";
+  lConfPwd.properties.text     = "Confirm Password";
+  win.properties.defaultButton = bApply;
+
+  // Working variables for the context-to-be
+  string  win.vars.status;
+  boolean win.vars.canApply;
+  boolean win.vars.envOk;
+
+  // Rendering
+  tfStatus.properties.renderInfo = renderinfo($this.vars.status, width=40);
+
+  layout (., win,
+          "Margin d:5
+           Table   Columns labels=GRID_PREF, 5, inputs=GRID_FILL, apply=0.2, 5, closeme=0.2
+            Gap 3 Rows New=GRID_PREF,
+                       confirm=GRID_PREF,
+                       GRID_FILL,
+                       buttons=GRID_PREF,
+                       status=GRID_PREF;
+           {
+             Column labels
+             {
+               lPwd
+               lConfPwd
+             }
+             
+             Column inputs
+             {
+               HSpan closeme pPwd
+               HSpan closeme pConfPwd
+             }
+             
+             Cell apply buttons bApply
+             Cell closeme buttons bClose
+             
+             Row status
+             {
+               HSpan closeme tfStatus
+             }
+           }");
+
+  // Property bindings (can only be bound when context is known)
+  gProperty (bApply, enabled, renderinfo($this.vars.canApply));
+
+  gEvent(win, call cancel(), event=(gWclosing));
+  gEvent(bClose, call cancel());
+  gEvent(bApply, call applyCb());
+
+  add(win, path($this.win));
+  show(win);
+}
+
+local function cancel()
+{
+  exit(0);
+}
+
+local function applyCb()
+{
+  string pwd     = $this.pPwd.model.root;
+
+  call apply($this.vars.pwdFile, pwd);
+
+  // Clear GUI
+  empty($this.pPwd.model.root);
+  empty($this.pConfPwd.model.root);
+  setfocus($this.pPwd);
+
+  call setStatus(msg = "Admin password successfully changed");
+}
+
+local function contextEstablished()
+{
+  // A convenient place to validate the inq.home system property
+  // and other environmental issues.
+  if (!$properties.inq_home)
+    call setErrorStatus(msg = "inq.home system property is not set");
+  else
+  {
+    file f;
+    call initFile(pwdFile = f);
+
+    any $this.vars.pwdFile = f;
+    $this.vars.envOk = true;
+
+    if (f.properties.readable)
+      call setStatus(msg = "Password was last set on " + f.properties.lastModified);
+  }
+}
+
+local function setupCheckOk(any component)
+{
+  gEvent(component, call checkOk(), event=(gDocchange, gDocinsert, gDocremove));
+}
+
+local function checkOk()
+{
+  string pwd     = $this.pPwd.model.root;
+  string confPwd = $this.pConfPwd.model.root;
+
+  $this.vars.canApply = pwd == confPwd && length(pwd) != 0 && $this.vars.envOk;
+}
+
+local function setErrorStatus(string msg)
+{
+  $this.vars.status = msg;
+  $this.tfStatus.properties.foreground = color c = "#ff0000";
+  $this.vars.envOk = false;
+}
+
+local function setStatus(string msg)
+{
+  $this.vars.status = msg;
+  $this.tfStatus.properties.foreground = color c = "#000000";
+}
+
+local function initFile(any pwdFile)
+{
+  // Is the path ok?
+  file f = "file:///" +  $properties.inq_home + "/etc/adminpasswd";
+  file p = f.properties.parentFile;
+
+  if (!p.properties.exists)
+    mkdirs(p);
+
+  pwdFile = f;
+
+  // Don't create the file at this point, or we could leave it empty
+}
+
+local function apply(any pwdFile, any pwd)
+{
+  // Try to delete the file first in case its read-only (which we set it to if we can)
+  deletefile(pwdFile);
+
+  // Rewrite file with new pwd
+  ioPrint pwdStream;
+  open(pwdStream, pwdFile, OPEN_WRITE);
+  writeln(pwdStream, crypt(pwd));
+  close(pwdStream);
+
+  // Set to read-only
+  pwdFile.properties.readOnly = true;
+}
+
+if (argsMap.l)
+{
+  // Headless/cmdline
+
+  file pwdFile;
+  call initFile(pwdFile);
+
+  if (pwdFile.properties.readable)
+    writeln($catalog.system.out, "Password was last set on " + pwdFile.properties.lastModified);
+
+  writestream($catalog.system.out, "Enter password (will echo!): ");
+  any pwd = readstream($catalog.system.in);
+
+  if (length(pwd) != 0)
+  {
+    writestream($catalog.system.out, "Confirm: ");
+    any cpwd = readstream($catalog.system.in);
+
+    if (pwd == cpwd)
+    {
+      call apply(pwdFile, pwd);
+      writeln($catalog.system.out, "localhost admin password has been changed");
+    }
+    else
+      writeln($catalog.system.out, "localhost admin password NOT changed");
+  }
+  else
+    writeln($catalog.system.out, "localhost admin password NOT changed");
+}
+else
+  call createGui();
+

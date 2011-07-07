@@ -1,0 +1,89 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+// The story is this: back from a student trip to Beijing my
+// son puts the memory card into a rather cheap PC
+// and.... it gets corrupted. Some scavenging software
+// is found but that rips the thumbnails and full-size
+// images separately. A short Inq script later....
+
+
+
+
+// Concatenate thumbnail headers to megapixel bodies of
+// images restored from a corrupted memory card.
+// Long live the panda.
+
+// The cwd (where the files are)
+file headers = ".";
+file images  = ".";
+
+// Headers are odd numbered files, bodies even. Set up two filters.
+// The files are called "image_nnnn.JPG"
+// The Inq filefilter type uses a regex to determine whether
+// the file is eligible. A scripted function is also possible.
+filefilter headerF = ".*[13579]\\.JPG";
+filefilter imageF  = ".*[02468]\\.JPG";
+
+// Rule out directories. Default is true.
+headerF.properties.acceptDirs =
+  imageF.properties.acceptDirs = false;
+
+// Put the filters into the files representing the cwd
+headers.properties.fileFilter = headerF;
+images.properties.fileFilter = imageF;
+
+// When the fileFilter property has been set, the listFiles
+// property uses it to filter the result.
+// Get the filtered lists of the files out. These are arrays (of course)
+any headerFiles = headers.properties.listFiles;
+any imageFiles  = images.properties.listFiles;
+
+writeln($catalog.system.out, headerFiles);
+writeln($catalog.system.out, imageFiles);
+
+// Make sure the names are in order, or we're really stuffed
+sort(headerFiles, $loop.properties.name);
+sort(imageFiles, $loop.properties.name);
+
+// Streams for the header, image and output
+ioByte h;
+ioByte i;
+ioByte o;
+
+// Iterate over the header list (doesn't matter which)
+foreach(headerFiles)
+{
+  writeln($catalog.system.out, "Header file is " + $loop);
+  writeln($catalog.system.out, "Image file is " + imageFiles[@count]);
+
+  // Open the inputs
+  open(h, $loop, OPEN_READ);
+  open(i, imageFiles[@count], OPEN_READ);
+
+  // Make the output file name - it is the header with the string "image_"
+  // removed. We have to convert the file to a string explicity, as the "sub"
+  // function only works on strings
+  string s = $loop;
+  writeln($catalog.system.out, "Output file is " + (s = sub("", "image_", s)));
+
+  // Open the output stream and write the inputs to it
+  open(o, s, OPEN_WRITE);
+  while(any a = readstream(h))
+    writestream(o, a);
+  while(any a = readstream(i))
+    writestream(o, a);
+
+  close(h);
+  close(i);
+  close(o);
+
+  writeln($catalog.system.out, "");
+}
+

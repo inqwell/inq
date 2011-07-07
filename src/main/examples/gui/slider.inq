@@ -1,0 +1,41 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+gWindow win;
+win.properties.contextNode = true;
+win.properties.defaultCloseOperation = EXIT_ON_CLOSE;
+gSlider sl;
+gTextField setVal;
+
+sl.properties.majorTickSpacing = 10;
+sl.properties.minorTickSpacing = 5;
+sl.properties.paintTicks = true;
+sl.properties.paintLabels = true;
+
+
+layout(., win, "Margin d:5 Etched Lowered Caption tl \"Slider\"; Geometry xy:vf sl
+                Geometry xy:vf Row
+                {
+                  Caption tl \"Value\"; setVal
+                }");
+
+any $this.win = win;
+
+int win.vars.slVal;
+sl.properties.renderInfo       = renderinfo($this.vars.slVal);
+setVal.properties.renderInfo   = renderinfo($this.vars.slVal, editable = true);
+
+gEvent(sl, firemodel=true);
+gEvent(setVal,  firemodel=true);
+
+win.properties.title = "Slider";
+//win.properties.size  = array size = (275,125);
+
+show(win);
+

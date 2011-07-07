@@ -1,0 +1,69 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/*
+ * $Archive:  $
+ * $Author: sanderst $
+ * $Revision: 1.5 $
+ * $Date: 2011-04-10 22:19:25 $
+ */
+
+/**
+ * ObjectMessages.inq
+ *
+ * Following the pattern of the GlassFish(tm) example
+ * of the same name, this example creates and manipulates
+ * object and bytes messages.
+ * It does not send the messages.
+ */
+
+#include<SampleUtilities.inq>
+
+any connFactory = call getConnectionFactory();
+any connection = mqcreateconnection(connFactory);
+
+// Create a session from the connection:
+//   auto-acknowledge mode
+//   not transacted
+any session = mqcreatesession(connection, false, AUTO_ACKNOWLEDGE);
+
+/* 
+ * Create an ObjectMessage from a String.
+ * Modify the original object.
+ * Read the message, proving that the object in the message
+ * has not changed.
+ *
+ * Inq note: Object messages are called Any messages
+ * because they hold anys.
+ */
+
+string str = "A String is an object. (Well, actually its an 'any')";
+writeln($catalog.system.out, "Writing ObjectMessage with string:  " + str);
+any anymsg = mqcreateanymessage(session, str);
+writeln($catalog.system.out, anymsg.properties.any);
+str = "I'm a different String now.";
+writeln($catalog.system.out, "ObjectMessage contains:  " + anymsg.properties.any);
+
+bytearray byteArray = (3, 5, 7, 9, 11);
+writeln($catalog.system.out, "Writing BytesMessage with array: " + byteArray);
+any bytesMessage = mqcreatebytesmessage(session, byteArray);
+byteArray[1] = 13;
+writeln($catalog.system.out, "Changed array element; array is now: " + byteArray);
+
+mqresetmessage(bytesMessage);
+
+bytesMessage.properties.bufferSize = 5;
+writeln($catalog.system.out, "BytesMessage contains: " +
+                             bytesMessage.properties.bytes);
+
+
+mqclose(connection);
+
+writeln($catalog.system.out, "\i terminating.....");
+

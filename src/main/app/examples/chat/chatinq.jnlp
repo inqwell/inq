@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright (C) 2011 Inqwell Ltd
+ 
+  You may distribute under the terms of the Artistic License, as specified in
+  the README file.
+-->
+<jnlp spec="1.0+" codebase="http://www.inqwell.com/inq1_0">
+  <information>
+    <title>Inqwell Chat Example</title>
+    <vendor>Inqwell Ltd</vendor>
+    <description>Inqwell Chat Example</description>
+    <description kind="tooltip">ChatInq</description>
+    <homepage href="http://www.inqwell.com"/>
+    <shortcut online="true">
+      <desktop/>
+      <menu submenu="ChatInq"/>
+    </shortcut>
+  </information>
+
+  <security>
+    <all-permissions/>
+  </security>
+
+  <resources>
+    <property name="sun.java2d.noddraw" value="true"/>
+    <jar href="lib/inqs.jar" main="true"/>
+    <j2se version="1.5+" initial-heap-size="64m" max-heap-size="256m"/>
+  </resources>
+
+
+  <application-desc main-class="com.inqwell.any.tools.AnyClient">
+    <argument>-package</argument>
+    <argument>examples.chat</argument>
+    <argument>-appName</argument>
+    <argument>ChatInq</argument>
+  </application-desc>
+
+</jnlp>
+
+

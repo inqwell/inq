@@ -1,0 +1,78 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+// Two solutions to problem 2 on projecteuler.net, see
+//   http://projecteuler.net/index.php?section=problems&id=2
+// Hmmm, you have to have solved the problem before you can browse
+// the forum for that problem...
+//
+// To find the sum of the even Fibonacci numbers not exceeding 4 million
+//
+
+// This implementation uses the golden ratio formula to evaluate
+// the Fibonacci terms. It is not the fastest way to reach the
+// result but does prove that Inq maintains accuracy when raising
+// non-integer decimals to powers.
+
+string s = (1+ sqrt(5))/2;
+decimal:15 $this.golden = s;
+
+local function fibonacci(int n)
+{
+  decimal:0 ret =
+    ($this.golden^^n - (1-$this.golden)^^n) / ($this.golden - (1-$this.golden));
+}
+
+//writeln($catalog.system.out, call fibonacci(n=5));
+
+int n = 1;
+int fib;
+int total = 0;
+
+date .start = getdate();
+
+while((fib = call fibonacci(n = n++)) <= 4000000)
+  if (fib % 2 == 0) total += fib;
+
+date .end = getdate();
+
+writeln($catalog.system.out, "The answer is " + total);
+writeln($catalog.system.out, "and it took " + (.end - .start) + "ms");
+writeln($catalog.system.out, "over " + n + " iterations");
+
+
+
+// Ported from nicola.muto's solution
+// at http://projecteuler.net/index.php?section=forum&id=2&page=25
+//
+//   "A solution based on the regular fibonacci pattern
+//    [E O O][E O O]...[E O O]...
+//    where E = Even number and O = Odd number
+//    ([0 1 1][2 3 5][8 13 21])."
+//
+// It seems about 5x faster
+
+
+date .start = getdate();
+
+long fp0   = 2;
+long fp1   = 3;
+long fp2   = 5;
+long total = 0;
+
+while (fp0 <= 4000000l)
+{
+  total += fp0;
+  fp2 = (fp1 = (fp0 = fp1 + fp2) + fp2) + fp0;
+}
+date .end = getdate();
+
+writeln($catalog.system.out, "The answer is " + total);
+writeln($catalog.system.out, "and it took " + (.end - .start) + "ms");
+

@@ -1,0 +1,50 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * Petstore i/o resource definitions
+ *
+ * Declare the SQL resource for the Xylinq server.
+ *
+ * Private & Confidential Copyright � Xylinq Ltd 2004.
+ * All rights reserved.
+ */
+package examples.petstore;
+
+resource ps(sqlserver,   // It's an sql server
+            10,          // to which there will be a maximum of 10 pooled connections
+
+            // Configuration data specific to SQL Server resources
+            map("user",     "pet1",                             // Login user
+                "password", "pet1",                             // Login pwd
+                "url",      "jdbc:mysql://localhost/ipetstore", // Url - assumes sql server is same host as Inq server
+
+                // The null configuration data. This is only used by plain (that is
+                // not prepared) SQL statements so Inq knows how to substitute null
+                // values into the SQL statement. Petstore only uses prepared
+                // statements so these are not actually necessary
+                "null", map(date.class, "NULL",
+                            string.class, "NULL",
+                            decimal.class, "NULL",
+                            double.class, "NULL",
+                            float.class, "NULL",
+                            int.class, "NULL"
+                           ),
+
+                // In plain SQL, which datatypes whose values when substituted will
+                // be quoted. Again, not used by petstore
+                "delim", map(date.class, "'",
+                             string.class, "'"),
+
+                // Whether to respect the row count returned by the underlying
+                // SQL server when updating single rows. By default Inq throws
+                // an exception if JDBC returns more than 1 when updating a single
+                // row. MySql returns 2 when the REPLACE statement is used so
+                // we choose to ignore it.
+                "cardinality", false
+              )
+            );

@@ -1,0 +1,39 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+ioCSV csv;
+
+csv.properties.ignoreBlank = true;
+csv.properties.autoTable   = true;
+
+omap myRoot;
+csv.properties.root = myRoot;
+
+if (open(csv, "test.csv", OPEN_READ))
+{
+  writeln($catalog.system.out, "Start:");
+  int counter;
+  while (any line = readstream(csv))
+  {
+    counter += 1;
+    writeln($catalog.system.out, "Line " + counter);
+    writeln($catalog.system.out, line);
+    /*
+    foreach(line)
+      writeln($catalog.system.out, $loop);
+    */
+  }
+  writeln($catalog.system.out, "End, lines: " + csv.properties.lineCount);
+  writeln($catalog.system.out, myRoot);
+}
+else
+{
+  writeln($catalog.system.out, "Can't open test.csv");
+}
+

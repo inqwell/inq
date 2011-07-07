@@ -1,0 +1,44 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+// The Inq "currency" type
+
+local function dumpProperties(any ccy)
+{
+  writeln($catalog.system.out, "currency code: " + ccy.properties.currencyCode);
+  writeln($catalog.system.out, "symbol: " + ccy.properties.symbol);
+  writeln($catalog.system.out, "default fraction digits: " + ccy.properties.defaultFractionDigits);
+}
+
+// What happens depends on your locale
+writeln($catalog.system.out, "Your local currency:");
+currency c;
+call dumpProperties(ccy = c);
+
+// The Great British Pound
+c = "GBP";
+call dumpProperties(ccy = c);
+
+// The Euro
+c = "EUR";
+call dumpProperties(ccy = c);
+
+// The Yen
+c = "JPY";
+call dumpProperties(ccy = c);
+
+// The Dollar
+c = "USD";
+call dumpProperties(ccy = c);
+
+// The Chinese Renminbi
+c = "CNY";
+call dumpProperties(ccy = c);
+
+

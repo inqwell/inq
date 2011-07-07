@@ -1,0 +1,34 @@
+<assembly xmlns="http://maven.apache.org/plugins/maven-assembly-plugin/assembly/1.1.2"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/plugins/maven-assembly-plugin/assembly/1.1.2 http://maven.apache.org/xsd/assembly-1.1.2.xsd">
+
+  <!--
+  Build the inq runtime, combining its dependencies into
+  the output
+  -->
+
+  <id>dependencies</id>
+
+  <formats>
+    <format>jar</format>
+  </formats>
+
+  <includeBaseDirectory>false</includeBaseDirectory>
+
+  <!--
+  Include our dependencies. They must be unpacked because there
+  is a bug in the assembly plugin at present:
+  http://jira.codehaus.org/browse/MASSEMBLY-334
+  which is less tidy than adding the jars and placing them
+  in the manifest's classpath.
+  -->
+  <dependencySets>
+    <dependencySet>
+      <useProjectArtifact>false</useProjectArtifact>
+      <useTransitiveDependencies>false</useTransitiveDependencies>
+      <unpack>true</unpack>
+    </dependencySet>
+  </dependencySets>
+
+</assembly>
+

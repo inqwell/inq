@@ -1,0 +1,256 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/*
+ * $Archive:  $
+ * $Author: sanderst $
+ * $Revision: 1.5 $
+ * $Date: 2011-04-10 22:19:25 $
+ */
+
+/**
+ * TopicSelectors.inq
+ *
+ * The setup of destinations etc is as for AnynchTopicExample.inq
+ * so please see comments there also.
+ * Following the Sun GlassFish(tm) example, this script
+ * demonstrates the use of multiple subscribers and
+ * message selectors.
+ *
+ * The Publisher process publishes 30 messages of 6 different types, randomly
+ * selected, then publishes a "Finished" message.  The script creates four
+ * instances of the Subscriber process, one for each of three types and one that 
+ * listens for the "Finished" message.  Each subscriber instance uses a 
+ * different message selector to fetch messages of only one type.  The publisher
+ * displays the messages it sends and the subscriber, using a listener, displays
+ * the messages that the subscribers receive.
+ * Because all the objects run in threads, the displays are interspersed when
+ * the program runs.
+ *
+ * Specify the queue name (for the control messages) and
+ * topic used to exchange the test messages on the command line.
+ */
+
+#include<SampleUtilities.inq>
+
+local function usage()
+{
+  writeln($catalog.system.err, "usage: \i:");
+  writeln($catalog.system.err, "  -topic <topic-name>");
+  writeln($catalog.system.err, "  -queue <queue-name>");
+  writeln($catalog.system.err, " [-num  <number of msgs>]");
+  exit(1);
+}
+
+local function producerStart(any process, // always provided by Inq
+                             any topic,
+                             any queue,
+                             any numSubscribers)
+{
+  writeln($catalog.system.out, "\e \l Starting: " + process.processName);
+
+  // Just send a service request to the process
+  // to run the demo
+  send doProducer(@channel = process.ichannel, topic, queue, numSubscribers);
+}
+
+// Process-start function for the subscriber.
+// Note: whatKind and subscriberNumber are declared
+// as value parameters as the new process keeps them
+// in its node space. They are read-only but the caller
+// is at liberty to change them.
+local function subscriberStart(any    process, // always provided by Inq
+                               any    topic,
+                               any    queue,
+                               string whatKind,
+                               int    subscriberNumber)
+{
+  writeln($catalog.system.out, "\e \l Starting: " + process.processName);
+
+  // Just send a service request to the process
+  // to run the demo
+  send doSubscriber(@channel = process.ichannel, topic, queue, whatKind, subscriberNumber);
+}
+
+local function jmsTopicListen(any message)
+{
+  writeln($catalog.system.out, "SUBSCRIBER " +
+                               $this.vars.subscriberNumber +
+                               " THREAD: Message received: " +
+                               message.properties.text);
+
+  any newsType = message.client.NewsType;
+
+  if (newsType == $catalog.jmstest.END_OF_MESSAGE_STREAM_TYPE)
+  {
+    writeln($catalog.system.out, "SUBSCRIBER " + $this.vars.subscriberNumber +
+                                 " THREAD: Received finished-publishing message");
+    exit(0);
+  }
+}
+
+local function jmsEnd()
+{
+  mqclose($this.jms.session);
+  mqclose($this.jms.connection);
+
+  writeln($catalog.system.out, "\e \l Ended: " + $process.processName);
+}
+
+// Pick the message type for the published message.
+local function chooseType()
+{
+  // an array index can be a literal integer or a node reference, so
+  // we have to do the random generation and index separately
+  random(int r, $catalog.jmstest.ARRSIZE);
+  $catalog.jmstest.MESSAGE_TYPES[r];
+}
+
+service doProducer(any topic, any queue, any numSubscribers)
+{
+  any $this.jms = call getTopic(topic);
+
+  /*
+   * After synchronizing with subscriber, create publisher.
+   * Create and send news messages.
+   * Send end-of-messages message.
+   */
+
+  /*
+   * Synchronize with subscribers.  Wait for messages indicating 
+   * that all subscribers are ready to receive messages.
+   */
+  call receiveSynchronizeMessages(prefix = $process.processName, queue, counter = numSubscribers);
+
+  any topicProducer = mqcreateproducer($this.jms.session, $this.jms.topic);
+
+  any txtmsg = mqcreatetextmessage($this.jms.session);
+
+  int numMsgs = $catalog.jmstest.ARRSIZE * 5;
+  int counter = 0;
+  while(counter < numMsgs)
+  {
+    // Choose the message type for this published message
+    any msgType = call chooseType();
+
+    // Set the client property NewsType...
+    txtmsg.client.NewsType = msgType;
+
+    // ...and set the text
+    txtmsg.properties.text = "Item " + counter + ": " + msgType;
+    writeln($catalog.system.out, $process.processName +
+                                 ": Setting message text to: " +
+                                 txtmsg.properties.text);
+    mqsend(topicProducer, txtmsg);
+
+    counter++;
+  }
+
+  txtmsg.client.NewsType = $catalog.jmstest.END_OF_MESSAGE_STREAM_TYPE;
+  txtmsg.properties.text = "That's all the news for today.";
+  mqsend(topicProducer, txtmsg);
+
+  exit(0);
+}
+
+service doSubscriber(any topic, any queue, any whatKind, any subscriberNumber)
+{
+  // Declare a func variable that is the callback for asynchronously
+  // received messages
+  cfunc topicListener = call jmsTopicListen();
+
+  // Save whatKind and subscriberNumber under the current context
+  // for later use in the listener callback
+  any $this.vars.whatKind         = whatKind;
+  any $this.vars.subscriberNumber = subscriberNumber;
+  
+  any $this.jms = call getTopic(topic);
+
+  /*
+   * Create subscriber with message selector.
+   * Start message delivery.
+   * Send synchronize message to publisher, then wait till all
+   * messages have arrived.
+   * Listener displays the messages obtained.
+   */
+
+  string selector = "NewsType = '" +
+                    whatKind + "'" + 
+                    " OR NewsType = '" +
+                    $catalog.jmstest.END_OF_MESSAGE_STREAM_TYPE + "'";
+
+  writeln($catalog.system.out, "SUBSCRIBER " + subscriberNumber +
+                               " THREAD: selector is \"" +
+                               selector +
+                               "\"");
+
+  any topicConsumer = mqcreateconsumer($this.jms.session, $this.jms.topic, selector, false);
+  mqsetmessagelistener(topicConsumer, topicListener);
+  mqstart($this.jms.connection);
+
+  // Let producer know that consumer is ready.
+  call sendSynchronizeMessage(prefix = $process.processName, controlQueueName = queue);
+
+  // Messages subsequently published by the producer process
+  // will be handled in jmsTopicListen
+}
+
+// Must supply -topic and -queue command line arguments
+if (!$catalog.argsMap.topic || !$catalog.argsMap.queue)
+  call usage();
+
+// Place the message types in the global $catalog space
+array  $catalog.jmstest.MESSAGE_TYPES = ("Nation/World", "Metro/Region", "Business",
+                                         "Sports", "Living/Arts", "Opinion",
+                                         // always last type
+                                         "Finished");
+any $catalog.jmstest.ARRSIZE = count($catalog.jmstest.MESSAGE_TYPES) - 1;
+any $catalog.jmstest.END_OF_MESSAGE_STREAM_TYPE = $catalog.jmstest.MESSAGE_TYPES[$catalog.jmstest.ARRSIZE];
+
+// Note: declaring NUM_SUBSCRIBERS as an alias to a
+// literal value means it is immutable.
+any NUM_SUBSCRIBERS = 3;
+
+// Start the processes
+any producer = spawn("PRODUCER",
+                     type  = PROCESS_DETACHED,
+                     start = call producerStart($catalog.argsMap.topic,
+                                                $catalog.argsMap.queue,
+                                                numSubscribers = NUM_SUBSCRIBERS),
+                     end   = call jmsEnd());
+
+int counter = 0;
+array subscribers;
+while (counter < NUM_SUBSCRIBERS)
+{
+  int msgType = counter + 2;
+  any subscribers[@last] = spawn("SUBSCRIBER" + counter,
+                                 type  = PROCESS_DETACHED,
+                                 start = call subscriberStart($catalog.argsMap.topic,
+                                                              $catalog.argsMap.queue,
+                                                              whatKind = $catalog.jmstest.MESSAGE_TYPES[msgType],
+                                                              subscriberNumber = counter),
+                                 end   = call jmsEnd(),
+                                 syncext = true);
+  counter++;
+}
+
+foreach(subscribers)
+  waitproc($loop);
+
+waitproc(producer);
+
+writeln($catalog.system.out, "\i terminating.....");
+
+// Terminate. Exit explicitly as (most likely) the
+// JMS runtime has started other threads
+// Ho ho... when you close all your connections properly like
+// jmsEnd does in this example everything terminates cleanly!
+//exit(0);
+

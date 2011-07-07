@@ -1,0 +1,157 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+
+/**
+ * Inq - Styled text message dialog (experimental)
+ */
+
+package inq.gui.util;
+
+// Use this one, as it allows the dialog to be placed anywhere rather than
+// assuming it will be placed at $this.
+function createRichMsgDialogAt(any dialogPath, any parent)
+{
+  if (!dialogPath)
+    any dialogPath = path($root.richMsgDialog);
+
+	gDialog(parent) dialog;
+
+  call createDialog(dialog);
+
+  add(dialog, dialogPath);
+
+  dialog;
+}
+
+/**
+ * Show a message dialog and initialise with the given parameters.
+ * If the okText is null then the OK button won't be visible.
+ */
+function richMsgDialog(any    dialog,
+                       string heading,
+                       string messageText  = "No Message!",
+                       string messageTitle = "Message",
+                       string okText       = "OK",
+                       string cancelText   = null,
+                       any    icon,
+                       func   okExpr,
+                       func   cancelExpr)
+{
+	any dialog = dialog ? dialog : $root.richMsgDialog;
+
+	dialog.ok.properties.text       = okText;
+	dialog.ok.properties.visible    = !isnull(okText);
+
+	dialog.cancel.properties.text       = cancelText;
+	dialog.cancel.properties.visible    = !isnull(cancelText);
+
+	//dialog.message.properties.icon  = icon ? icon : $uidefaults.OptionPane.informationIcon;
+	dialog.properties.title         = messageTitle;
+	dialog.vars.okExpr              = okExpr;
+	dialog.vars.cancelExpr          = cancelExpr;
+
+  // Use Inq vector access to the text pane's underlying document to add the text
+//  any doc = dialog.message.model.root;
+//  empty(doc);
+//  any atEnd = path(doc[last]);
+
+  // Add heading
+//  if (heading)
+//  {
+//    any styledHeading.@style = dialog.styles.heading;
+//    any styledHeading.@txt   = heading;
+//    add(styledHeading, atEnd);
+//  }
+//
+//  any styledMsg.@style = dialog.styles.base;
+//  any styledMsg.@txt   = messageText;
+//  add(styledMsg, atEnd);
+
+  empty(dialog.message.model.root);
+  doclayout(dialog.message.model,
+            "Para
+            {
+              Style dialog.styles.heading; Para
+              {
+                heading;
+              }
+              \"\n\n\";
+              Style dialog.styles.base; Para
+              {
+                messageText;
+              }
+            }");
+
+	show(dialog, true);
+}
+
+function hideRichMsgDialog(any dialog)
+{
+	any dialog = dialog ? dialog : $root.richMsgDialog;
+	hide(dialog);
+}
+
+local function dialogOK()
+{
+	xfunc($this.vars.okExpr);
+	setnull($this.vars.okExpr);
+}
+
+local function dialogCancel()
+{
+	xfunc($this.vars.cancelExpr);
+	setnull($this.vars.cancelExpr);
+}
+
+local function createDialog(any dialog)
+{
+  dialog.properties.hideOnOk     = true;
+  dialog.properties.hideOnCancel = true;
+  dialog.properties.contextNode  = true;
+  dialog.properties.resizable    = true;
+  dialog.properties.size         = array size = (450,350);
+  //dialog.properties.icon         = image("../../inqicons/mwarn.gif");
+
+  func dialog.vars.okExpr;
+  func dialog.vars.cancelExpr;
+
+  // Declare dialog contents
+  gTextPane  message;
+  message.properties.editable = false;
+  gButton ok;
+  gButton cancel;
+  gEvent (ok, gDialog=gDialogok);
+  gEvent (cancel, gDialog=gDialogcancel);
+  ok.properties.text="OK";
+  cancel.properties.text="Cancel";
+  dialog.properties.defaultButton = ok;
+
+  // Set up the button's default (action) event to be
+  // the dialogOK  event
+  gEvent(dialog, call dialogOK(),     event=(gDialogok));
+  gEvent(dialog, call dialogCancel(), event=(gDialogcancel));
+
+  layout ($stack, dialog,
+          "Margin d:10 message
+          Margin d:10 Geometry xy:vf Row { <> Geometry d:f ok ~ Geometry d:f cancel <> }");
+
+  // Create styles
+  // properties...
+  string  baseStyle.@fontFamily = "Arial";   // basic style
+  int     baseStyle.@fontSize = 12;
+  int     headingStyle.@fontSize = baseStyle.@fontSize + 2;
+  boolean headingStyle.@bold = true;
+  any     headingStyle.@alignment = gParaAlign(ALIGN_CENTER);
+
+  smap  dialog.styles;
+
+  style dialog.styles.base         = baseStyle;
+  style dialog.styles.base.heading = headingStyle;  any dialog.styles.heading = dialog.styles.base.heading;
+
+
+}

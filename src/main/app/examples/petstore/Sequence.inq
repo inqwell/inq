@@ -1,0 +1,40 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * PetStore Example
+ *
+ * Sequence type. Sequences of numbers.
+ */
+
+package examples.petstore;
+
+typedef Sequence
+{
+  fields
+  (
+    string Sequence;
+    SeqVal Value;
+  )
+  
+  construct
+  ({
+     // Commence a sequence value at 1
+     $this.Value = 1;
+   }
+  )
+   
+  pkey
+  (
+    fields (Sequence)
+
+    #include <{db}/Sequence.pkey.sql>
+  )
+
+  // I/O resource binding
+  iobind (SimpleSqlIO, ps)
+}

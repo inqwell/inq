@@ -1,0 +1,9 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+// Load the verifiers
+exec("classpath:///inq/gui/verifiers.inq");

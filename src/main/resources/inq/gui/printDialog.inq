@@ -1,0 +1,612 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ *
+ * Inq built in print dialog.
+ *
+ */
+
+package inq.gui.util;
+
+
+function createPrintDialogAt(any dialogPath, any parent)
+{
+  if (!dialogPath)
+    any dialogPath = path($root.printDialog);
+
+  gDialog(parent) dialog;
+
+  call createDialog(dialog, parent);
+
+  dialog;
+}
+
+local function createDialog(any dialog, any parent)
+{
+  dialog.properties.hideOnOk     = true;
+  dialog.properties.hideOnCancel = true;
+  dialog.properties.contextNode  = true;
+
+  // yuk - hide the icon if no parent!
+  if (parent)
+    dialog.properties.resizable = true;
+  else
+    dialog.properties.resizable = false;
+
+  // Callback function holders
+  func dialog.vars.okExpr;
+  func dialog.vars.cancelExpr;
+
+  gButton bOk;
+  gButton bCancel;
+  gEvent(bOk, gDialog=gDialogok);
+  gEvent(bCancel, gDialog=gDialogcancel);
+  bOk.properties.text="OK";
+  bCancel.properties.text="Cancel";
+
+  gEvent(dialog, call dialogOK(),     event=(gDialogok));
+  gEvent(dialog, call dialogCancel(), event=(gDialogcancel));
+
+  gTab tab;
+
+  gBox bPrinter;
+
+  layout(., dialog, "tab { bPrinter }
+                    Geometry xy:vf Margin d:3
+                    Table  Columns GRID_FILL, 0.2, 5, 0.2
+                      Rows GRID_FILL;
+                    {
+                      Cell 1 0 Align b bOk
+                      Cell 3 0 Align b bCancel
+                    }
+                    ");
+
+  bPrinter.properties.;
+  bPrinter.properties.tabTitle = "Printer";
+  bPrinter.properties.tabIcon  = image("images/printer.gif");
+
+  call printerTab(guiParent = bPrinter, context = dialog);
+
+  gBox bLayout;
+
+  layout(., tab, "bLayout");
+
+  bLayout.properties.;
+  bLayout.properties.tabTitle = "Layout";
+  bLayout.properties.tabIcon  = image("images/portrait.gif");
+
+  call layoutTab(guiParent = bLayout, context = dialog);
+}
+
+local function printerTab(any guiParent, any context)
+{
+  gComboBox cbPrinters;
+  gEvent(cbPrinters, call selectPrinter());
+
+  gLabel    lStatus;
+  gLabel    lJobsQd;
+  // Initial text
+  lStatus.properties.text = "Accepting Jobs";
+  lJobsQd.properties.text = "0";
+
+  int context.vars.jobCount;
+  string context.vars.acceptingJobs;
+  lJobsQd.properties.renderInfo = renderinfo($this.vars.jobCount, label="Jobs Queued:");
+  lStatus.properties.renderInfo = renderinfo($this.vars.acceptingJobs, label="Status:");
+
+  gRadio    rAll;
+  gRadio    rRange;
+  gButtonGroup printGroup;
+  rAll.properties.buttonGroup   = printGroup;
+  rRange.properties.buttonGroup = printGroup;
+  rAll.properties.text   = "All";
+  rRange.properties.text = "Pages";
+  gEvent(rRange, call selectRange());
+  rAll.properties.renderInfo    = renderinfo(0);
+  rRange.properties.renderInfo  = renderinfo(1);
+  int context.vars.printGroup;
+  printGroup.properties.renderInfo  = renderinfo($this.vars.printGroup);
+  context.vars.printGroup = 0;
+
+  gTextField tfStart;
+  gTextField tfEnd;
+  tfStart.properties.selectOnFocus = true;
+  tfEnd.properties.selectOnFocus   = true;
+  int context.vars.selStart = null;
+  int context.vars.selEnd   = null;
+  tfStart.properties.renderInfo = renderinfo($this.vars.selStart, width=5, editable=true, label="from:");
+  tfEnd.properties.renderInfo = renderinfo($this.vars.selEnd, width=5, editable=true, label="to:");
+
+  gSpinner  sCopies;
+
+  // Note about spinners. A spinner can be date or numeric. Which one is
+  // not determined until any one of the minimum value, maximum value or
+  // current value is set, then the spinner's model is determined and
+  // its editor created. Until this time it has a default editor that
+  // is never used.
+  // The problem comes when input verifiers and insert validators are
+  // put on the spinner before the true editor is established. In this
+  // case they will be ignored, so establish the spinner type now
+  // by setting its minimim value
+  sCopies.properties.minimum = 1;
+
+  // So now we can apply some verifiers etc
+  sCopies.properties.validateInsert = $catalog.guiFuncs.numericInteger;
+  sCopies.properties.inputVerifier  = $catalog.guiFuncs.numericInteger;
+
+  sCopies.properties.selectOnFocus  = true;
+  int context.vars.copies = 1;
+  sCopies.properties.renderInfo = renderinfo($this.vars.copies, label="Copies:", width=4);
+
+  // Set up the rendering/model properties for the printer list
+  any printerListModel.internal    = renderinfo($this.printer.printerName);
+  cbPrinters.properties.model      = printerListModel;
+  cbPrinters.properties.modelRoot  = path($this.vars.printers);
+  string context.vars.selectedPrinter;
+  cbPrinters.properties.renderInfo = renderinfo($this.vars.selectedPrinter, label="Name:");
+
+  // Call into Inq to get the printer data, sort it by printer name
+  // and add to the node space.
+  any printers = callmethod("getPrinterList", class="com.inqwellx.print.Jps");
+  sort(printers, $loop.printer.printerName);
+
+  any context.vars.printers = printers;
+
+  // Find the default printer
+  any defaultPrinter = callmethod("getDefaultPrinter", class="com.inqwellx.print.Jps");
+
+/*
+  layout(., context, guiParent,
+         "
+           Geometry xy:vf Border Caption \"Printer\"; Margin d:3 Row
+           {
+             // We really need a table-based layout scheme for aligning
+             // labels with their components, when the components are
+             // not of all the same height.
+             Geometry xy:fv Column
+             {
+               Label cbPrinters
+               ~~~
+               Label lStatus
+               ~~
+               Label lJobsQd
+             }
+             ~~
+             Column
+             {
+               Geometry xy:vf cbPrinters
+               ~
+               <>
+               Geometry xy:vf lStatus
+               ~
+               <>
+               Geometry xy:vf lJobsQd
+             }
+           }
+           Row
+           {
+             Geometry xy:vf Border Caption \"Print Range\"; Margin d:3 Row
+             {
+               Column
+               {
+                 Geometry xy:vf rAll
+                 Geometry xy:vf Row
+                 {
+                   rRange
+                   ~~
+                   Geometry d:f Row { Label tfStart # tfStart }
+                   ~~
+                   Geometry d:f Row { Label tfEnd # tfEnd }
+                   printGroup
+                 }
+               }
+             }
+             Geometry xy:vf Border Caption \"Copies\"; Margin d:3 Row
+             {
+               Geometry xy:vf Align t Row
+               {
+                 Geometry xy:vf Label sCopies # sCopies
+               }
+             }
+           }
+         ");
+
+  */
+
+  layout(., context, guiParent,
+         "
+           Geometry xy:vf Border Caption \"Printer\"; Margin d:3
+           Table  Columns labels=GRID_PREF, 5, widgets=GRID_FILL
+             Rows 0.33,
+                  0.33,
+                  0.34;
+           {
+             Column labels
+             {
+               Label cbPrinters
+               Label lStatus
+               Label lJobsQd
+             }
+             Column widgets
+             {
+               cbPrinters
+               lStatus
+               lJobsQd
+             }
+           }
+           Row
+           {
+             Geometry xy:vf Border Caption \"Print Range\"; Margin d:3
+             Table  Columns         GRID_PREF, 10, GRID_PREF, GRID_FILL, 5, GRID_PREF, GRID_FILL
+               Rows GRID_PREF,
+                    GRID_PREF;
+             {
+               Row
+               {
+                 rAll
+               }
+               Row
+               {
+                 rRange
+                 ~                 // advance past 10 pixel space column
+                 Label tfStart #   // Label of tfStart and avoid Label id id grammar
+                 tfStart
+                 ~                 // advance past 5 pixel space column
+                 Label tfEnd #
+                 tfEnd
+                 printGroup        // button group - not a component, just for context
+               }
+             }
+             Geometry xy:vf Border Caption \"Copies\"; Margin d:3
+             Table  Columns GRID_PREF, GRID_FILL
+               Rows GRID_FILL;
+             {
+               Cell 0 0 Align t Label sCopies
+               Cell 1 0 Align t sCopies
+             }
+           }
+         ");
+  // Do this only *after* the layout is defined - causes an event to
+  // be kicked out
+  if (defaultPrinter)
+    context.vars.selectedPrinter = defaultPrinter.printerName;
+
+}
+
+local function layoutTab(any guiParent, any context)
+{
+  gComboBox cbMediaList;
+
+  gRadio rPortrait;
+  gRadio rLandscape;
+  gButtonGroup orientGroup;
+  rPortrait.properties.buttonGroup  = orientGroup;
+  rLandscape.properties.buttonGroup  = orientGroup;
+  rPortrait.properties.text = "Portrait";
+  rLandscape.properties.text = "Landscape";
+  gEvent(rPortrait, call selectOrientation());
+  gEvent(rLandscape, call selectOrientation());
+  rPortrait.properties.renderInfo    = renderinfo(PORTRAIT);
+  rLandscape.properties.renderInfo   = renderinfo(LANDSCAPE);
+  object context.vars.orientation;
+  orientGroup.properties.renderInfo = renderinfo($this.vars.orientation);
+  context.vars.orientation = PORTRAIT;
+
+
+  any mediaListModel.internal       = renderinfo($this.media.sizeName);
+  cbMediaList.properties.model        = mediaListModel;
+  cbMediaList.properties.modelRoot    = path($this.vars.mediaList);
+  any context.vars.mediaList        = call setupSizeNames();
+  any context.vars.@mediaSize       = gMediaSize(ISO_A4);
+  cbMediaList.properties.renderInfo   = renderinfo($this.vars.@mediaSize, label="Media Size:");
+
+  gSpinner sMarginLeft;
+  gSpinner sMarginRight;
+  gSpinner sMarginTop;
+  gSpinner sMarginBottom;
+  sMarginLeft.properties.selectOnFocus    = true;
+  sMarginRight.properties.selectOnFocus   = true;
+  sMarginTop.properties.selectOnFocus     = true;
+  sMarginBottom.properties.selectOnFocus  = true;
+
+  // Margin variables
+  float context.vars.marginLeft   = 25.4;
+  float context.vars.marginRight  = 25.4;
+  float context.vars.marginTop    = 25.4;
+  float context.vars.marginBottom = 25.4; // default to 1" all round
+
+  sMarginLeft.properties.renderInfo   = renderinfo($this.vars.marginLeft, width=8, label="Left:");
+  sMarginRight.properties.renderInfo  = renderinfo($this.vars.marginRight, width=8, label="Right:");
+  sMarginTop.properties.renderInfo    = renderinfo($this.vars.marginTop, width=8, label="Top:");
+  sMarginBottom.properties.renderInfo = renderinfo($this.vars.marginBottom, width=8, label="Bottom:");
+
+/*
+  layout(., context, guiParent,
+         "
+         Geometry xy:vf Column
+         {
+           Geometry xy:vf Margin d:3 Row
+           {
+             Geometry d:f Label cbMediaList # cbMediaList
+           }
+           Row
+           {
+             Margin d:3 Caption \"Orientation\"; Column
+             {
+               orientGroup
+               rPortrait
+               rLandscape
+             }
+             ~
+             // Margins layout.  Note that you could swap Row and Column
+             // around here and transpose Top and Right components but
+             // this way gives the correct alignment of the input controls
+             // using the resizability of the labels.
+             Margin d:3 Caption \"Margins (mm)\"; Row
+             { Column
+               {
+                 Row { Label sMarginLeft Geometry d:f sMarginLeft }
+                 ~
+                 Row { Label sMarginTop  Geometry d:f sMarginTop }
+               }
+               ~
+               Column
+               {
+                 Row { Label sMarginRight Geometry d:f sMarginRight }
+                 ~
+                 Row { Label sMarginBottom Geometry d:f sMarginBottom }
+               }
+             }
+           }
+         }
+         ");
+*/
+  layout(., context, guiParent,
+         "
+         Geometry xy:vf
+         Table  Columns GRID_PREF, 5, GRID_FILL
+           Rows GRID_PREF;
+         {
+				   Row
+					 {
+					   Label cbMediaList ~ cbMediaList
+					 }
+				 }
+				 Geometry xy:vf Row
+				 {
+           Geometry d:f Margin d:3 Caption \"Orientation\"; Column
+           {
+             orientGroup
+             rPortrait
+             rLandscape
+           }
+					 ~
+					 Margin d:3 Caption \"Margins (mm)\";
+					 Table  Columns tll=GRID_PREF, 5, tlw=GRID_FILL, 10, brl=GRID_PREF, 5, brw=GRID_FILL
+					   Rows GRID_PREF,
+						      10,
+						      GRID_PREF;
+					 {
+						 Column tll
+						 {
+							 Label sMarginLeft
+							 ~
+							 Label sMarginTop
+						 }
+						 Column tlw
+						 {
+							 sMarginLeft
+							 ~
+							 sMarginTop
+						 }
+						 Column brl
+						 {
+							 Label sMarginRight
+							 ~
+							 Label sMarginBottom
+						 }
+						 Column brw
+						 {
+							 sMarginRight
+							 ~
+							 sMarginBottom
+						 }
+					 }
+         }
+         ");
+}
+
+local function setupSizeNames()
+{
+  hmap mediaList;
+  call addSizeName(mediaList, sizeName=gMediaSize(NA_LETTER));
+  call addSizeName(mediaList, sizeName=gMediaSize(ISO_A4));
+
+  writeln($catalog.system.out, "MEDIA LIST " + mediaList);
+  mediaList;   // return
+}
+
+local function addSizeName(object mediaList, object sizeName)
+{
+  //           mediaList
+  //              |
+  //              | identity(container1);
+  //              |
+  //          <container>
+  //              |
+  //              |  "media"
+  //              |
+  //            media
+  //              |
+  //          ----------
+  //          |        |  ...
+  //       sizeName    ...
+
+  hmap container;
+  hmap container.media;
+  any  container.media.sizeName = sizeName;
+  any  newKey = identity(container.media);
+  add(container, path(mediaList.{newKey}));
+}
+
+local function dialogOK()
+{
+  // Make an attributes map
+  int    jobAttrs.@copies      = $this.vars.copies;
+  object jobAttrs.@orientation = $this.vars.orientation;
+  string jobAttrs.printerName  = $this.vars.selectedPrinter;
+  any    jobAttrs.@mediaSize   = $this.vars.@mediaSize;
+  call doMargins(jobAttrs);
+
+  writeln($catalog.system.out, jobAttrs);
+  xfunc($this.vars.okExpr, jobAttrs);
+}
+
+local function dialogCancel()
+{
+  xfunc($this.vars.cancelExpr);
+}
+
+local function selectPrinter()
+{
+  any a = $this.vars.selectedPrinter;
+  writeln($catalog.system.out, "*********Selected: " + a);
+  writeln($catalog.system.out, $path);
+  if (a)
+  {
+    $this.vars.jobCount = $this.vars.printers.{a}.printer.jobCount;
+    $this.vars.acceptingJobs = $this.vars.printers.{a}.printer.acceptingJobs
+                              ? "Accepting Jobs"
+                              : "Not Accepting Jobs";
+  }
+
+}
+
+// -- REMEMBER to replace the use of this function with the one
+// defined in AnyClient in the system.client package.
+local function isNumeric(string text, object value, object formatter, boolean isDecimal)
+{
+  // text is the string being inserted into the document control.
+  // value will be null if text does not convert
+
+  //writeln($catalog.system.out, "isNumeric: text      " + text);
+  //writeln($catalog.system.out, "isNumeric: value     " + value);
+  //writeln($catalog.system.out, "isNumeric: formatter " + formatter);
+  //writeln($catalog.system.out, "isNumeric: " + text);
+  //writeln($catalog.system.out, "isNumeric: " + decimal);
+  if (isDecimal && text == ".")
+    return(text);
+
+  // Check if the text being entered/pasted is parsable
+  isnull(parse(text, formatter, value)) ? null : text;
+  /*
+  float val = text;
+  isnull(val) ? null : text;
+  */
+}
+
+local function isNumericGEZero(any component, string text)
+{
+  // We explicitly reference vars.copies here, so this function cannot
+  // be reused by components rendering other variables!
+  // text is the string content of the document control.
+  // val will be null if text does not convert
+  int val = text;
+  if (isnull(val) || val == 0)
+  {
+    writeln($catalog.system.out, "isNumericGEZero ", .);
+    component.renderedValue = 1;
+    //$this.vars.copies = 1; // force the model and refresh the view
+    false;
+  }
+  else
+    true;
+}
+
+local function marginVerifier(string text, object value, object formatter)
+{
+  writeln($catalog.system.out, "marginVerifier: text      " + text);
+  writeln($catalog.system.out, "marginVerifier: value     " + value);
+  writeln($catalog.system.out, "marginVerifier: formatter " + formatter);
+
+  parse(text, formatter, value);
+  /*
+  float val = text;
+  if (isnull(val) || val < 0)
+    false;
+  else
+    true;
+  */
+}
+
+local function selectRange()
+{
+  writeln($catalog.system.out, "select range");
+  writeln($catalog.system.out, $this.tabs.printer.selStart);
+  setfocus($this.tfStart);
+}
+
+local function selectOrientation()
+{
+  writeln($catalog.system.out, @event);
+  if (@event.component == $this.rPortrait)
+    $this.tab.bLayout.properties.tabIcon  = image("images/portrait.gif");
+  else
+    $this.tab.bLayout.properties.tabIcon  = image("images/landscape.gif");
+  writeln($catalog.system.out, $this.vars.orientation);
+}
+
+// Uses a printer support function to convert a media size and
+// margin setting values into a MediaPrintableArea attribute
+// that is placed into the specified job attributes map.
+local function doMargins(object jobAttrs)
+{
+  array margins = ($this.vars.marginLeft,
+                   $this.vars.marginRight,
+                   $this.vars.marginTop,
+                   $this.vars.marginBottom);
+
+  any jobAttrs.@mediaPrintableArea = callmethod("getPrintableArea",
+                                                class="com.inqwellx.print.Jps",
+                                                $this.vars.@mediaSize,
+                                                margins);
+}
+
+// Raise the specified print dialog or $root.printDialog if none
+// is specified.
+function printDialog(any    dialog,
+                     string title         = "Print",
+                     func   okExpr,
+                     func   cancelExpr,
+                     any    jobAttrs)
+{
+  any dialog = dialog ? dialog : $root.printDialog;
+
+  dialog.properties.title        = title;
+
+  dialog.vars.okExpr     = okExpr;
+  dialog.vars.cancelExpr = cancelExpr;
+
+  dialog.vars.copies = 1;
+
+  // If the caller supplied any attributes then set them into the
+  // dialog. TODO: more attributes are defined by Java; surely caller
+  // could supply only a subset?
+  if (jobAttrs)
+  {
+    dialog.vars.selectedPrinter = jobAttrs.printerName;
+    dialog.vars.orientation     = jobAttrs.@orientation;
+    dialog.vars.copies          = jobAttrs.@copies;
+  }
+
+  show(dialog);
+
+  // setfocus() after show() or ignored by swing
+  setfocus(dialog.cbPrinters);
+}
+

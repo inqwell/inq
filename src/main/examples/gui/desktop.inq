@@ -1,0 +1,57 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+// Desktop pane demo
+
+// I intend to incorporate http://dock.javaforge.com/
+// for a better GUI experience!
+
+gWindow win;
+win.properties.defaultCloseOperation = EXIT_ON_CLOSE;
+win.properties.size = array size = (350,250);
+win.properties.title = "Desktop Demo";
+gDesktop desktop;
+layout(., win, "desktop");
+
+gIWindow iwin;
+iwin.properties.contextNode = true;
+layout(., desktop, "iwin");
+
+gSlider sl;
+gTextField setVal;
+
+sl.properties.majorTickSpacing = 10;
+sl.properties.minorTickSpacing = 5;
+sl.properties.paintTicks = true;
+sl.properties.paintLabels = true;
+
+
+layout(., iwin, "Caption tl \"Slider\"; Geometry xy:vf sl
+                Geometry xy:vf Row
+                {
+                  Caption tl \"Value\"; setVal
+                }");
+
+any $this.win = win;
+
+int iwin.vars.slVal;
+
+sl.properties.renderInfo       = renderinfo($this.vars.slVal);
+setVal.properties.renderInfo   = renderinfo($this.vars.slVal, editable = true);
+
+gEvent(sl, firemodel=true);
+gEvent(setVal,  firemodel=true);
+
+iwin.vars.slVal    = 0;
+iwin.properties.title = "Slider";
+iwin.properties.size  = array size = (275,125);
+
+show(win);
+show(iwin);
+

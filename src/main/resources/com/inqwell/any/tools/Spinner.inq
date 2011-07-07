@@ -1,0 +1,29 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * Utility functions.  Spinner next/previous value fns
+ * Return positive value >= 1.
+ */
+
+package system.util.spinner;
+
+function nextValue(object current)
+{
+  if (current == maxval(current))
+    1;
+  else
+    current + 1;
+}
+
+function prevValue(object current)
+{
+  if (current <= 1) // in case spinner defaulted to zero
+    1;
+  else
+    current - 1;
+}

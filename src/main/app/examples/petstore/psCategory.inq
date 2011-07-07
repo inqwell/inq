@@ -1,0 +1,30 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * PetStore Example
+ *
+ * Category functionality
+ */
+
+package examples.petstore;
+
+service loadCategories(any at)
+{
+  // Seed map for an event-live structure
+  hmap m;
+  
+  // Reading all Category instances
+  any k = new(Category.All);
+  read(Category, k, setname="list", target=m);
+  
+  // Place in the node space at the path specified by 'at',
+  // removing it from the seed map at the same time as an
+  // event-live structure can only live in a single event-live
+  // parent at any one time.
+  add(remove(m.list), at);
+}

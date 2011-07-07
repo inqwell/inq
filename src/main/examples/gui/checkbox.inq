@@ -1,0 +1,54 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+// Checkbox test.
+//
+// Demonstrates the checked and unchecked value properties
+// of a check box. Also uses a standard validateInsert function
+// just for fun.
+
+
+local function trimString(any text)
+{
+  text = trim(text);
+  true;
+}
+
+cfunc trimString = call trimString();
+
+gWindow win;
+gTextField tf;
+gCheck chk1;
+
+win.properties.contextNode=true;
+win.properties.title="Check Box";
+win.properties.defaultCloseOperation = EXIT_ON_CLOSE;
+
+layout(., win, "chk1 tf");
+
+string win.vars.myValue;
+chk1.properties.renderInfo     = renderinfo($this.vars.myValue, label="Click Me");
+chk1.properties.checkedValue   = "Hello";
+chk1.properties.uncheckedValue = "Goodbye";
+
+string win.vars.selValue;
+tf.properties.renderInfo       = renderinfo($this.vars.selValue, editable=true);
+tf.properties.inputVerifier    = trimString;
+tf.properties.validateInsert   = $catalog.guiFuncs.toUpper;
+
+gEvent(chk1, call cbCheck());
+
+show(win);
+
+local function cbCheck()
+{
+  writeln($catalog.system.out, "Value is " + $this.vars.myValue);
+  $this.vars.selValue = $this.vars.myValue;
+}
+

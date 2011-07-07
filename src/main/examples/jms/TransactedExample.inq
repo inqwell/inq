@@ -1,0 +1,906 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/*
+ * $Archive:  $
+ * $Author: sanderst $
+ * $Revision: 1.5 $
+ * $Date: 2011-04-10 22:19:25 $
+ */
+
+/**
+ * TransactedExample.inq
+ *
+ * The TransactedExample demonstrates the use of transactions in a JMS
+ * application.  It represents a highly simplified eCommerce application, in
+ * which the following things happen:
+ *
+ * Legend
+ * R - Retailer
+ * V - Vendor
+ * S - Supplier
+ * O - Order Queue
+ * C - Confirmation Queue
+ * ()- Thread
+ * []- Queue
+ *
+ *                                   2(b)             3
+ *          1        2(a)        /+------->[S1 O]<-----------(S1)
+ *        /+-->[V O]<----+      /                             |
+ *       /                \    /                      3       |
+ *      /                  \  /     5      v------------------+
+ *    (R)                  ( V )-------->[V C]        4
+ *     \                   /  \            ^------------------+
+ *      \                 /    \                              |
+ *       \   7         6 /      \                             |
+ *        +---->[R C]<--+        \   2(c)             4       |
+ *                                +------->[SN O]<-----------(SN)
+ *
+ * 1.  A retailer sends a message to the vendor order queue ordering a quantity 
+ * of computers.  It waits for the vendor's reply.
+ *
+ * 2.  The vendor receives the retailer's order message and places an order 
+ * message into each of its suppliers' order queues, all in one transaction. 
+ * This JMS transaction combines one synchronous receive with multiple sends.
+ *
+ * 3.  One supplier receives the order from its order queue, checks its
+ * inventory, and sends the items ordered to the order message's replyTo
+ * field. If it does not have enough in stock, it sends what it has. 
+ * The synchronous receive and the send take place in one JMS transaction.
+ *
+ * 4.  The other supplier receives the order from its order queue, checks its
+ * inventory, and sends the items ordered to the order message's replyTo
+ * field. If it does not have enough in stock, it sends what it has. 
+ * The synchronous receive and the send take place in one JMS transaction.
+ *
+ * 5.  The vendor receives the replies from the suppliers from its confirmation 
+ * queue and updates the state of the order.  Messages are processed by an 
+ * asynchronous message listener; this step illustrates using JMS transactions 
+ * with a message listener.
+ *
+ * 6.  When all outstanding replies are processed for a given order, the vendor 
+ * sends a message notifying the retailer whether or not it can fulfill the 
+ * order.
+ *
+ * 7.  The retailer receives the message from the vendor.
+ *
+ * The script contains three processes: Retailer, Vendor and GenericSupplier
+ * It also contains some immediate script to run everything.
+ *
+ * All the messages use the mqcreatemapmessage type.  Synchronous receives are
+ * used for all message reception except for the case of the vendor processing 
+ * the replies of the suppliers. These replies are processed asynchronously 
+ * and demonstrate how to use transactions within a message listener.
+ *
+ * All processes except Retailer use transacted sessions.
+ *
+ * The script uses five queues.  Before you run it, create the
+ * queues and name them A, B, C, D and E.
+ *
+ * When you run the script, specify on the command line the number of
+ * computers to be ordered.
+ */
+
+// This example benefits from using some typedefs:
+
+typedef int OrderStatus = 1
+(
+  PENDING    : 1 : "Pending";
+  CANCELLED  : 2 : "Cancelled";
+  FULFILLED  : 3 : "Fulfilled";
+);
+
+typedef Order
+{
+  fields
+  (
+    int    Order;       // Order number - the Inq convention is to name the/a primary key field after the typedef
+    int    Quantity;    // How many monitors and hard disks this order is for
+    int    Monitor = 0; // Number of monitors
+    int    Storage = 0; // Number of hard disks
+    object OrderMsg;    // The order message see notes in construct() below
+    object MonitorMsg;  // The message received from the monitor supplier
+    object StorageMsg;  // The message received from the hard drive supplier
+    OrderStatus;
+  )
+
+  construct
+  ({
+    // Allocate an order number
+    // [TODO: The Java example has no thread safety on this. Is this OK?]
+    $this.Order = $catalog.vars.orderNumber;
+    ++$catalog.vars.orderNumber;
+
+    // Store $stack.vendorOrderMessage in the Order.
+    // In this example we are holding the message in the Order
+    // instance. The Inq environment is at liberty to clone
+    // instances, for example when joined into a transaction to
+    // provide the transaction's private copy. The Inq "object"
+    // data type can be used to wrap things to protect them from
+    // cloning (see also its use with paths in the examples of
+    // Inq xml handling).
+    // The same comments apply to MonitorMsg and StorageMsg
+    //
+    // Typedefs that are persisted to a database comprise simple data
+    // types only (apart from blobs)
+    $this.OrderMsg = vendorOrderMessage;
+
+    // Set up the Quantity field from the vendorOrderMessage
+    $this.Quantity = vendorOrderMessage.Quantity;
+
+    // The Monitor and Storage quantities are already zero. Inq initialises
+    // value fields of typedefs to null by default but we have provided
+    // explicit initial values in the field definition. OrderStatus
+    // is also set to PENDING. Its initial value is inherited from
+    // the typedef alias for OrderStatus, above
+  })
+
+  // Every typedef needs a primary key
+  pkey
+  (
+    fields(Order)
+  )
+
+  // We add a key that allows us to retrieve orders by their OrderStatus
+  // field. Then Inq will then manage the orders that are in the various
+  // states for us.
+  key ByOrderStatus
+  (
+    fields(OrderStatus)
+  )
+
+  // There is no iobind clause, so this typedef is in-memory only.
+  // It is nonetheless able to participate in a transaction and
+  // is managed by the Inq environment.
+}
+
+// an order number counter
+int $catalog.vars.orderNumber = 1;
+
+#include<SampleUtilities.inq>
+
+local function usage()
+{
+  // TODO
+  writeln($catalog.system.err, "usage: \i:");
+  writeln($catalog.system.err, "  -topic <topic-name>");
+  writeln($catalog.system.err, "  -queue <queue-name>");
+  writeln($catalog.system.err, " [-num  <number of msgs>]");
+  exit(1);
+}
+
+local function retailerStart(any process, // always provided by Inq
+                             any quantity,
+                             any vendorOrderQueueName,
+                             any retailerConfirmationQueueName)
+{
+  writeln($catalog.system.out, "\e \l Starting: " + process.processName);
+
+  // Just send a service request to the process
+  // to run the demo
+  send doRetailer(@channel = process.ichannel,
+                  quantity,
+                  vendorOrderQueueName,
+                  retailerConfirmationQueueName);
+}
+
+local function vendorStart(any process,
+                           any vendorOrderQueueName,
+                           any monitorOrderQueueName,
+                           any storageOrderQueueName,
+                           any vendorConfirmationQueueName)
+{
+  writeln($catalog.system.out, "\e \l Starting: " + process.processName);
+
+  // Just send a service request to the process
+  // to run the demo
+  send doVendor(@channel = process.ichannel,
+                vendorOrderQueueName,
+                monitorOrderQueueName,
+                storageOrderQueueName,
+                vendorConfirmationQueueName);
+}
+
+local function genericSupplierStart(any process, // always provided by Inq
+                                    any itemName,
+                                    any inQueueName)
+{
+  writeln($catalog.system.out, "\e \l Starting: " + process.processName);
+
+  // Just send a service request to the process
+  // to run the demo
+  send doGenericSupplier(@channel = process.ichannel, itemName, inQueueName);
+}
+
+local function vendorMessageListenerStart(any process, // always provided by Inq
+                                          any vendorConfirmationQueueName,
+                                          int numSuppliers)
+{
+  writeln($catalog.system.out, "\e \l Starting: " + process.processName);
+
+  // Just send a service request to the process
+  // to run the demo
+  send doVendorMessageListener(@channel = process.ichannel,
+                               vendorConfirmationQueueName,
+                               numSuppliers);
+}
+
+local function jmsEnd()
+{
+  writeln($catalog.system.out, "\e \l Ended: " + $process.processName);
+}
+
+local function vendorListenerEnd()
+{
+  mqclose($this.connection);
+  writeln($catalog.system.out, "\e \l Ended: " + $process.processName);
+}
+
+/**
+ * The Retailer process orders a number of computers by sending a message
+ * to a vendor.  It then waits for the order to be confirmed.
+ *
+ * In this example, the Retailer places two orders, one for the quantity
+ * specified on the command line and one for twice that number.
+ *
+ * This process does not use transactions.
+ */
+service doRetailer(any quantity,
+                   any vendorOrderQueueName,
+                   any retailerConfirmationQueueName)
+{
+  any connection                 = call getConnection();
+
+  // In this example we add a bit of exception handling
+  // for the first time, just to be a little tidier
+  try
+  {
+    any session                    = mqcreatesession(connection, false, AUTO_ACKNOWLEDGE);
+    any vendorOrderQueue           = call getQueue(session, queue = vendorOrderQueueName);
+    any retailerConfirmationQueue  = call getQueue(session, queue = retailerConfirmationQueueName);
+
+    any msgProducer = mqcreateproducer(session, vendorOrderQueue);
+    //writeln($catalog.system.out, "PRODUCER: Created client-acknowledge session");
+
+    any outMessage          = mqcreatemapmessage(session);
+    any outMessage.Item     = "Computer(s)";
+    any outMessage.Quantity = quantity;
+    outMessage.properties.JMSReplyTo = retailerConfirmationQueue;
+
+    mqsend(msgProducer, outMessage);
+
+    writeln($catalog.system.out, "RETAILER: ordered: " +
+                                 quantity +
+                                 " computer(s)");
+
+    any orderConfirmationConsumer = mqcreateconsumer(session, retailerConfirmationQueue);
+    mqstart(connection);
+    any inMessage = mqreceive(orderConfirmationConsumer);
+
+    int accepted = inMessage.OrderAccepted;
+    if (accepted)
+      writeln($catalog.system.out, "RETAILER: order filled");
+    else
+      writeln($catalog.system.out, "RETAILER: order not filled");
+
+    writeln($catalog.system.out, "RETAILER: placing another order");
+    outMessage.Quantity = quantity * 2;
+    mqsend(msgProducer, outMessage);
+    writeln($catalog.system.out, "RETAILER: ordered: " +
+                                 outMessage.Quantity +
+                                 " computer(s)");
+
+    any inMessage = mqreceive(orderConfirmationConsumer);
+
+    accepted = inMessage.OrderAccepted;
+    if (accepted)
+      writeln($catalog.system.out, "RETAILER: order filled");
+    else
+      writeln($catalog.system.out, "RETAILER: order not filled");
+
+    // Send a non-text control message indicating end of messages.
+    mqsend(msgProducer, mqcreatemessage(session));
+  }
+  finally
+  {
+    mqclose(connection);
+    exit(0);
+  }
+}
+
+/**
+ * The Vendor process uses one transaction to receive the computer order from
+ * the retailer and order the needed number of monitors and disk drives
+ * from its suppliers.  At random intervals, it throws an exception to
+ * simulate a database problem and cause a rollback.
+ *
+ * The process uses an asynchronous message listener to process replies from
+ * suppliers. When all outstanding supplier inquiries complete, it sends a 
+ * message to the Retailer accepting or refusing the order.
+ */
+service doVendor(any vendorOrderQueueName,
+                 any monitorOrderQueueName,
+                 any storageOrderQueueName,
+                 any vendorConfirmationQueueName)
+{
+                // TODO other process. asyncSession = connection.createSession(true, 0);
+
+  any connection  = call getConnection();
+
+  // When creating transactional sessions the acknowledge mode is irrelevant,
+  // so in Inq it is the final (optional) argument. We don't specify it here.
+  // There can only be one transacted session per Process. Once created,
+  // commit and rollback are managed by the process's transaction environment.
+  // There is no "mqcommit" function, for example. See further notes below.
+  any session     = mqcreatesession(connection, true);
+
+  any vendorOrderQueue        = call getQueue(queue = vendorOrderQueueName, session);
+  any monitorOrderQueue       = call getQueue(queue = monitorOrderQueueName, session);
+  any storageOrderQueue       = call getQueue(queue = storageOrderQueueName, session);
+  any vendorConfirmationQueue = call getQueue(queue = vendorConfirmationQueueName, session);
+
+  /*
+   * Create receiver for vendor order queue, sender for
+   * supplier order queues, and message to send to suppliers.
+   */
+  any vendorOrderMessageConsumer  = mqcreateconsumer(session, vendorOrderQueue);
+  any monitorOrderMessageProducer = mqcreateproducer(session, monitorOrderQueue);
+  any storageOrderMessageProducer = mqcreateproducer(session, storageOrderQueue);
+  any orderMessage                = mqcreatemapmessage(session);
+
+  int r;      // for random number generation
+  int exitResult;
+
+  // Start the receipt of messages
+  mqstart(connection);
+
+  /*
+   * Process orders in vendor order queue.
+   * Use one transaction to receive order from order queue
+   * and send messages to suppliers' order queues to order 
+   * components to fulfill the order placed with the vendor.
+   */
+  while (true)
+  {
+    // Gone to some effort to ape the code structure of TransactedExample.java
+    // in the GlassFish(tm) examples. A more typical example in Inq would
+    // use a message listener function and not manipulate the transaction
+    // directly, but in any case other patterns are possible, as this
+    // port demonstrates.
+
+    transaction
+    {
+      // By default a Process's root transaction will commit or rollback any
+      // transacted messaging session it is managing. If script opens a
+      // nested transaction and wants it to perform this function then 
+      // the mqsetcommit function is provided.
+      mqsetcommit(true);
+
+      // Receive an order from a retailer.
+      writeln($catalog.system.out, "VENDOR: await order...");
+      any inMessage = mqreceive(vendorOrderMessageConsumer);
+
+      // All messages support the property "messageType" which yields
+      // a string constant identifying whether the message is text, map
+      // and so forth. This is the cheapest way to check a message's
+      // type. If you want the value of a particular property that is
+      // only supported by the expected message type (such as
+      // the "text" property of a text message) then that is an
+      // alternative way.
+      if (inMessage.properties.messageType != "MAP")
+      {
+        /*
+         * Message is an end-of-message-stream message from
+         * retailer.  Send similar messages to suppliers,
+         * then break out of processing loop.
+         */
+        any endOfMessageStream = mqcreatemessage(session);
+        endOfMessageStream.properties.JMSReplyTo = vendorConfirmationQueue;
+
+        mqsend(monitorOrderMessageProducer, endOfMessageStream);
+        mqsend(storageOrderMessageProducer, endOfMessageStream);
+
+        // In the java example there is a session.commit() here.
+        // Nothing for Inq
+
+        break();
+      }
+
+      /*
+       * A real application would check an inventory database
+       * and order only the quantities needed.  Throw an
+       * exception every few times to simulate a database
+       * concurrent-access exception and cause a rollback.
+       * [Random number between 0 and 2 with 1 meaning "fail".]
+       */
+      if (random(r, 3) == 1)
+        throw("Simulated database concurrent access exception");
+
+      // Just alias the received message to make things a little
+      // clearer when comparing this script to the Java equivalent.
+      any vendorOrderMessage = inMessage;
+
+      // Record retailer order as a pending order.
+      // Inq notes:
+      //   1. Make a new empty Order
+      any order = new(Order);
+      //   2. Submit it to the transaction (construct {} runs now)
+      create(order);
+
+      /*
+       * Set order number and reply queue for outgoing
+       * message.
+       */
+      any orderMessage.VendorOrderNumber = order.Order;
+      orderMessage.properties.JMSReplyTo = vendorConfirmationQueue;
+      int quantity = vendorOrderMessage.Quantity;
+      writeln($catalog.system.out, "Vendor: Retailer ordered " +
+                                   quantity + " " +
+                                   vendorOrderMessage.Item);
+
+      // Send message to monitor supplier.
+      // Establish Item and Quantity map members
+      any orderMessage.Item     = "Monitor";
+      any orderMessage.Quantity = quantity;
+      mqsend(monitorOrderMessageProducer, orderMessage);
+
+      writeln($catalog.system.out, "Vendor: ordered " + quantity + " " +
+                                    orderMessage.Item  +
+                                    "(s)");
+
+      /*
+       * Reuse message to send to storage supplier, changing
+       * only item name.
+       * Inq note: once a map member has been set up it can be
+       * assigned in this way.
+       */
+      orderMessage.Item = "Hard Drive";
+      mqsend(storageOrderMessageProducer, orderMessage);
+      writeln($catalog.system.out, "Vendor: ordered " + quantity + " " +
+                                   orderMessage.Item  +
+                                   "(s)");
+
+      // There is no explicit commit of the messaging session as
+      // the Java example has. This is performed by Inq when the
+      // transaction block closes. Inq also commits the creation
+      // of the Order (see create(order) above), so data and
+      // messaging are committed together.
+
+    } // commit txn
+    catch
+    {
+      // We are throwing an exception to simulate an environmental
+      // error (see throw(...) above). If not caught this would naturally
+      // roll back the enclosing transaction however in this test example
+      // we want to continue the while(true) loop and process the
+      // next order. As stated elsewhere, the coding pattern is not
+      // very "event-loop" for Inq but we are sticking to the original
+      // Java example.
+      // Inq supports explicit transaction roll back with the "abort"
+      // function so call it now.
+      abort();
+
+      // Certain special paths are valid in a catch{} block. You
+      // can writeln the $stack if you want to see them all.
+
+      writeln($catalog.system.out, "Vendor: JMSException occurred: " +
+                                   @exception);
+      writeln($catalog.system.out, @stackTrace);
+      writeln($catalog.system.out, @javaStack);
+      writeln($catalog.system.out, "Vendor: rolled back transaction 1");
+      
+      // TODO exitResult = 1;
+
+      // This "continue;" statement is only so we don't hit the
+      // writeln below saying we've committed the txn (which we
+      // haven't). As mentioned, the flow is a bit contrived
+      continue;
+    }
+
+    // If we get here the simulated error did not occur and the
+    // transaction was committed by Inq
+    writeln($catalog.system.out, "Vendor: committed transaction 1");
+  }
+
+  // Wait till suppliers get back with answers.
+  // TODO listener.monitor.waitTillDone();
+  lock("foo", -1, cfunc f = $catalog.jmstest.latch);
+
+  mqclose(connection);
+
+  exit(0);
+}
+
+/**
+ * The GenericSupplier class receives an item order from the
+ * vendor and sends a message accepting or refusing it.
+ */
+service doGenericSupplier(any itemName, any inQueueName)
+{
+  any connection  = call getConnection();
+
+  // When creating transactional sessions the acknowledge mode is irrelevant,
+  // so in Inq it is the final (optional) argument. We don't specify it here.
+  // There can only be one transacted session per Process. Once created,
+  // commit and rollback are managed by the process's transaction environment.
+  // There is no "mqcommit" function, for example. See further notes below. <-- TODO
+  any session    = mqcreatesession(connection, true);
+
+  any orderQueue = call getQueue(queue = inQueueName, session);
+
+  any msgConsumer = mqcreateconsumer(session, orderQueue);
+  mqstart(connection);
+
+  int inventory;   // see call checkInventory() below
+
+  /*
+   * Keep checking supplier order queue for order request until
+   * end-of-message-stream message is received.
+   * Receive order and send an order confirmation as one transaction.
+   */
+  while (true)
+  {
+    transaction
+    {
+      mqsetcommit(true);
+
+      any inMessage = mqreceive(msgConsumer);
+      if (inMessage.properties.messageType != "MAP")
+      {
+        /*
+         * Message is an end-of-message-stream message.
+         * Send a similar message to reply queue, commit
+         * transaction, then stop processing orders by breaking
+         * out of loop.
+         */
+        any msgProducer = mqcreateproducer(session,
+                                           getproperty(inMessage.properties.JMSReplyTo));
+        mqsend(msgProducer, mqcreatemessage(session));
+
+        // No commit required for Inq  <--- TODO
+        //session.commit();
+        break(true);
+      }
+
+      // Just alias the received message to make things a little
+      // clearer when comparing this script to the Java equivalent.
+      any orderMessage = inMessage;
+
+      // Extract quantity ordered from order message. All map message
+      // content is read as strings, so if we want some other type we
+      // must declare it explicitly and assign, as here.
+      int quantity = orderMessage.Quantity;
+
+      writeln($catalog.system.out, itemName +
+                                   " Supplier: Vendor ordered " +
+                                   quantity + " " +
+                                   orderMessage.Item + "(s)");
+
+      /*
+       * Create sender and message for reply queue.
+       * Set order number and item; check inventory and set
+       * quantity available.  
+       * Send message to vendor and commit transaction.
+       */
+      any msgProducer = mqcreateproducer(session,
+                                         getproperty(orderMessage.properties.JMSReplyTo));
+
+      any outMessage = mqcreatemapmessage(session);
+
+      // Note: This statement will silently convert the VendorOrderNumber
+      // value from an int in the source message to a string in the target
+      // one:
+      //   outMessage.VendorOrderNumber = orderMessage.VendorOrderNumber;
+      // so to preserve the data type we have to go through a variable
+      int orderNumber = orderMessage.VendorOrderNumber;
+      any outMessage.VendorOrderNumber = orderNumber;
+
+      any outMessage.Item = itemName;
+      int numAvailable = call checkInventory(inventory);
+      if (numAvailable >= quantity)
+        any outMessage.Quantity = quantity;
+      else
+        any outMessage.Quantity = numAvailable;
+
+      mqsend(msgProducer, outMessage);
+
+      writeln($catalog.system.out, itemName + " Supplier: sent " +
+                                   outMessage.Quantity + " " +
+                                   outMessage.Item + "(s)");
+
+      // No commit required for Inq  <--- TODO
+      //session.commit();
+    }
+
+    writeln($catalog.system.out, itemName +
+                                 " Supplier: committed transaction");
+  }
+        
+  mqclose(connection);
+
+  exit(0);
+}
+
+/**
+ * The VendorMessageListener process handles an order confirmation message
+ * from a supplier to the vendor.
+ *
+ * It demonstrates the use of transactions within message listeners.
+ *
+ * Note that in the GlassFish(tm) Java example the 
+ */
+service doVendorMessageListener(any vendorConfirmationQueueName,
+                                int numSuppliers)
+{
+  any connection = call getConnection();
+
+  any session                 = mqcreatesession(connection, true);
+  any vendorConfirmationQueue = call getQueue(queue = vendorConfirmationQueueName, session);
+  any vendorConfirmationConsumer = mqcreateconsumer(session, vendorConfirmationQueue);
+
+  // Alias into the $this node space the things the vendorMessageListener
+  // function needs access to when it processes messages or terminates
+  any $this.session      = session;
+  any $this.connection   = connection;
+  any $this.numSuppliers = numSuppliers;
+
+  // Set up a function to be called when messages are received by
+  cfunc vendorMessageListener = call vendorMessageListener();
+  mqsetmessagelistener(vendorConfirmationConsumer, vendorMessageListener);
+
+  mqstart(connection);
+
+  // Messages subsequently received at vendorConfirmationQueue
+  // will be handled in vendorMessageListener
+}
+
+local function vendorMessageListener(any message)
+{
+  // Process a message received at the vendorConfirmationQueue
+
+
+  /*
+   * If message is an end-of-message-stream message and this is the
+   * last such message, set monitor status to all done processing 
+   * messages and commit transaction.
+   */
+  if (message.properties.messageType != "MAP")
+  {
+    if (call outstandingOrders() == 0)
+    {
+      $this.numSuppliers--;
+      if ($this.numSuppliers == 0)
+      {
+        // TODO
+        //monitor.allDone();
+        lock("foo");
+        notify("foo", cfunc f = $catalog.jmstest.latch = true);
+        exit(0);
+      }
+    }
+    // No need to explicitly commit - Inq transaction is managing the
+    // messaging session.
+  }
+  else
+  {
+    /* 
+     * Message is an order confirmation message from a supplier.
+     */
+    int orderNumber = -1;
+
+    // Just alias the message to make it a bit more readable and like
+    // the Java equivalent example
+    any component = message;
+
+    /* 
+     * Process the order confirmation message and commit the
+     * transaction.
+     */
+    orderNumber = component.VendorOrderNumber;
+    any Order = call processSubOrder(Order = orderNumber, component);
+                // TODO
+                //session.commit();
+                
+    /*
+     * If this message is the last supplier message, send message
+     * to Retailer and commit transaction.
+     */
+    if (!call isPending(item = Order))
+    {
+      writeln($catalog.system.out, "Vendor: Completed processing for order " +
+                                   Order.Order);
+
+      // Get the original order message out of its protective wrapping
+      // inside the Order instance.
+      any orderMsg = getobject(Order.OrderMsg);
+      any replyQueue = orderMsg.properties.JMSReplyTo;
+      any mp         = mqcreateproducer($this.session, replyQueue);
+      any retailerConfirmationMessage = 
+        mqcreatemapmessage($this.session);
+
+      if (call isFulfilled(item = Order))
+      {
+        // NOTE: Things taken out of mapmessages are returned
+        // as strings, relying on implicit Inq type conversion.
+        // For boolean any non-zero length string is true, so "false"
+        // is actually converted to boolean true. For this reason
+        // we cannot push booleans through mapmessages. Use an
+        // integer instead.
+        any retailerConfirmationMessage.OrderAccepted = 1;  // true
+        writeln($catalog.system.out, "Vendor: sent " +
+                                     Order.Quantity +
+                                     " computer(s)");
+      }
+      else if (call isCancelled(item = Order))
+      {
+        any retailerConfirmationMessage.OrderAccepted = 0; // false
+        writeln($catalog.system.out, "Vendor: unable to send " +
+                                     Order.Quantity +
+                                     " computer(s)");
+      }
+      mqsend(mp, retailerConfirmationMessage);
+                    // TODO
+                    //session.commit();
+                    //System.out.println("  Vendor: committed transaction 2");
+    }
+  }
+  // No explicit commit is required. The transactional session is
+  // managed by the Inq implicit transaction
+}
+
+local function processSubOrder(any Order, any component)
+{
+  // The most succinct form of read(). Reads the Order typedef using
+  // the stack as the primary key value. $stack.Order is the order
+  // number from the caller. There is also $stack.component but read()
+  // only uses $stack.Order because this is the only thing required
+  // to satisfy the primary key, which read() uses by default.
+  read(Order, .);
+
+  string itemName = null;
+  int    quantity;
+
+  // Determine which subcomponent this is.
+  itemName = component.Item;
+
+  // Read out the quantity
+  quantity = component.Quantity;
+  writeln($catalog.system.out, "\e " + itemName + " " + quantity);
+
+  // We'll use a collator for case-insensitive comparison, just
+  // for an illustration
+  collator c;
+  c.properties.strength = STRENGTH_PRIMARY;
+
+  // Note down the quantity of the monitors/hard drives as appropriate
+  if (collate(c, itemName, "monitor") == 0)
+  {
+    writeln($catalog.system.out, "\e \l " + itemName);
+    Order.MonitorMsg = component;
+    Order.Monitor    = quantity;
+  }
+  else if (collate(c, itemName, "hard drive") == 0)
+  {
+    writeln($catalog.system.out, "\e \l " + itemName);
+    Order.StorageMsg = component;
+    Order.Storage    = quantity;
+  }
+
+  /*
+   * If notification for all subcomponents has been received,
+   * verify the quantities to compute if able to fulfill order.
+   */
+  if ((Order.MonitorMsg) && (Order.StorageMsg))
+  {
+    if (Order.Quantity > Order.Monitor)
+      Order.OrderStatus = enum(OrderStatus, CANCELLED);
+    else if (Order.Quantity > Order.Storage)
+      Order.OrderStatus = enum(OrderStatus, CANCELLED);
+    else
+      Order.OrderStatus = enum(OrderStatus, FULFILLED);
+  }
+
+  // Return the order we are processing
+  Order;
+}
+
+// Return the number of orders still to be processed.
+local function outstandingOrders()
+{
+  any k = new(Order.ByOrderStatus);
+  k.OrderStatus = enum(OrderStatus, PENDING);
+  read(Order, k, setname="orders");
+
+  // return value
+  count(orders);
+}
+
+local function isPending(any item)
+{
+  item.OrderStatus == enum(OrderStatus, PENDING);
+}
+
+local function isFulfilled(any item)
+{
+  item.OrderStatus == enum(OrderStatus, FULFILLED);
+}
+
+local function isCancelled(any item)
+{
+  item.OrderStatus == enum(OrderStatus, CANCELLED);
+}
+
+// Simulate the number of available items - between 0 and 4
+local function checkInventory(any inventory)
+{
+  random(inventory, 5);
+}
+
+
+// TODO
+
+// The number of computers to be ordered can be specified on the
+// command line. The default is 3
+int quantity = $catalog.argsMap.quantity ? $catalog.argsMap.quantity : 3;
+
+// Place a latch variable in the global $catalog space
+// The TODO producer/subscriber processes use this to
+// synchronise with each other. Local variable booleans
+// are initially false
+boolean $catalog.jmstest.latch;
+
+any vendorOrderQueueName          = "A";
+any retailerConfirmationQueueName = "B";
+any monitorOrderQueueName         = "C";
+any storageOrderQueueName         = "D";
+any vendorConfirmationQueueName   = "E";
+
+// Start the processes
+any retailer = spawn("RETAILER",
+                     type  = PROCESS_DETACHED,
+                     start = call retailerStart(quantity,
+                                                vendorOrderQueueName,
+                                                retailerConfirmationQueueName),
+                     end   = call jmsEnd());
+
+any vendor   = spawn("VENDOR",
+                      type  = PROCESS_DETACHED,
+                      start = call vendorStart(vendorOrderQueueName,
+                                               monitorOrderQueueName,
+                                               storageOrderQueueName,
+                                               vendorConfirmationQueueName),
+                      end   = call jmsEnd());
+
+any monitorSupplier  = spawn("MONITOR_SUPPLIER",
+                             type  = PROCESS_DETACHED,
+                             start = call genericSupplierStart(itemName = "Monitor",
+                                                               inQueueName = monitorOrderQueueName),
+                             end   = call jmsEnd());
+
+any storageSupplier  = spawn("STORAGE_SUPPLIER",
+                             type  = PROCESS_DETACHED,
+                             start = call genericSupplierStart(itemName = "Hard Drive",
+                                                               inQueueName = storageOrderQueueName),
+                             end   = call jmsEnd());
+
+any vendorListener   = spawn("VENDOR_LISTENER",
+                             type  = PROCESS_DETACHED,
+                             start = call vendorMessageListenerStart(vendorConfirmationQueueName,
+                                                                     numSuppliers = 2),
+                             end   = call vendorListenerEnd(),
+                             syncext = true);
+
+waitproc(retailer);
+waitproc(vendor);
+waitproc(monitorSupplier);
+waitproc(storageSupplier);
+waitproc(vendorListener);
+
+writeln($catalog.system.out, "\i terminating.....");
+

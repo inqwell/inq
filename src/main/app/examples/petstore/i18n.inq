@@ -1,0 +1,62 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * PetStore Example
+ *
+ * i18n setup.
+ */
+
+if (!$root.ps.i18n)
+{
+  // Supported languages so far:
+  set supportedLanguages = ("en");
+  
+  // Check if we have specified the i18n parameter. If not, set the language
+  // to English.
+  string i18n;
+  
+  if ($catalog.argsMap.i18n)
+    i18n = $catalog.argsMap.i18n;
+  else
+  {
+    writeln($catalog.system.out,
+            "WARNING: i18n parameter not found. Using 'en' by default.");
+    i18n = "en";
+  }
+  
+  // do we have the requested language in our repository? Check
+  // by seeing if the language file is there (relative to this script).
+  file lang = absurl(i18n + $properties.file_separator + "i18n.inq", "\i");
+  
+  // There are a whole host of properties associated with the 'file' data type
+  // including things like SHA256. We just use the 'exists' property
+  if (!getproperty(lang.properties.exists))
+  {
+    writeln($catalog.system.out,
+            "ERROR: Requested i18n language '" + i18n + "' not found at " + lang + " - Aborting.");
+    exit(1);
+  }
+  
+  // Store it for later use. Note: For the time being - this characterises the
+  // server as a whole.
+  //string $catalog.i18n = i18n;
+  
+  // As well, place the locale at $root.i18n. This will characterise the
+  // session - its more future-proof in terms of using this path to 
+  // define i18nised strings when Inq performs the substitution on
+  // transfer to the client.
+  any $root.ps.i18n = i18n;
+  // See AdminSrv.inq. To be fixed.
+  string $root.i18n = i18n;
+  
+  // load the constant string values
+  exec(i18n + "/i18n.inq");
+  
+  // Leave this path on the stack for other .inq files to use.
+  any i18n = path($catalog.{$root.ps.i18n});
+}

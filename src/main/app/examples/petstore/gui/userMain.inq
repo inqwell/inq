@@ -1,0 +1,153 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * PetStore Example
+ *
+ * Initial GUI for standard user
+ */
+
+package examples.petstore;
+
+/**
+ * Create and show the GUI.
+ */
+local function createGUI()
+{
+  // Set this up as a shorthand for later use
+  any i18n = path($catalog.{$root.i18n});
+  
+  // Create a window
+  gWindow userMain;
+  
+  // The window is a "context node" meaning that
+  // event handlers run with $this == userMain
+  userMain.properties.contextNode = true;
+  
+  // Include the connected server in the window title. Inq has no formal
+  // URL type (at least for now), they are just strings, so to get
+  // only protocol:host we use string manipulation. 
+  string s = $catalog.argsMap.serverHost;
+  if ((int i = strindex(s, "?")) > 0)
+    s = leftstring(s, i);
+  userMain.properties.title = {i18n}.ps.title.DASHBOARD + " (" + s + ")";
+
+  userMain.properties.defaultCloseOperation = EXIT_ON_CLOSE;
+  //userMain.properties.icon = $catalog.icons.items;
+  userMain.properties.icon = $catalog.icons.petstore;
+  userMain.properties.resizable = false;
+
+
+  gButton bMyAccount;
+  gButton bMyOrders;
+  gButton bNewOrder;
+  gButton bBrowseItems;
+  gButton bExit;
+
+  // Set each button's properties
+  bMyAccount.properties.text = {i18n}.ps.button.MY_ACCOUNT;
+  bMyAccount.properties.icon = $catalog.icons.my_account;
+  bMyOrders.properties.text  = {i18n}.ps.button.MY_ORDERS;
+  bMyOrders.properties.icon  = $catalog.icons.my_orders;
+  bNewOrder.properties.text  = {i18n}.ps.button.NEW_ORDER;
+  bNewOrder.properties.icon  = $catalog.icons.new_order;
+  bBrowseItems.properties.text = {i18n}.ps.button.ITEMS;
+  bBrowseItems.properties.icon = $catalog.icons.items;
+  bExit.properties.text      = {i18n}.ps.button.EXIT;
+  bExit.properties.icon      = $catalog.icons.exit;
+  bMyAccount.properties.verticalTextPosition =
+    bMyOrders.properties.verticalTextPosition =
+    bNewOrder.properties.verticalTextPosition =
+    bBrowseItems.properties.verticalTextPosition =
+    bExit.properties.verticalTextPosition = GUI_TOP;
+  bMyAccount.properties.horizontalTextPosition =
+    bMyOrders.properties.horizontalTextPosition =
+    bNewOrder.properties.horizontalTextPosition =
+    bBrowseItems.properties.horizontalTextPosition =
+    bExit.properties.horizontalTextPosition = GUI_CENTER;
+  
+  // When our context is known, perform any further initialisation required
+  // within it.
+  gEvent(bExit, call contextEstablished(), event=(gContext));
+
+  // Lay them out
+  layout(., userMain, "Margin d:3
+                       Table  Gap 3 Columns 0.2, 0.2, 0.2, 0.2, 0.2
+                         Rows GRID_PREF;
+                       {
+                         Row
+                         {
+                           bMyAccount
+                           bNewOrder
+                           bMyOrders
+                           bBrowseItems
+                           bExit
+                         }
+                       }");
+
+  // Put the window into the permanent node space.
+  any $this.userMain = userMain;
+  
+  // Establish some event handlers for the buttons
+  gEvent(bMyAccount, call showMyAccount());
+  gEvent(bMyOrders,  call showMyOrders());
+  gEvent(bNewOrder,  call showNewOrder());
+  gEvent(bBrowseItems,  call showBrowseItems());
+  gEvent(bExit,      call Exit());
+
+  // Show the window. show() returns the window
+  // so that is also the return value of this function.
+  show(userMain);
+}
+
+local function showMyAccount()
+{
+  call global:showMyAccount();
+}
+
+local function showNewOrder()
+{
+  call global:showNewOrder();
+}
+
+local function showMyOrders()
+{
+  call global:showMyOrders(externals = $this.funcs);
+}
+
+local function showBrowseItems()
+{
+  call global:showBrowseItems();
+}
+
+local function contextEstablished()
+{
+  // The My Orders screen has a menu option to enter a new order, which
+  // raises (or creates) the New Order screen. To support this type of
+  // thing, create a func in encapsulating this context and calling the
+  // appropriate function.
+  // The map $this.funcs will also be held elsewhere in the node-space
+  // (beneath other windows) so it must be a smap.
+  // windows
+  smap $this.funcs;
+  func $this.funcs.newOrder = call showNewOrder();
+}
+
+local function Exit()
+{
+  exit(0);
+}
+
+any dialogParent = call createGUI();
+
+// Create the utility message dialog. We create the dialog and put it
+// at a well-known path for the Petstore application to use. This means
+// that when we don't know what context we are in (as can happen when
+// handling exceptions) we can still get at the dialog should we want
+// to use it.
+call inq.gui.util:createMessageDialogAt(parent     = dialogParent,
+                                        dialogPath = path($root.dialogs.ps.message));

@@ -1,0 +1,18 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+// sum test
+
+int x.p.a=1;
+int x.q.a=2;
+int x.r.a=3;
+
+// Don't forget the $loop qualifier for the sum child expression.
+writeln($catalog.system.out, sum(x, $loop.a));
+

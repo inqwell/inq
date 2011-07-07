@@ -1,0 +1,29 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+// For each positive integer how many different values are obtained
+// for the remainder  of n ^^ 2 / (n + 4)
+// ??
+// Run this script to see that the answer very rapidly reaches 9.
+
+int n = 1;
+set s;  
+
+while(true)
+{
+  any m = n^^2 % (n + 4);
+  if (!contains(s, m))
+    s += m;
+
+  writeln($catalog.system.out, "" + n + " " + count(s) + " " + m);
+
+  n++;
+  wait("hello", 500);
+}
+

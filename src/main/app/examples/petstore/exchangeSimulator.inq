@@ -1,0 +1,189 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * PetStore Example
+ *
+ * Regulatory Reporting Exchange Simulation
+ *
+ * Orders shipped by petstores must be reported to
+ * the Pet International Exchange (PIE) stating the
+ * item, quantity sold and price. Regulatory reporting
+ * ensures price transparency and species monitoring,
+ * leading to an ethical and sustainable market.
+ * The prices of received orders are published and
+ * members can subscribe to receive them.
+ *
+ * This script is run separarely from the petstore client
+ * and server and processes shipped orders received at
+ * the message queue FILL.PIE, publishing prices to
+ * the topic FEED.PIE, invoked as follows:
+ *
+ *    inq -in exchangeSimulator.inq -fill FILL.PIE -feed FEED.PIE
+ *
+ * Demonstrates:
+ *   - asynchronous receipt of messages at a queue
+ *   - parsing and processing of the XML message payload
+ *   - publishing to a topic
+ */
+
+package examples.petstore.pie;
+
+local function usage()
+{
+  writeln($catalog.system.err, "usage: \i: -fill <queue-name> -feed <topic-name>");
+  exit(1);
+}
+
+local function simStart(any process, // always provided by Inq
+                        any fillQueueName,
+                        any feedTopicName)
+{
+  writeln($catalog.system.out, "\e \l Starting: " + process.processName);
+
+  // Just send a service request to the process
+  // to run the simulator
+  send doSimulator(@channel = process.ichannel, fillQueueName, feedTopicName);
+}
+
+local function simEnd()
+{
+  if ($this.connection)
+    mqclose($this.connection);
+}
+
+local function fillReceived(any message)
+{
+  if (any xmlMsg = message.properties.text)
+  {
+    // writeln($catalog.system.out, "Reading message: " + message.properties.text);
+    
+    // Parse the message
+    open($this.xmlStrm, "string://xmlMsg", OPEN_READ);
+    any fill = readstream($this.xmlStrm);
+    close($this.xmlStrm);
+    if (fill)
+    {
+      foreach(fill.reportorder.items)
+      {
+        // Spoof a new price
+        decimal:2 price = $loop.LineItem.UnitPrice;
+        call adjustment(price);
+        
+        // Replace the UnitPrice in the parsed XML (which is a string)
+        // with the new price (which is decimal:2)
+        any $loop.LineItem.UnitPrice = price;
+        writeln($catalog.system.out, "\l: " + $loop.LineItem);
+        
+        // Create the XML content
+        any root.itemsold.item = $loop.LineItem;
+        open($this.xmlStrm, "string://xmlMsg", OPEN_WRITE);
+        writestream($this.xmlStrm, root);
+        close($this.xmlStrm);
+        
+        // Reuse the received message and publish
+        mqclearmessage(message);
+        message.properties.text = xmlMsg;
+        writeln($catalog.system.out, "Publishing message: " + xmlMsg);
+        mqsend($this.priceFeed, message);
+      }
+    }
+  }
+}
+
+local function adjustment(any price)
+{
+  // Adjust the price by +/- 10%
+  price += price * (random($this.randomVal) - $this.point5) / 10;
+}
+
+service doSimulator(any fillQueueName, any feedTopicName)
+{
+  setexceptionhandler(cfunc f = {
+                                  // Just output the whole stack
+                                  writeln($catalog.system.err, .);
+                                  writeln($catalog.system.err, "Bailing...");
+                                  exit(0);
+                                }
+                     );
+
+  // Initialise the messaging env
+  any connFactory = callmethod("getJMSConnectionFactory", class="com.inqwell.any.jms.JMSHelper", $catalog.argsMap);
+  any $this.connection = mqcreateconnection(connFactory);
+  $this.connection.properties.exceptionHandler = func f =
+    {
+      writeln($catalog.system.err, "Caught " + msg);
+      writeln($catalog.system.err, stackTrace);
+      writeln($catalog.system.err, "Terminating... ");
+      exit(1);
+    };
+    
+  any $this.session    = mqcreatesession($this.connection, true);
+  any fillQueue        = mqcreatequeue($this.session, fillQueueName);
+  any fillCons         = mqcreateconsumer($this.session, fillQueue);
+  cfunc fillReceived   = call fillReceived();
+  mqsetmessagelistener(fillCons, fillReceived);
+
+  // Setup topic to publish Item prices
+  any priceTopic = mqcreatetopic($this.session, feedTopicName);
+  any $this.priceFeed = mqcreateproducer($this.session, priceTopic);
+  
+  // Set up a stream for parsing received orders
+  ioXMLX $this.xmlStrm;
+  // Each item in the order is published under the tag <item>. Inq
+  // cannot support duplicated names in a map so provide a tag
+  // function to override the name. The path match is
+  // on *items.item. We do not match on just *item because the
+  // stream is reused for the message we publish, which has
+  // the form itemsold.item
+  // is reused when generating the .
+  object p = path($this*items.item);
+  any tagFuncs.{p} = cfunc f = call itemTag();
+  $this.xmlStrm.properties.tagFuncs = tagFuncs;
+
+  // Establish some decimals for increase/decrease
+  decimal:3 $this.increase = "0.075";
+  decimal:3 $this.decrease = "-0.075";
+  decimal:3 $this.randomVal;
+  decimal:1 $this.point5 = "0.5";
+
+  // Start receive incoming messages
+  mqstart($this.connection);
+
+  // Any messages received at the consumer fillCons
+  // will be delivered to the local function fillReceived. In the
+  // mean time, the process can continue to process other Inq
+  // events, such as further service requests.
+  
+  writeln($catalog.system.out, "Awaiting orders at " + fillQueueName);
+  writeln($catalog.system.out, "Publishing prices to " + feedTopicName);
+}
+
+local function itemTag(any node,
+                       any parent,
+                       any nodeName,
+                       any ordinal,
+                       any content,
+                       any last,    // always false - SAX parser does not know
+                       any descend,
+                       any attributes)
+{
+  nodeName + ordinal;
+}
+
+if (!($catalog.argsMap.fill && $catalog.argsMap.feed))
+  call usage();
+
+// Start a process to handle messages at the input queue
+spawn("ExchangeSimulator",
+      type  = PROCESS_DETACHED,
+      start = call simStart(fillQueueName = $catalog.argsMap.fill,
+                            feedTopicName = $catalog.argsMap.feed),
+      end   = call simEnd(),
+      syncext = true);
+
+

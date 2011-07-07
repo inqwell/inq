@@ -1,0 +1,66 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+// Hello World as Inq Client-Server
+//   - client side
+
+package examples.helloworld;
+
+local function createGui(any win)
+{
+  // Place the window in the node space
+  any $this.win = win;
+
+  // Create a text field and a label both rendering $this.vars.Hello.HelloWorld
+  // First setup the text field...
+  gTextField tf;
+  tf.properties.selectOnFocus = true;
+  tf.properties.renderInfo = renderinfo($this.vars.Hello.HelloWorld, editable=true);
+  gEvent(tf, call sendHello());
+
+  // ...then the label
+  gLabel lbl;
+  lbl.properties.renderInfo = renderinfo($this.vars.Hello.HelloWorld);
+  gEvent(lbl, call contextEstablished(), event=(gContext));
+  
+  // Note that $this.vars.Hello will be dispatched from the server.
+
+  // Layout the text field and label
+  layout(., win, "Table Columns GRID_PREF
+                      Rows GRID_PREF, 20;
+                  {
+                    Column
+                    {
+                      Caption \"Type Here:\"; tf
+                      Margin d:3 lbl
+                    }
+                  }");
+
+  // Show the window
+  show(win);
+}
+
+// When in the context $root.win, initialise the server
+local function contextEstablished()
+{
+  send initHello();
+}
+
+// Update the server-side instance. We (and anyone else logged in) are
+// observing the Hello instance, so our GUI is updated that way.
+local function sendHello()
+{
+  send sayHello($this.vars.Hello);
+}
+
+// Create and setup a top level window
+gWindow win;
+win.properties.title       = "Inq Hello World";
+win.properties.contextNode = true;
+win.properties.defaultCloseOperation = EXIT_ON_CLOSE;
+
+call createGui(win);

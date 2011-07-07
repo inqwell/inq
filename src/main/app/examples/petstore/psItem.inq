@@ -1,0 +1,90 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/** 
+ * PetStore Example
+ *  
+ * Item functionality.
+ */
+
+package examples.petstore;
+
+/**
+ * The search service used by the client's deployment of the item chooser.
+ * The contract is to reply on the item chooser's chooserResult service
+ * with any results.
+ */
+service searchPet(any Search, any id)
+{
+  // Just do the read. The Search key is a non-unique key, which means
+  // it will create a node-set. We give the read() a prototype hmap
+  // to characterise the structure. This is important because the result
+  // will be rendered by a gTable in the client, requiring vector access.
+  hmap m;
+  read(Item, Search, target=m, setname="list");
+  
+  // Aggregate the Product type. This statement places the Item's
+  // corresponding Product instance as its sibling in the node-set
+  // structure. This is Inq's representation of a 1-1 relationship
+  // (an Item has one associated Product). Inq's aggregate() function
+  // is very powerful, this is its simplest use and implies the
+  // application of Product's primary key using Item.Product
+  // Notes:
+  //   1. The aggregate() function is given the path m.list.[@first].Item
+  //      as the thing to aggregate from. This implies a loop over the
+  //      node-set.
+  //   2. The node-set m.list may be empty if read() did not return
+  //      anything. In that case, the use of [@first] resolves to null
+  //      whereas [0] would throw an exception.
+  aggregate(Product, m.list[@first].Item);
+  
+  // Whatever we've got send it back to the chooserResult service
+  // passing back the id we were given as well.
+  send inq.gui.util:chooserResult(value = Search.SearchValue,
+                                  id,
+                                  m.list);
+}
+
+service filterItems(any filter, any at)
+{
+  add(call filterItems(filter), at);
+}
+
+service webFilterItems(any filter, any at)
+{
+  call filterItems(filter);
+}
+
+service updateItems(any items, any thing)
+{
+  // In fact not specific to the Item type. Would update anything.
+  foreach(items)
+  {
+    // Get the managed instance
+    any i = read(typeof($loop.{thing}), $loop.{thing});
+    i = $loop.{thing};
+  }
+}
+
+local function filterItems(any filter)
+{
+  hmap m;
+  read(Item, filter, setname="list", target=m);
+
+  // TODO: explain
+  any k = new(Category.pkey);
+  aggregate(Product,
+            m.list[@first].Item,
+            foreach = cfunc f = {
+                                  k.Category = $loop.Product.Category;
+                                  read(Category, k, target=$loop);
+                                  read(Inventory, $loop.Item, target=$loop);
+                                }
+           );
+  remove(m.list);
+}
+

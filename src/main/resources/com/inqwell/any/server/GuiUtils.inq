@@ -1,0 +1,18 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * Inqwell Server  - Gui Utilities
+ */
+
+package inq.gui.util;
+
+service removeContext()
+{
+  remove($this);
+}
+

@@ -1,0 +1,835 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * PetStore Example
+ *
+ * New Order GUI
+ */
+
+package examples.petstore;
+
+/**
+ * Creates a table to display the items being ordered.
+ * Not local because also used by myOrders.inq
+ */
+function setupItemTable(any context,
+                        any itemTable,
+                        any i18n,
+                        boolean isEditable = false)
+{
+  any columns = call itemTableColumns(i18n, isEditable);
+
+  itemTable.properties.columns        = columns;
+  itemTable.properties.modelRoot      = path($this.vars.items);
+  itemTable.properties.visibleRows    = 6;
+  itemTable.properties.visibleColumns = 0;  // Ensures container will show all columns
+  
+  if (isEditable)
+  {
+    // Set up the "qty" column to be editable.
+    //   1. Make a component that will act as the editor
+    gTextField tf;
+    
+    //   2. Provide a variable for the editor component to work on
+    //      We are editing LineItem.Qty and the working variable
+    //      for the form has already been created so we can simply
+    //      clone this to set it up.
+    any context.vars.qtyEdit = clone(context.vars.LineItem.Qty);
+  
+    //   3. Tell the editor component where/what its data is
+    tf.properties.renderInfo = renderinfo($this.vars.qtyEdit, typedef=LineItem.Qty, editable=true);
+    
+    //   4. Only allow +ve values to be typed
+    tf.properties.validateInsert = $catalog.guiFuncs.positiveInteger;
+    
+    //   5. Establish the editor component for the qty column
+    itemTable.properties.columns.qty.editor.properties.component = tf;
+    
+    //   6. Establish a onStopEdit function for the column
+    itemTable.properties.columns.qty.editor.properties.onStopEdit = cfunc f = call qtyChanged();
+  }
+  else
+  {
+    // Apply a style function to the status column
+    itemTable.properties.columns.status.renderer.properties.style = cfunc f = call statusStyle();
+
+    // Establish a custom renderer component to display an icon
+    // and the rendered value as normal. Unfortunately, the standard
+    // label (which Inq creates internally), although capable of
+    // painting an icon and some text, cannot left-justify the
+    // text and right-justify the icon to give the desired effect.
+    // Therefore, use two labels and lay them out with the necessary
+    // constraints.
+    gLabel cxlIcon;
+    gLabel statusValue;
+    
+    // Create a box explicitly (instead of using Row{...}) as this
+    // becomes the renderer component for the column
+    gBox   statusRenderer;
+    statusRenderer.properties.axis = X_AXIS;
+    layout(., statusRenderer, "statusValue Geometry xy:fv cxlIcon");
+    
+    // Make it the renderer component of the status column
+    itemTable.properties.columns.status.renderer.properties.component = statusRenderer;
+    
+    // Tell Inq which component the value should be set into
+    itemTable.properties.columns.status.renderer.properties.setValueToComponent = statusValue;
+    
+    // Use a simple mouse click event to invoke the cancel functionality.
+    // The event handler function maybeCxl() determines whether the event
+    // is within the cancel region of the status cell 
+    gEvent(itemTable, call maybeCxl(), event=(gMclicked));
+  }
+
+  // Put stripes on the table rows
+  itemTable.properties.rowStyle = $catalog.guiFuncs.tableStripe;
+
+  // Set up the totals row, if the table has one
+  call setupTotalTable(context,
+                       itemTable,
+                       columns,
+                       i18n);
+  // return the table
+  itemTable;
+}
+
+// Finalise the setup of the totals row
+local function setupTotalTable(any context,
+                               any itemTable,
+                               any columns,
+                               any i18n)
+{
+  // Fetch any totals table out of itemTable
+  any totalsTable = itemTable.properties.totalsTable;
+  if (totalsTable)
+  {
+    // Make the data for totalsTable to render. As stated elsewhere, there is
+    // only one row. The ValueHelper type is used just to get a suitably typed
+    // field to hold the order total.
+    any context.vars.orderTotal.row.OrderTotal = new(ValueHelper);
+    context.vars.orderTotal.row.OrderTotal.String = {i18n}.ps.title.TOTAL;
+  
+    // Establish its columns. The columns are the same as the parent
+    // table with the exception of the description and total columns,
+    // so replace those.
+    any columns.total  = renderinfo($this.OrderTotal.Price, typedef=ValueHelper.Price, format="\u00A4#,##0.00");
+    any columns.description = renderinfo($this.OrderTotal.String);
+    totalsTable.properties.columns = columns;
+  
+    // Tell it where the total root is
+    totalsTable.properties.modelRoot  = path($this.vars.orderTotal);
+    
+    // Bold the font used for the totals
+    totalsTable.properties.font = itemTable.properties.font.properties.bold;
+
+    totalsTable.properties.columns.total.renderer.properties.style = cfunc f = call totalStyle();
+  }
+}
+
+local function itemTableColumns(any i18n, any isEditable)
+{
+  // Specify the columns to render. An ordered map is used, columns
+  // can later be referenced by their map key.
+  // All column definitions use a renderinfo. The simplest case just
+  // specifies the meta-data, which assumes a path of $this.<type>.<field>
+  // beneath the table's data root. 
+  omap columns;
+  any columns.itemid      = renderinfo(typedef=Item.Item);
+  any columns.Category    = renderinfo(typedef=Product.Category);
+  any columns.name        = renderinfo(typedef=Product.Name);
+  any columns.qty         = renderinfo(typedef=LineItem.Qty);
+  any columns.unitprice   = renderinfo(typedef=LineItem.UnitPrice);
+  any columns.description = renderinfo(typedef=Product.Description);
+  
+  // However an expression can also be provided. This makes the cell's
+  // MVC sensitive to changes to LineItem.Qty and LineItem.UnitPrice
+  any columns.total       = renderinfo($this.LineItem.Qty * $this.LineItem.UnitPrice,
+                                       typedef=LineItem.UnitPrice,
+                                       label={i18n}.ps.title.TOTAL,
+                                       width=9);
+  if (!isEditable)
+  {
+    any columns.status      = renderinfo(typedef=OrderStatus.Status);
+    any columns.lastupdated = renderinfo(typedef=OrderStatus.Timestamp);
+  }
+  
+  // Returns
+  columns;
+}
+
+/**
+ * Creates some components for entering a new order item and lays them
+ * out to make a form.
+ */
+local function createOrderEntry(any context, any guiParent)
+{
+  // Set this up as a shorthand for later use
+  any i18n = path($catalog.{$root.i18n});
+  
+  gLabel     lIcon;
+  gTextField tfName;
+  gTextField tfDescription;
+  gArrow     bMore;
+  gTextField tfQty;
+  gTextField tfPrice;
+  gTextField tfTotal;
+  gButton    bAddToOrder;
+  gTextArea  taMoreInfo;
+  
+  any        tfLookup = call setupLookupComponent(context, i18n);
+
+  // Create some data for the components to view/control. The best way is
+  // to create typedef instances, since that is what the data actually is.
+  any context.vars.Product  = new(Product);
+  any context.vars.Item     = new(Item);
+  any context.vars.LineItem = new(LineItem);
+  
+  // Alias in the i18n cancel question (See cancelOrder)
+  any context.vars.cancelConfirm =  {i18n}.ps.question.CANCEL;
+  
+  // Associate the components with the data  
+  tfName.properties.renderInfo        = renderinfo($this.vars.Product.Name, typedef=Product.Name);
+  tfDescription.properties.renderInfo = renderinfo($this.vars.Product.Description, typedef=Product.Description);
+  tfQty.properties.renderInfo         = renderinfo($this.vars.LineItem.Qty, typedef=LineItem.Qty, editable=true);
+  tfPrice.properties.renderInfo       = renderinfo($this.vars.LineItem.UnitPrice, typedef=LineItem.UnitPrice);
+  // In this case we compute the rendered value and use the meta-data just
+  // to get the right label. Well I suppose that's a bit messy... TODO
+  tfTotal.properties.renderInfo       = renderinfo($this.vars.LineItem.UnitPrice * $this.vars.LineItem.Qty, typedef=Order.TotalPrice);
+
+  // Set up the qty text field to only allow numeric input. See
+  // cp://inq/gui/verifiers.inq where these functions are defined.
+  tfQty.properties.validateInsert = $catalog.guiFuncs.positiveInteger;
+  
+  int context.vars.more = GUI_EAST;
+  bMore.properties.renderInfo = renderinfo($this.vars.more);
+  
+  // Render the additional info 
+  taMoreInfo.properties.lineWrap = true;
+  taMoreInfo.properties.scrollable  = false;
+  taMoreInfo.properties.editable = false;
+  taMoreInfo.properties.wrapStyleWord = true;
+  taMoreInfo.properties.opaque = false;
+  taMoreInfo.properties.renderInfo = renderinfo
+    (isnull($this.vars.Item.Attr1 + "\n", "") +
+     isnull($this.vars.Item.Attr2 + "\n", "") + 
+     isnull($this.vars.Item.Attr3 + "\n", "") +
+     isnull($this.vars.Item.Attr4 + "\n", "") +
+     isnull($this.vars.Item.Attr5, ""));
+  
+  // The 'document' events are often combined to do things
+  // as the text field content changes. Here we just fire the
+  // model ($this.vars.LineItem.Qty from the renderinfo above) so
+  // so that tfTotal's renderinfo responds to recalculate the
+  // line total.
+  gEvent(tfQty, event=(gDocchange, gDocinsert, gDocremove), firemodel=true);
+
+  // When the text field gains focus it selects its contents
+  tfQty.properties.selectOnFocus = true;
+  
+  bAddToOrder.properties.text = {i18n}.ps.button.ADD_TO_ORDER;
+  bAddToOrder.properties.icon = $catalog.icons.plus;
+
+  // Set up a gContext event which fires when the context for the component
+  // becomes known (that is $this is established for it). See also the
+  // comments in myAccount.inq. We set up the pet chooser which requires
+  // functions that know our context.
+  gEvent(tfLookup, call contextEstablished(), event=(gContext));
+  
+  // Layout the components in the given parent. We use the four argument version
+  // of layout() because the inq node (where the components end up in the node
+  // space) is different from the graphical hierarchy.
+  layout(., context, guiParent,
+         "Scroll
+          Caption {i18n}.ps.general.ADD_ITEM;
+          Table orderForm
+            Columns lookup=GRID_FILL, more=GRID_PREF, separator=GRID_PREF, order=GRID_PREF, 3, addto=GRID_PREF
+            Rows GRID_PREF,
+                 GRID_PREF,
+                 5,
+                 GRID_PREF,
+                 GRID_PREF,
+                 5,
+                 icon=GRID_PREF,
+                 more=GRID_PREF,
+                 moreinfo=GRID_PREF;
+          {
+            Column lookup
+            {
+              Label tfLookup #  // avoid Label <id> <id> grammar trap
+              Align tl tfLookup
+              ~                 // step over 5 pixel space row
+              Label tfName #
+              Align tl tfName
+              ~
+              Label tfDescription #
+              tfDescription
+            }
+            Column order
+            {
+              Label tfQty #
+              Align tl tfQty
+              ~
+              Label tfPrice #
+              tfPrice
+              ~
+              Label tfTotal #
+              tfTotal
+            }
+            
+            // Use direct cell addressing for some components
+            Cell separator 0 separator more Separator
+            Cell addto more bAddToOrder
+            Cell more more bMore
+            Cell addto 0 addto icon Align tf lIcon
+            
+            // 
+            Row moreinfo
+            {
+              HSpan addto taMoreInfo
+            }
+          }");
+
+  gProperty(lIcon, icon, renderinfo(call resolveIcon($this.vars.Product.Icon)));
+  gProperty(bAddToOrder, enabled, renderinfo($this.vars.LineItem.UnitPrice * $this.vars.LineItem.Qty));
+  gEvent(bAddToOrder, call addToOrder());
+
+  gEvent(bMore, call showMore());
+}
+
+local function addToOrder()
+{
+  // Create the object network representing an order line and
+  // place it in the table.
+  
+  // Make a map - it represents the overall row. It must be a hmap as this
+  // map type generates events and propagates events from its children.
+  hmap m;
+  
+  // In the columns for itemTable we referenced the types Item, Product
+  // and LineItem, so we need to put these into row.
+  
+  // The instances $this.vars.Product etc are working variables
+  // used by the form, so we need to clone them when making the row.
+  any m.Product  = clone($this.vars.Product);
+  any m.Item     = clone($this.vars.Item);
+  any m.LineItem = clone($this.vars.LineItem);
+  
+  // Add the row to the table.
+  //   1. We need a map key. When structures are made by Inq it uses
+  //      the primary key of the initial typedef. The LineItem instance
+  //      is only client-side at the moment, so its key fields
+  //      have not been set up. Use the identity of the row map.
+  any k = identity(m);
+  
+  //   2. Add the row map to the table's root node. Use add() rather
+  //      than any ... because add() raises an event.
+  add(m, path($this.vars.items.{k}));
+  
+  call calcOrderTotal();
+}
+
+function calcOrderTotal()
+{
+  $this.vars.orderTotal.row.OrderTotal.Price =
+    $this.vars.items ? isnull(sum($this.vars.items, $loop.LineItem.Qty * $loop.LineItem.UnitPrice), 0)
+                     : 0;
+}
+
+local function showMore()
+{
+  //TODO
+  $this.vars.more = $this.vars.more == GUI_EAST ? { $this.vars.moreinfo = $this.vars.moreVisible;
+                                                    GUI_SOUTH;
+                                                  }
+                                                : { $this.vars.moreinfo = 0;
+                                                    GUI_EAST;
+                                                  };
+}
+
+local function createGUI()
+{
+  // Set this up as a shorthand for later use
+  any i18n = path($catalog.{$root.i18n});
+  
+  // Create a window
+  gWindow newOrder;
+  newOrder.properties.contextNode = true;
+  newOrder.properties.title = {i18n}.ps.title.NEW_ORDER;
+  newOrder.properties.icon  = $catalog.icons.new_order16;
+
+  // Set up the pet chooser
+  call setupPetChooser(parent = newOrder,
+                       i18n);
+  
+  // Create the buttons for removing order items, placing the order
+  // and so forth
+  gButton bRemove;
+  gButton bCancel;
+  gButton bPlaceOrder;
+  bRemove.properties.text = {i18n}.ps.button.REMOVE_ITEM;
+  bRemove.properties.icon = $catalog.icons.minus;
+  bCancel.properties.text     = {i18n}.ps.button.CANCEL;
+  bCancel.properties.icon  = $catalog.icons.delete;
+  bPlaceOrder.properties.text = {i18n}.ps.button.PLACE_ORDER;
+  bPlaceOrder.properties.icon  = $catalog.icons.tick;
+
+  gTable itemTable;
+  // Add a totals table. We only need one row. This must be done prior
+  // to layout
+  gTable totalsTable;
+  totalsTable.properties.visibleRows  = 1;
+  totalsTable.properties.showGrid     = false;
+  itemTable.properties.totalsTable    = totalsTable;
+  
+  
+  gSplit topBox;
+  topBox.properties.resizeWeight = 0;
+  
+  // Perform a partial layout.
+  // Notes:
+  //   1. Complex components like tables must know their context before
+  //      properties (like columns and modelRoot) can be set up so we
+  //      must place it into the Inq node space beneath the node (the
+  //      window) that defines the context before setting those up.
+  //   2. In this example we open a brace after the gSplit "topBox".
+  //      In general, this syntax causes descent in the component
+  //      hierarchy and is most commonly seen when laying out menus.
+  //      Here it adds the component (itemTable) as the first (of two)
+  //      that gSplit accommodates.  
+  layout(., newOrder, "topBox
+                       {
+                         Caption tl {i18n}.ps.general.ITEMS; itemTable
+                       }
+                       
+                       // Now layout the main buttons
+                       Geometry xy:vf
+                       Margin d:3
+                       Table Gap 3 Columns 0.25, GRID_FILL, 0.25, 0.25
+                                     Rows  GRID_PREF;
+                       {
+                         Row
+                         {
+                           bPlaceOrder ~ bRemove bCancel
+                         }
+                       }
+                       ");
+
+  // Create the form for adding an order item, laying it out as the
+  // second child of topBox. 
+  call createOrderEntry(context = newOrder, guiParent = topBox);
+
+  // Now it has a context we can configure the table
+  call setupItemTable(context = newOrder,
+                      itemTable,
+                      i18n,
+                      isEditable = true);
+
+  // Enable the OK button according to the table selection.
+  // 1) Tell the table to fire events from its selection model data and...
+  gEvent(itemTable, event=(gSelection), firemodel=true);
+  
+  // 2) ...bind the bRemove button's enabled property to the table's
+  // selection count
+  gProperty(bRemove, enabled, renderinfo($this.itemTable.model.selectCount));
+
+  // We can only cancel the order if there are some items in it
+  // Point this property at any valid data item under the items list
+  gProperty(bCancel, enabled, renderinfo($this.vars.items*LineItem.UnitPrice));
+  
+  // Likewise placing the order
+  gProperty(bPlaceOrder, enabled, renderinfo($this.vars.items*LineItem.UnitPrice));
+  
+  gEvent(bRemove,     call removeFromOrder());
+  gEvent(bCancel,     call cancelOrder());
+  gEvent(bPlaceOrder, call placeOrder());
+
+  // Place in the node space
+  any $this.newOrder = newOrder;
+}
+
+local function removeFromOrder()
+{
+  // Remove the selected item(s) from the table.
+  
+  // Fetch the current selection from the table. We cannot use
+  // the direct model variables at $this.itemTable.model.selection
+  // as these are changed by Inq whenever the table selection changes
+  // and we are removing rows.
+  foreach($this.itemTable.properties.itemSelection)
+    remove($this.vars.items.{$loop});
+
+  call calcOrderTotal();
+}
+
+local function cancelOrder()
+{
+  // An example of asking a question using the question dialog
+  // provided by Inq, see cp://inq/gui/questiondialog.inq
+  
+  // Call the question dialog passing a func (encapsulating our context)
+  // for the OK callback.
+  call inq.gui.util:questionDialog(dialog       = $this.questionDialog,
+                                   questionText = $this.vars.cancelConfirm,
+                                   okExpr       = func f =
+                                                     {
+                                                       // Remove all the items
+                                                       remove($this.vars.items);
+                                                       $this.vars.orderTotal.row.OrderTotal.Price = 0;
+                                                     });
+}
+
+local function placeOrder()
+{
+  call global:placeOrder(parent  = $this,
+                         Account = $this.vars.Account);
+}
+
+/**
+ * Create, set up and return a text field to serve as a component to
+ * lookup available pets. This function creates the component,
+ * creates the data it renders and establishes a popup menu
+ * that controls the extent of the search value.
+ */
+local function setupLookupComponent(any context,
+                                    any i18n)
+{
+  gTextField tfLookup;
+
+  // The tfLookup component is used to search for pets using the Item.Search
+  // key (see Item.inq). We create a Search key instance and have tfLookup
+  // render its Search.SearchValue field.
+  any context.vars.Search = new(Item.Search);
+
+  // We don't associate any meta-data with tfLookup so instead we just
+  // define a label for it.
+  tfLookup.properties.renderInfo = renderinfo($this.vars.Search.SearchValue, label={i18n}.ps.general.LOOKUP, editable=true);
+  
+  // Put a hint image in tfLookup - we have a popup menu on it that
+  // determines the values of the various Search.FooActive fields and
+  // we want the user to know its there. Also, select its contents when
+  // it receives focus
+  tfLookup.properties.hintImage = $catalog.icons.rightmouse;
+  tfLookup.properties.selectOnFocus = true;
+
+  // Create some menu check components to make the popup menu for the
+  // lookup component.
+  gMenuCheck mcSearchOnName;
+  gMenuCheck mcSearchOnDescr;
+  gMenuCheck mcSearchOnAttr1;
+  gMenuCheck mcSearchOnItem;
+  
+  // Bind the check items to their data
+  mcSearchOnName.properties.renderInfo  = renderinfo($this.vars.Search.NameActive,  label = {i18n}.ps.button.NAME);
+  mcSearchOnDescr.properties.renderInfo = renderinfo($this.vars.Search.DescrActive, label = {i18n}.ps.button.DESCR);
+  mcSearchOnAttr1.properties.renderInfo = renderinfo($this.vars.Search.Attr1Active, label = {i18n}.ps.button.MISC);
+  mcSearchOnItem.properties.renderInfo  = renderinfo($this.vars.Search.ItemActive,  label = {i18n}.ps.button.ITEM);
+  
+  // A menu check item (and its the same for check boxes) have properties
+  // that establish the value they set into their rendered data for the
+  // checked and unchecked state. Looking at the definition of Item.Search
+  // and the SQL that underlies it (for example in mysql/Item.Search.sql)
+  // we see that the Flag type is used, whose values are Y and N
+  mcSearchOnName.properties.checkedValue =
+    mcSearchOnDescr.properties.checkedValue =
+    mcSearchOnAttr1.properties.checkedValue =
+    mcSearchOnItem.properties.checkedValue = enum(Flag, Y);
+  
+  mcSearchOnName.properties.uncheckedValue =
+    mcSearchOnDescr.properties.uncheckedValue =
+    mcSearchOnAttr1.properties.uncheckedValue =
+    mcSearchOnItem.properties.uncheckedValue = enum(Flag, N);
+  
+  // Switch on everything except Item
+  context.vars.Search.NameActive = 
+    context.vars.Search.DescrActive =
+    context.vars.Search.Attr1Active = enum(Flag, Y);
+  context.vars.Search.ItemActive =  enum(Flag, N);
+
+  // Create a popup on the component which allows the user to select
+  // the field(s) the search should extend to
+  gPopupMenu popupMenu;
+
+  // Layout the menu items
+  layout(., popupMenu, "mcSearchOnName
+                        mcSearchOnDescr
+                        mcSearchOnAttr1
+                        mcSearchOnItem");
+
+  // Put the popup menu on the text field
+  gPopup(tfLookup, popupMenu);
+
+  // return the text field
+  tfLookup;
+}
+
+local function setupPetChooser(any parent,
+                               any i18n)
+{
+  gTable table;
+  
+  call inq.gui.util:createItemChooser(parent,
+                                      title = {i18n}.ps.title.CHOOSE_PET,
+                                      table,
+                                      at = path($root.psChooser),
+                                      items  = {i18n}.ps.title.CHOOSE_PET);
+  
+  // Set up the table model for use as a pet chooser by establishing
+  // those properties we are responsible for. See cp://inq/gui/itemChooser.inq
+  // for those that the common item chooser script sets up.
+  omap columns;
+  any columns.itemid      = renderinfo(typedef=Item.Item);
+  any columns.Category    = renderinfo(typedef=Product.Category);
+  any columns.name        = renderinfo(typedef=Product.Name);
+  any columns.unitprice   = renderinfo(typedef=Item.ListPrice);
+  any columns.description = renderinfo(typedef=Product.Description);
+  any columns.icon        = renderinfo(typedef=Product.Icon, label={i18n}.ps.title.COLOURS_VARY);
+  
+  table.properties.columns = columns;
+
+  // When the columns property of a table has been set we can then
+  // address them and alter their properties
+  // The icon column displays the pet image.
+  // 1. Tell Inq we don't want it to set any value to the column
+  //    automatically
+  table.properties.columns.icon.renderer.properties.setValueToComponent = null;
+  // 2. Establish a style function that Inq calls when rendering the cell.
+  table.properties.columns.icon.renderer.properties.style = func f = call renderPetIcon();
+
+  // Force table viewport to be wide enough to show all columns
+  // without requiring scrolling
+  table.properties.visibleColumns = 0;
+  
+  // And finally just some other properties for visuals
+  table.properties.rowHeight   = 130;
+  table.properties.visibleRows = 4;
+  table.properties.showGrid    = false;
+  table.properties.rowStyle = $catalog.guiFuncs.tableStripe;
+
+}
+
+local function renderPetIcon(any component, any rowRoot)
+{
+  component.properties.icon = call resolveIcon(rowRoot.Product.Icon);
+
+  // A render function can return a style, but we don't use one here.
+  null;
+}
+
+/**
+ * An example of a onStopEdit function. Inq calls an onStopEdit function
+ * before and after the underlying value in the table data structure is
+ * updated. All the arguments Inq passes are listed in this example with
+ * an explanation for each. You don't have to include any arguments you
+ * don't want to use
+ * @param parent - the parent component, that is the gTable
+ * @param component - the editor component
+ * @param rowRoot - the node-set child of the row being edited. In this
+ * example we could access rowRoot.Product, rowRoot.LineItem etc
+ * @param row - the row number
+ * @param rowKey - the map key of the row (that is the map key of the
+ * node-set child)
+ * @param column - the column number
+ * @param columnName - the column name (that is the name the column
+ * was given in the original omap set as the table's columns property).
+ * @param mouseCell - this is always false for editing functions. It is
+ * used when calling rendering functions and indicates whether the mouse
+ * is in the cell being rendered. 
+ * @param isUser - whether editing was stopped because of user action
+ * or by the underlying system (for example because focus was lost)
+ * @param value - the current value within the table's data structure this
+ * cell is rendering.
+ * @param newValue - the value from the editor component that the cell
+ * will become (after = false) or is now (after = true)
+ * @param after - an onStopEdit function is called at least once and at
+ * most twice. The first call passes after = false and at this point
+ * the underlying cell value has not been changed. The function can
+ * veto the edit by assignment newValue = value.
+ * The second call only occurs if value != newValue and passes after = true.
+ * At this point the underlying cell value has been updated.
+ * @param formatter - the formatter associated with the column
+ */
+local function qtyChanged(any parent,
+                          any component,
+                          any rowRoot,
+                          any row,
+                          any rowKey,
+                          any column,
+                          any columnName,
+                          any isMouseCell,
+                          any isUser,
+                          any value,
+                          any newValue,
+                          any after,
+                          any formatter)
+{
+  // This assignment simply kicks out an event on rowRoot.LineItem.UnitPrice
+  // We do it because we want the Total column to be re-rendered.
+  rowRoot.LineItem.UnitPrice = rowRoot.Item.ListPrice;
+  call calcOrderTotal();
+}
+
+local function statusStyle(any component,
+                           any value,
+                           any rowRoot,
+                           any isMouseCell)
+{
+  // Decide what style and icon, if any, to apply to the value and
+  // icon parts of the custom renderer
+  switch
+  {
+    when (rowRoot.OrderStatus.Status == enum(OStatus, O))
+    {
+      component.statusValue.properties.style = $catalog.ps.styles.open;
+      component.cxlIcon.properties.icon = $catalog.icons.cxlItem;
+    }
+
+    when (rowRoot.OrderStatus.Status == enum(OStatus, A))
+    {
+      component.statusValue.properties.style = $catalog.ps.styles.allocated;
+      component.cxlIcon.properties.icon = $catalog.icons.cxlItem;
+    }
+      
+    when (rowRoot.OrderStatus.Status == enum(OStatus, C))
+    {
+      component.statusValue.properties.style = $catalog.ps.styles.cancelled;
+      component.cxlIcon.properties.icon = null;
+    }
+      
+    when (rowRoot.OrderStatus.Status == enum(OStatus, S))
+    {
+      component.statusValue.properties.style = $catalog.ps.styles.shipped;
+      component.cxlIcon.properties.icon = null;
+    }
+    
+    otherwise
+      component.cxlIcon.properties.icon = null;
+  }
+  
+  // returns no style for Inq to apply - everything required is already done
+  null;
+}
+
+local function totalStyle(any formatter)
+{
+  // By doing this we ensure the currency symbol is that of the server's
+  // locale. This is not particularly realistic, so it is just to demonstrate
+  // that Inq supports a currency type (see psLogin.inq and .../i18n.inq).
+  // A style function is a little clumsy though, locale support to be added....
+  formatter.properties.currency = $catalog.ccy;
+  
+  null;
+}
+
+local function maybeCxl()
+{
+  // We only respond to the mouse event if:
+  //   1) The status is Allocated or Open
+  //   2) The event occurred in the status column
+  //   2) The event is in the cell region where we have placed the cancel icon
+
+  if (@event.cellX &&       // No coordinates if event is outside the data/cell region
+      (@event.rowRoot.OrderStatus.Status == enum(OStatus, O) ||
+       @event.rowRoot.OrderStatus.Status == enum(OStatus, A)) &&
+      @event.columnName == "status" &&   // Must be in the 'status' column
+      @event.cell.width - @event.cellX <= $catalog.icons.cxlItem.properties.width) // In the icon area
+  {
+    send cxlItem(@event.rowRoot.OrderStatus);
+  }
+}
+
+local function contextEstablished()
+{
+  // Set up some functions to pass to item chooser registration. These,
+  // along with the table model (see setupPetChooser) are what
+  // characterises the (reusable) item chooser as a pet chooser.
+  
+  // Validation of the lookup string is at least 3 characters
+  func validateF = {
+                     // On the stack we have the smap "vars" and the search
+                     // value as "value". Pass back $this.vars.Search via "vars"
+                     // so it will be given back to us when searchF is called
+                     any vars.Search = $this.vars.Search;
+                     
+                     // Do the validation and return true/false
+                     length(value) >= 3;
+                   };
+  
+  // The search function's contract is to invoke a service that, in
+  // turn, invokes back on chooserResult (see cp://inq/gui/itemChooser.inq)
+  // A cfunc does not encapsulate a context, so when it is invoked the
+  // context remains unchanged, and is that of the item chooser.
+  cfunc searchF  = {
+                     // At vars.Search we have the Search key whose
+                     // fields are being rendered by the tfLookup
+                     // component and the various popup menu check
+                     // items. Its all ready to go so just invoke it
+                     send searchPet(vars.Search, id);
+                   };
+                   
+  func foundF    = {
+                     // Put the designated value within the result
+                     // into the component.
+                     component.renderedValue = result.{component.ic.valuePath};
+                     
+                     // Copy the instances within the result to those
+                     // our components are rendering
+                     $this.vars.Product = result.Product;
+                     $this.vars.Item    = result.Item;
+                     
+                     // Copy over the unit cost and Item fields from
+                     // the chosen Item to the LineItem
+                     $this.vars.LineItem.UnitPrice = result.Item.ListPrice;
+                     $this.vars.LineItem.Item      = result.Item.Item;
+                   };
+  
+  func notFoundF = {
+                     writeln($catalog.system.out, "Not found");
+                   };
+  
+  // Register tfLookup with the pet chooser
+  call inq.gui.util:registerItemChooserComponent(component   = $this.tfLookup,
+                                                 itemChooser = $root.psChooser,
+                                                 validateF,
+                                                 searchF,
+                                                 foundF,
+                                                 notFoundF,
+                                                 valuePath = path($this.Item.Item));
+
+  // As well, create a question dialog parented on $this 
+  call inq.gui.util:createQuestionDialogAt(parent = $this,
+                                           dialogPath = path($this.questionDialog));
+
+  // Create a function that placeOrder.inq can use to get at the question
+  // dialog we have created. This is an example of how different contexts can
+  // cooperate. The function must be a func, so it encapsulates the current
+  // context.
+  func $this.funcs.getQuestionDialog = {
+                                         $this.questionDialog;
+                                       };
+
+  // Similarly a function to recover the items
+  func $this.funcs.getItems = $this.vars.items;
+  
+  // TODO: Explain
+  any $this.vars.moreinfo = $this.orderForm.properties.rows.moreinfo;  
+  double $this.vars.moreVisible = $this.vars.moreinfo;
+  $this.vars.moreinfo = 0;
+  
+  // We need our account to place orders against, so use the service
+  // we use in myAccount.inq to achieve this.
+  send initAccount();
+}
+
+function showNewOrder()
+{
+  if (!$this.newOrder)
+    call createGUI();
+
+  show($this.newOrder);
+  setfocus($this.newOrder.tfLookup);
+}

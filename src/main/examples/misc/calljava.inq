@@ -1,0 +1,38 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+// Calling Java methods from Inq. Calling Inq from Java
+// is possible but example is TODO.
+
+writeln($catalog.system.out,
+        "ctor no args: " +
+        callmethod (class = "com.inqwell.any.AnyInt"));
+
+writeln($catalog.system.out,
+        "ctor with args: " +
+        callmethod (class = "com.inqwell.any.AnyString", "Hello, world"));
+
+// Static method with args. This method simply returns the argument
+writeln($catalog.system.out,
+        "static method with args: " +
+        callmethod("callMethodTest", class = "com.inqwell.any.CallMethod", "pass"));
+
+// Instance method with args
+string x.y = "Hello, again";
+writeln($catalog.system.out,
+        "instance method with args: " +
+        callmethod("concat", instance = x.y, " too"));
+
+// If the method's return type is not Any then the
+// value is returned inside an AnyObject for opaque
+// transport withing Inq
+writeln($catalog.system.out,
+        "Not an any: " +
+        callmethod ("callMethodReturnsObject", class = "com.inqwell.any.CallMethod"));
+ 

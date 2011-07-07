@@ -1,0 +1,33 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+int x.y=1; int x.z=2;
+switch
+{
+  when(x.y == 1) writeln($catalog.system.out, "pass");
+  when(x.z == 1) writeln($catalog.system.out, "fail");
+  otherwise
+    writeln($catalog.system.out, "fail");
+}
+
+switch
+{
+  when(x.z == 1) writeln($catalog.system.out, "fail");
+  when(x.y == 1) writeln($catalog.system.out, "pass");
+  otherwise
+    writeln($catalog.system.out, "fail");
+}
+
+switch
+{
+  when(x.z == 0)   writeln($catalog.system.out, "fail");
+  when(x.y == x.z) writeln($catalog.system.out, "fail");
+  otherwise
+    writeln($catalog.system.out, "pass");
+}

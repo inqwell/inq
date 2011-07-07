@@ -1,0 +1,39 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+// Find the smallest number divisible by the
+// integers between 1 and 10
+// Notes
+//  1. The result of the while loop is the return value
+//     of the function isDivisible()
+//  2. The break() statement can has an optional expression
+//     that is the value of the loop
+
+function isDivisible(any number)
+{
+  int counter = 2;  // 1 is degenerate
+
+  while (counter < 10) // we know its divisible by 10, so stop at 9
+  {
+    if (number % counter)
+    {
+      break(false);
+    }
+
+    counter = counter + 1;
+    true;
+  }
+}
+
+int x = 10;  // we know 10 won't work but start there anyway
+
+while (!call isDivisible(number=x))
+  x = x + 10;
+
+writeln($catalog.system.out, "The smallest number divisible by 1 to 10 is " + x);

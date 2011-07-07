@@ -1,0 +1,226 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/*
+ * $Archive: $
+ * $Author: sanderst $
+ * $Revision: 1.5 $
+ * $Date: 2011-04-10 22:19:25 $
+ */
+
+/**
+ * XMLTopicExample.inq
+ *
+ * Same as AsynchTopicExample.inq except that it uses
+ * XML inside a text message, generating it on the sender
+ * side and parsing on the receiver side.
+ */
+
+#include<SampleUtilities.inq>
+
+// A typedef for this example to use
+typedef FooType
+{
+  fields
+  (
+    int    ProductId;
+    string HotFlag        width=5
+    (
+      H : "H" : "Hot";
+      M : "M" : "Warm";
+      E : "E" : "Cold";
+    )
+    string Comment        width=32;
+    float  Rate           width=5    format="0.000";
+    date   LastUpdated               format="dd MMM yyyy";
+  )
+
+  pkey
+  (
+    fields(ProductId)
+  )
+}
+
+local function usage()
+{
+  writeln($catalog.system.err, "usage: \i:");
+  writeln($catalog.system.err, "  -topic <topic-name>");
+  writeln($catalog.system.err, "  -queue <queue-name>");
+  writeln($catalog.system.err, " [-num  <number of msgs>]");
+  exit(1);
+}
+
+local function producerStart(any process, // always provided by Inq
+                             any topic,
+                             any queue,
+                             any msgCount)
+{
+  writeln($catalog.system.out, "\e \l Starting: " + process.processName);
+
+  // Just send a service request to the process
+  // to run the demo
+  send doProducer(@channel = process.ichannel, topic, queue, msgCount);
+}
+
+local function consumerStart(any process, // always provided by Inq
+                             any topic,
+                             any queue)
+{
+  writeln($catalog.system.out, "\e \l Starting: " + process.processName);
+
+  // Just send a service request to the process
+  // to run the demo
+  send doConsumer(@channel = process.ichannel, topic, queue);
+}
+
+local function jmsEnd()
+{
+  writeln($catalog.system.out, "\e \l Ended: " + $process.processName);
+}
+
+local function jmsAsynchEnd()
+{
+  writeln($catalog.system.out, "\e \l Ended: " + $process.processName);
+  mqclose($this.jms.connection);
+}
+
+service doProducer(any topic, any queue, any msgCount)
+{
+  any $this.jms = call getTopic(topic);
+
+  /*
+   * After synchronizing with consumer, create producer.
+   * Create text message.
+   * Send messages, varying text slightly.
+   * Send end-of-messages message.
+   * Finally, close connection.
+   */
+
+  /*
+   * Synchronize with consumer.  Wait for message indicating 
+   * that consumer is ready to receive messages.
+   */
+  call receiveSynchronizeMessages(prefix = $process.processName, queue, counter = 1);
+
+  // In this example we illustrate creating an unassigned producer
+  // This means the producer has no associated destination, so to use
+  // it a destination must have its _producer_ property set.
+  // mqsend() can then accept the destination its first argument, i.e. we
+  // can say mqsend(topic, msg) instead of mqsend(producer, msg)
+  // for example.
+  any topicProducer = mqcreateproducer($this.jms.session);
+  $this.jms.topic.properties.producer = topicProducer;
+
+  any txtmsg = mqcreatetextmessage($this.jms.session);
+
+  // Send messages to the topic.
+  int counter = 0;
+  any foo.fooInstance = new(FooType);
+  ioXMLX xmlStream;
+  xmlStream.properties.inqAttributes = true;
+  string xmlText;
+  while (counter++ < msgCount)
+  {
+    // Set some instance fields
+    foo.fooInstance.ProductId = counter;
+    foo.fooInstance.Comment   = "Here is a message " + counter;
+
+    // Produce the XML
+    open(xmlStream, "string://xmlText", OPEN_WRITE);
+    writestream(xmlStream, foo);
+    close(xmlStream);
+    writeln($catalog.system.out, $process.processName + "Publishing instance: " + foo.fooInstance.Comment);
+    txtmsg.properties.text = xmlText;
+    mqsend($this.jms.topic, txtmsg);
+  }
+
+  // Send the control message indicating end-of-messages
+  mqsend($this.jms.topic, mqcreatemessage($this.jms.session));
+
+  mqclose($this.jms.connection);
+
+  exit(0);
+}
+
+local function jmsTopicListen(any message)
+{
+  if (message.properties.text)
+  {
+    any inXmlText = message.properties.text;
+    writeln($catalog.system.out, "Parsing message: " + inXmlText);
+
+    // Now parse the xml
+    open($this.vars.xmlStream, "string://inXmlText", OPEN_READ);
+    any foo = readstream($this.vars.xmlStream);
+    close($this.vars.xmlStream);
+    writeln($catalog.system.out, "Parsed: " + foo);
+    writeln($catalog.system.out, "which is of type " + typeof(foo.fooInstance));
+  }
+  else
+  {
+    exit(0);
+  }
+}
+
+service doConsumer(any topic, any queue)
+{
+  // Declare a func variable that is the callback for asynchronously
+  // received messages
+  cfunc topicListener = call jmsTopicListen();
+
+  any $this.jms = call getTopic(topic);
+
+  // Set up a XML stream for the listener function to use
+  ioXMLX $this.vars.xmlStream;
+
+  /*
+   * Create consumer.
+   * Register message listener (TextListener).
+   * Start message delivery.
+   * Send synchronize message to producer, then wait till all
+   * messages have arrived.
+   * Listener displays the messages obtained.
+   */
+  any topicConsumer = mqcreateconsumer($this.jms.session, $this.jms.topic);
+  mqsetmessagelistener(topicConsumer, topicListener);
+  mqstart($this.jms.connection);
+
+  // Let producer know that consumer is ready.
+  call sendSynchronizeMessage(prefix = $process.processName, controlQueueName = queue);
+
+  // Messages subsequently published by the producer process
+  // will be handled in jmsTopicListen
+}
+
+// Must supply -topic and -queue command line arguments
+if (!$catalog.argsMap.topic || !$catalog.argsMap.queue)
+  call usage();
+
+int msgCount = $catalog.argsMap.num ? $catalog.argsMap.num : 10;
+
+// Start the processes
+any multipleProducer = spawn("MultipleProducer",
+                             type  = PROCESS_DETACHED,
+                             start = call producerStart($catalog.argsMap.topic,
+                                                        $catalog.argsMap.queue,
+                                                        msgCount),
+                             end   = call jmsEnd());
+
+any asynchConsumer  = spawn("AsynchConsumer",
+                            type  = PROCESS_DETACHED,
+                            start = call consumerStart($catalog.argsMap.topic,
+                                                       $catalog.argsMap.queue),
+                            end   = call jmsAsynchEnd(),
+                            syncext = true);
+
+waitproc(multipleProducer);
+waitproc(asynchConsumer);
+
+writeln($catalog.system.out, "\i terminating.....");
+

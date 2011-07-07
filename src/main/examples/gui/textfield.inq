@@ -1,0 +1,55 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+//
+// Just a test of document events that also fire their model
+// We do not get an event storm. You can also see that the
+// rendered value is updated text is typed
+//
+
+gWindow w;
+w.properties.contextNode = true;
+w.properties.defaultCloseOperation = EXIT_ON_CLOSE;
+any $this.w = w;
+int w.vars.counter;
+gButton b;
+gEvent(b, call testWin());
+b.properties.text = "Press";
+layout(., w, "b");
+show(w);
+
+local function testWin()
+{
+  gWindow w;
+  w.properties.contextNode = true;
+  gTextField f;
+  gButton    b;
+  b.properties.text = "Press";
+
+  string w.vars.str;
+  f.properties.renderInfo = renderinfo($this.vars.str, editable=true);
+
+  layout(., w, "f b");
+  any $this.w = w;
+  show(w);
+
+  gEvent (f, call writeText(), event=(gDocchange, gDocinsert, gDocremove), firemodel=true);
+  gEvent(b, call doText());
+}
+
+local function doText()
+{
+  $this.vars.str = "Hello!";
+}
+
+local function writeText()
+{
+  writeln($catalog.system.out, $this.vars.str);
+}
+

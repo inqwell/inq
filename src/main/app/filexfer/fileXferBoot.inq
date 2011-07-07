@@ -1,0 +1,6 @@
+package inq.filexfer;
+
+#include <filexfer.inq>
+
+call initialise();
+

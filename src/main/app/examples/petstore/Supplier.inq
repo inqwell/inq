@@ -1,0 +1,43 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * PetStore Example
+ *
+ * Supplier type. Suppliers of Items
+ */
+
+package examples.petstore;
+
+#include <i18n.inq>
+
+typedef Supplier
+{
+  fields
+  (
+    int        Supplier;
+    Name;
+    SupplierStatus;
+    AddressLine   Addr1;
+    AddressLine   Addr2;
+    City;
+    State;
+    ZIP;
+    Phone;
+  )
+  
+  pkey
+  (
+    fields (Supplier)
+
+    #include <{db}/Supplier.pkey.sql>
+  )
+
+  // I/O resource binding
+  iobind (SimpleSqlIO, ps)
+}
+  

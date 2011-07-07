@@ -1,0 +1,28 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+// Discriminate when calling local or global functions with the same name
+
+package testlocal;
+
+function f()
+{
+  writeln($catalog.system.out, "GLOBAL");
+}
+
+local function f()
+{
+  writeln($catalog.system.out, "LOCAL");
+}
+
+call f();
+
+call global:f();
+
+

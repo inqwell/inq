@@ -1,0 +1,95 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+// Inq file dialog. Multiple selection TODO. Filechooser interface PROVISIONAL
+
+package inq.gui.util;
+
+function createFileDialog(string dialogName = "fileDialog",
+                          any    directory)
+{
+  if ($this.{dialogName})
+    return($this.{dialogName});
+
+	gDialog() {dialogName};
+	// alias for convenience
+  any topLevel = {dialogName};
+
+  topLevel.properties.hideOnOk     = true;
+  topLevel.properties.hideOnCancel = true;
+  topLevel.properties.contextNode  = true;
+  topLevel.properties.resizable    = true;
+
+  gEvent(topLevel, call fileDialogOK(),     event=(gDialogok));
+  gEvent(topLevel, call fileDialogCancel(), event=(gDialogcancel));
+  gEvent(topLevel, gDialog=gDialogcancel,   event=(gWclosing));
+
+  gFileChooser fc;
+  gEvent(fc, gDialog=gDialogcancel, event=(gFCcancel));
+  gEvent(fc, gDialog=gDialogok,     event=(gFCapprove), wait=true);
+  
+  if (directory)
+    fc.properties.directory = directory;
+
+  layout(., topLevel, "Column { fc }");
+
+  // Create these for later
+  func topLevel.vars.okExpr;
+  func topLevel.vars.cancelExpr;
+
+//  layout (., topLevel, "Margin d:10 question Margin d:10 Geometry xy:vf Row { <> Geometry d:f ok ~~~~ Geometry d:f cancel <> } }");
+  add(topLevel, path($this.{dialogName}));
+  topLevel;
+}
+
+function fileDialog(any    dialog,
+                    string title = "File",
+                    any    filters,
+                    any    directory,
+                    func   okExpr,
+                    func   cancelExpr)
+{
+
+	any dialog = dialog ? dialog : $root.fileDialog;
+
+//	dialog.ok.properties.text       = okText;
+//	dialog.cancel.properties.text   = cancelText;
+	dialog.properties.title         = title;
+
+	// Remember the call back functions in the variables of
+	// the dialog context
+	dialog.vars.okExpr     = okExpr;
+	dialog.vars.cancelExpr = cancelExpr;
+
+  // Setting up the filters causes us to call the function
+  dialog.fc.properties.filters = filters;
+
+  if (directory)
+    dialog.fc.properties.directory = directory;
+
+//	if (focusTo == "OK")
+//	  setfocus(dialog.ok);
+//	else
+//	  setfocus(dialog.cancel);
+
+
+  // testing
+  //dialog.fc.properties.multiSelectionEnabled = true;
+  // pop up the dialog
+  show (dialog);
+}
+
+local function fileDialogOK()
+{
+  xfunc($this.vars.okExpr, selection=$this.fc.selection[0]);
+}
+
+local function fileDialogCancel()
+{
+	xfunc($this.vars.cancelExpr);
+}
+

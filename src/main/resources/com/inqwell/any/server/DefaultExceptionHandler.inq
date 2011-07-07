@@ -1,0 +1,53 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * Server Default Startup.
+ *
+ * Installs the default exception handler
+ *
+ */
+package system.server;
+
+// For exceptionToService
+service handleException(string  msg,
+                        string  stackTrace,
+                        func    handler,
+                        boolean isUser,
+                        object  exInfo)
+{
+  writeln($catalog.system.out, msg);
+  writeln($catalog.system.out, stackTrace);
+  if(exInfo)
+    writeln($catalog.system.out, exInfo);
+}
+
+// For exceptionToFunction.
+local function handleException(string  msg,
+                               string  stackTrace,
+                               boolean isUser,
+                               boolean isCommit,
+                               date    exTime,
+                               object  exInfo)
+{
+  writeln($catalog.system.err, "*** Default Exception Handler ***");
+  writeln($catalog.system.err, msg);
+  writeln($catalog.system.err, exTime);
+  writeln($catalog.system.err, stackTrace);
+  if(exInfo)
+    writeln($catalog.system.out, exInfo);
+}
+
+$catalog.inq.system.Server.properties.defaultExceptionHandler =
+  cfunc f = call handleException(msg,
+                                 stackTrace,
+                                 isUser,
+                                 isCommit,
+                                 exTime,
+                                 exInfo);
+
+writeln($catalog.system.out, "Server Started");

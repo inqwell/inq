@@ -1,0 +1,281 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/*
+ * $Archive:  $
+ * $Author: sanderst $
+ * $Revision: 1.5 $
+ * $Date: 2011-04-10 22:19:25 $
+ */
+
+/**
+ * AckEquivExample.inq
+ *
+ * The AckEquivExample shows how the following two scenarios both ensure
+ * that a message will not be acknowledged until processing of it is complete:
+ *
+ *   +  Using an asynchronous consumer (message listener) in an 
+ *      AUTO_ACKNOWLEDGE session
+ *
+ *   +  Using a synchronous consumer in a CLIENT_ACKNOWLEDGE session
+ *
+ * With a message listener, the automatic acknowledgment happens when the
+ * handler function returns -- that is, after message processing has finished.
+ *
+ * With a synchronous receive, the client acknowledges the message after
+ * processing is complete.  (If you use AUTO_ACKNOWLEDGE with a synchronous
+ * receive, the acknowledgement happens immediately after the mqreceive call; if
+ * any subsequent processing steps fail, the message cannot be redelivered.)
+ *
+ * The program contains a SynchProducer process, a SynchConsumer process, an 
+ * AsynchSubscriber process with a handler function, a MultiplePublisher process,
+ * and some immediate script to run everything.
+ *
+ * Specify a queue name and a topic name on the command line when you run the 
+ * program.  The program also uses a queue named "controlQueue", which should be
+ * created before you run the program.
+
+ * TODO:
+
+ * Specify the queue name (for the control messages) and
+ * topic used to exchange the test messages on the command line.
+ */
+
+#include<SampleUtilities.inq>
+
+local function usage()
+{
+  writeln($catalog.system.err, "usage: \i:");
+  writeln($catalog.system.err, "  -topic <topic-name>");
+  writeln($catalog.system.err, "  -queue <queue-name>");
+  writeln($catalog.system.err, " [-num  <number of msgs>]");
+  exit(1);
+}
+
+local function synchProducerStart(any process, // always provided by Inq
+                                  any queue)
+{
+  writeln($catalog.system.out, "\e \l Starting: " + process.processName);
+
+  // Just send a service request to the process
+  // to run the demo
+  send doSynchProducer(@channel = process.ichannel, queue);
+}
+
+local function synchConsumerStart(any process, // always provided by Inq
+                                  any queue)
+{
+  writeln($catalog.system.out, "\e \l Starting: " + process.processName);
+
+  // Just send a service request to the process
+  // to run the demo
+  send doSynchConsumer(@channel = process.ichannel, queue);
+}
+
+local function multiplePublisherStart(any process, // always provided by Inq
+                                      any topic)
+{
+  writeln($catalog.system.out, "\e \l Starting: " + process.processName);
+
+  // Just send a service request to the process
+  // to run the demo
+  send doMultiplePublisher(@channel = process.ichannel, topic);
+}
+
+local function asynchSubscriberStart(any process, // always provided by Inq
+                                     any topic)
+{
+  writeln($catalog.system.out, "\e \l Starting: " + process.processName);
+
+  // Just send a service request to the process
+  // to run the demo
+  send doAsynchSubscriber(@channel = process.ichannel, topic);
+}
+
+local function jmsEnd()
+{
+  writeln($catalog.system.out, "\e \l Ended: " + $process.processName);
+}
+
+local function asynchSubscriberEnd()
+{
+  mqclose($this.vars.topicSubscriber);
+  mqunsubscribe($this.vars.session, "AckEquivExampleSubscription");
+  mqclose($this.vars.connection);
+}
+
+local function jmsTopicListen(any message)
+{
+  if (message.properties.text)
+    writeln($catalog.system.out, "SUBSCRIBER: Processing message: " + message.properties.text);
+  else
+  {
+    exit(0);
+  }
+}
+
+/**
+ * The SynchProducer process creates a session in CLIENT_ACKNOWLEDGE mode and
+ * sends a message.
+ */
+
+service doSynchProducer(any queue)
+{
+  any connection  = call getConnection();
+  any session     = mqcreatesession(connection, false, CLIENT_ACKNOWLEDGE);
+  any queue       = call getQueue(session, queue); // replaces parameter but that's ok...
+  any msgProducer = mqcreateproducer(session, queue);
+  writeln($catalog.system.out, "PRODUCER: Created client-acknowledge session");
+
+  any message     = mqcreatetextmessage(session, "Here is a client-acknowledge message");
+
+  writeln($catalog.system.out, "PRODUCER: Sending message: " +
+                               message.properties.text);
+
+  mqsend(msgProducer, message);
+
+  mqclose(connection);
+
+  exit(0);
+}
+
+service doSynchConsumer(any topic, any queue)
+{
+  any connection  = call getConnection();
+  any session     = mqcreatesession(connection, false, CLIENT_ACKNOWLEDGE);
+  any queue       = call getQueue(session, queue); // replaces parameter but that's ok...
+  any msgConsumer = mqcreateconsumer(session, queue);
+  mqstart(connection);
+  writeln($catalog.system.out, "CONSUMER: Created client-acknowledge session");
+
+  any message = mqreceive(msgConsumer);
+  writeln($catalog.system.out, "CONSUMER: Processing message: " +
+                               message.properties.text);
+
+  writeln($catalog.system.out, "CONSUMER: Now I'll acknowledge the message");
+  mqacknowledge(message);
+
+  mqclose(connection);
+
+  exit(0);
+}
+
+service doMultiplePublisher(any topic, any controlQueue)
+{
+  any connection  = call getConnection();
+  any session     = mqcreatesession(connection, false, AUTO_ACKNOWLEDGE);
+  writeln($catalog.system.out, "PUBLISHER: Created auto-acknowledge session");
+  any topic       = mqcreatetopic(session, topic); // replaces parameter but that's ok...
+
+  /*
+   * After synchronizing with subscriber, create publisher.
+   * Send 3 messages, varying text slightly.
+   * Send end-of-messages message.
+   */
+
+  /*
+   * Synchronize with subscriber.  Wait for message indicating 
+   * that subscriber is ready to receive messages.
+   */
+  call receiveSynchronizeMessages(prefix = "PUBLISHER", queue = "controlQueue", counter = 1);
+
+  any topicPublisher = mqcreateproducer(session, topic);
+  string msgtxt = "Here is an auto-acknowledge message ";
+  any message     = mqcreatetextmessage(session);
+  int counter = 0;
+  while (counter < 3)
+  {
+    counter++;
+    message.properties.text = msgtxt + counter;
+    mqsend(topicPublisher, message);
+  }
+
+  // Send a non-text control message indicating end of messages.
+  mqsend(topicPublisher, mqcreatemessage(session));
+
+  mqclose(connection);
+
+  exit(0);
+}
+
+service doAsynchSubscriber(any topic, any controlQueue)
+{
+  any connection  = call getConnection();
+  connection.properties.clientID = "AckEquivExample";
+
+  any session     = mqcreatesession(connection, false, AUTO_ACKNOWLEDGE);
+  writeln($catalog.system.out, "SUBSCRIBER: Created auto-acknowledge session");
+  any topic       = mqcreatetopic(session, topic); // replaces parameter but that's ok...
+
+  /*
+   * Create auto-acknowledge subscriber.
+   * Register message listener
+   * Start message delivery.
+   * Send synchronize message to publisher, then wait till all
+   *   messages have arrived.
+   * Listener displays the messages obtained.
+   */
+
+  any topicSubscriber = mqcreatedurablesubscriber(session,
+                                                  topic,
+                                                  "AckEquivExampleSubscription");
+
+  // Alias into the $this node space the things the jmsTopicListen
+  // function needs access to when it sees the termination message.
+  any $this.vars.connection      = connection;
+  any $this.vars.session         = session;
+  any $this.vars.topicSubscriber = topicSubscriber;
+
+  cfunc topicListener = call jmsTopicListen();
+  mqsetmessagelistener(topicSubscriber, topicListener);
+
+  mqstart(connection);
+
+  call sendSynchronizeMessage(prefix = "SUBSCRIBER:", controlQueueName = "controlQueue");
+
+  // Messages subsequently published by the publisher process
+  // will be handled in jmsTopicListen
+}
+
+// Must supply -topic and -queue command line arguments.
+// The control queue is a literal value
+if (!$catalog.argsMap.topic || !$catalog.argsMap.queue)
+  call usage();
+
+int msgCount = $catalog.argsMap.num ? $catalog.argsMap.num : 10;
+
+// Start the processes
+any synchProducer = spawn("SYNCH_PRODUCER",
+                          type  = PROCESS_DETACHED,
+                          start = call synchProducerStart( $catalog.argsMap.queue),
+                          end   = call jmsEnd());
+
+any synchConsumer  = spawn("SYNCH_CONSUMER",
+                            type  = PROCESS_DETACHED,
+                            start = call synchConsumerStart($catalog.argsMap.queue),
+                            end   = call jmsEnd());
+
+any multiplePublisher  = spawn("MULTIPLE_PUBLISHER",
+                               type  = PROCESS_DETACHED,
+                               start = call multiplePublisherStart($catalog.argsMap.topic),
+                               end   = call jmsEnd());
+
+any asynchSubscriber  = spawn("ASYNCH_SUBSCRIBER",
+                              type  = PROCESS_DETACHED,
+                              start = call asynchSubscriberStart($catalog.argsMap.topic),
+                              end   = call asynchSubscriberEnd(),
+                              syncext = true);
+
+waitproc(synchProducer);
+waitproc(synchConsumer);
+waitproc(multiplePublisher);
+waitproc(asynchSubscriber);
+
+writeln($catalog.system.out, "\i terminating.....");
+

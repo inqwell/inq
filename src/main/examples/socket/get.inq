@@ -1,0 +1,50 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+
+// Small demonstration of connecting to a socket (in this example, the
+// inqwell web server).
+
+// 
+// 
+//
+
+// Declare two streams of different types.
+ioPrint p;
+ioByte b;
+
+// Open the byte stream attaching it to the host/port. Even though we
+// are opening for WRITE when the sink is a socket Inq opens the
+// stream for READ as well.
+open(b, "socket://inqwell.com:80", OPEN_WRITE);
+
+// Wrap the print stream around the byte stream. Why do this? Well not
+// much point really since the print stream could have been used both
+// ways in this case. Its just a demonstration, showing that it is possible
+// to have different stream characteristics for the same physical
+// source/sink.
+open(p, "stream://b", OPEN_READ);
+
+any s = "GET / HTTP/1.0\n\n";
+bytearray ba;
+ba = s;
+
+// These two lines are interchangable
+//writestream(p, s);
+writestream(b, ba);
+
+
+// Read the response. Print streams return a line for each read.
+// When EOF is reached Inq null is returned.
+while (!isnull(any i = readstream(p)))
+{
+  writeln($catalog.system.out, i);
+}
+
+close(b);

@@ -1,0 +1,542 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * PetStore Example
+ *
+ * Order functionality.
+ */
+
+package examples.petstore;
+
+/**
+ * Create a new Order containing the specified LineItems
+ * @param Order a filled-out Order instance, not yet created
+ * @param lineItems the items to be placed in the Order
+ * @throws if the order is empty
+ */
+local function newOrder(any Order, any lineItems, any ack)
+{
+  if (count(lineItems) > 0)
+  {
+    transaction
+    {
+      // To create a managed instance we require the candidate to
+      // have been made in the server. This function does not
+      // make that assumption (we may have been called from the
+      // client via a service) so make the candidate now and
+      // initialise it from the argument.
+      any Order = new(Order, Order);
+      
+      // Initialise the OrderDate field
+      Order.OrderDate = getdate();
+      
+      // There is only one courier we really trust to deliver your pets
+      // safe and sound. They are properly licensed in the carriage of
+      // pets and inspected regularly.
+      Order.Courier = "PetsToYou";
+  
+      // Initial status is open
+      Order.Status = enum(OStatus, O);
+      
+      // Submit to the transaction for creation. This runs the
+      // Order type's construct block, initialising its Order (id)
+      // field.
+      // We use the two argument form of create(). The second
+      // argument is a data item carried in the creation event
+      // generated when the transaction commits. This is explained
+      // further in listenForOrders()
+      any createData = call makeCreateRaiseData(Order);
+      create(Order, createData);
+  
+      // Loop over the LineItems given and create as for Order.
+      // Referring to LineItem.<construct>, the associated Order
+      // is on the stack.
+      foreach(lineItems)
+      {
+        any LineItem = new(LineItem, $loop.LineItem);
+  
+        // When LineItem.<construct> runs the associated OrderStatus
+        // is created as well.
+        create(LineItem);
+      }
+      
+      // Hmmm, just sleep a while just to leave the GUI showing in
+      // busy mode. Obviously, just for demonstration purposes.
+      wait("foo", 4000);
+      
+      // Croak test. Try uncommenting this and see that the GUI is
+      // still un-glassed even if an exception occurs.
+      // a = b;
+    }
+      
+    // That's it. When the enclosing transaction commits then
+    // all being well Inq will write the Order and LineItem and
+    // OrderStatus instances to the database.
+    
+    // Send a positive acknowledgement via the utility service
+    // updateOk (See gui/userStart.inq).
+    // Note this reference to $stack.Order is the one created
+    // at the line above
+    //         any Order = new(Order, Order);
+    // in other words Inq has no block scoping and the stack is
+    // always the stack. This instance has the Order.Order field
+    // initialised (which we need because it is displayed in the
+    // client's message dialog), but it is not the server's
+    // managed instance. We would need to use read() to obtain
+    // that if we so wished.
+    send updateOk(item = Order, ack);
+  }
+  else
+  {
+    // Throw an exception which may be handled by the function
+    // unexpectedError(). See gui/userStart.inq
+    throw($catalog.{$root.i18n}.ps.exception.ORDER_CREATION,
+          $catalog.{$root.i18n}.ps.exception.EMPTY_ORDER,
+          func f = call unexpectedError());
+  }
+}
+
+/**
+ * Produce a list of Orders according to the supplied filter and
+ * place in the context at the given location
+ */
+function filterOrders(any filter, any root)
+{
+  // The filter is taken to be a ready-made key we can use. When
+  // called from the client this is an instance of Filter.
+  // Notes
+  //   1. By default the structure will be event-live. For this purpose
+  //      we must seed the structure with a hmap. The caller can
+  //      override this with a seed map of his/her own
+  //   2. The filter is a non-unique key (perhaps obviously) so we
+  //      have to give the read() function the name for the list.
+  //   3. Our Account is already at $this.vars.Account and we don't
+  //      rely on the client setting this field of the filter.
+  //   These things result in a list of Orders returned by the filter
+  //   at m.list
+  
+  any m = root ? root : hmap m;
+  
+  any Account = call getAccount();
+  filter.Account = Account.Account;
+  
+  read(Order, filter, setname="list", target=m);
+  
+  // Return the list. We have to remove it from the seed map as an
+  // event-live structure can only live in a single event-live parent
+  // at any one time.
+  remove(m.list);
+}
+
+local function getItems(any Order, any root)
+{
+  // Create a key suitable for looking up an Order's associated
+  // LineItem instances. The matching fields in the key ByOrder
+  // are copied from the initialising value Order. This is just
+  // the field Order.Order. 
+  any k = new(LineItem.ByOrder, Order);
+
+  // See comments in filterOrders() above.
+  any m = root ? root : hmap m;
+  read(LineItem, k, setname="list", target=m);
+  
+  // TODO: explain
+  any k = new(Product.pkey);
+  aggregate(Item,
+            m.list[@first].LineItem,
+            foreach = cfunc f = {
+                                  k.Product = $loop.Item.Product;
+                                  read(Product, k, target=$loop);
+                                  
+                                  read(OrderStatus, $loop.LineItem, target=$loop);
+                                }
+           );
+
+  // TODO: Explain
+  remove(m.list);
+}
+
+/**
+ * Listen for new orders being created.
+ *
+ * Demonstrates listening for instances being created in the environment.
+ * When an instance is successfully created the creating transaction
+ * raises an event. This event can be picked up by listening to the
+ * system catalog.
+ *
+ * The purpose of this listener is to place orders that match the filter
+ * criteria established in the My Orders GUI into the list in our
+ * server-side node space that underpins the order summary table. In so
+ * doing the event raised by manipulating the node space will be propagated
+ * to the client causing the new item to appear in the GUI table.
+ *
+ * @param at the path where the list root is
+ * @param filter the filter criteria for the list
+ */
+local function listenForOrders(any at, any filter)
+{
+  // at and filter are two pieces of information that the listener
+  // will use when it processes received events. Put them into
+  // a single map merely for convenience.
+  any listenInfo.at     = at;
+  any listenInfo.filter = filter;
+
+  // Dispatch node events of interest to the function argument.
+  // The stack when the expression is invoked contains the data
+  // carried in the event (which is the instance that was created)
+  // at the path "@eventData" and any other arguments (listenInfo in
+  // this case) that are specified.
+  // Notes:
+  //   1. Additional arguments are resolved when the listen statement
+  //      is executed and kept for when an event is dispatched.
+  //   2. listenForOrders is called each time new filter criteria are
+  //      established. To discard the old listener the unlisten()
+  //      function is used, passing the node to unlisten from and the
+  //      current dispatcher. Its return value is the node ($catalog)
+  //   3. Then listen to $catalog, dispatching to newOrderCreated(), for
+  //      a) create events with...
+  //      b) ...filtering data that matches that specified when create()  
+  //         was called
+  //      c) instances of type Order only
+  //      capturing the additional argument 'listenInfo'
+  //   4. The dispatch function must be specfied as a 'func' so that the
+  //      current context ($this) is captured and established when
+  //      an event occurs.
+  //   5. The 'listen' function returns a token representing the dispatch.
+  //      This token can be used to 'unlisten' when events are no longer
+  //      required.  
+  any $this.listeners.newOrder = listen (unlisten($catalog, $this.listeners.newOrder),
+                                         func f = { /*writeln($catalog.system.out, .);*/ call newOrderCreated(listenInfo, Order = @eventData); },
+                                         event = (create),
+                                         create  = call makeCreateListenData(filter),
+                                         typedef = Order,
+                                         listenInfo);
+}
+
+local function newOrderCreated(any Order, any listenInfo)
+{
+
+  // TODO: Explain
+  if (call isNewInstanceInDateRange(listenInfo.filter, Order))
+  {
+    // Make a node set child for the new Order
+    hmap m;
+    any m.Order = Order;
+
+    // Add it into the list, causing it to appear on the GUI screen.
+    any pKey = getprimarykey(Order);
+    add(m, path($this.{listenInfo.at}.{pKey}));
+  }
+}
+
+/**
+ * Helper function to determine if the Order is is within the expected
+ * date range defined in the filter.
+ */
+local function isNewInstanceInDateRange(any filter, any Order)
+{
+  // just return TRUE or FALSE depending on whether the Order
+  // falls in our expected date range
+  (isnull(filter.FromDate) || filter.FromDate <= Order.OrderDate) &&
+  (isnull(filter.ToDate)   || filter.ToDate   >= Order.OrderDate);
+}
+
+/**
+ * Create a map to characterise events raised on Order creation.
+ */
+local function makeCreateRaiseData(any Order)
+{
+  any createData = new(Order.Filter);
+  createData.Account  = Order.Account;
+  createData.Status   = Order.Status;
+  createData.FromDate = Order.OrderDate;
+  createData.ToDate   = Order.OrderDate;
+  
+  // returns
+  createData;
+}
+
+/**
+ * Create a map used by listeners to discriminate events raised on Order
+ * creation.
+ */
+local function makeCreateListenData(any filter)
+{
+  any createData.Account   = isnull(filter.Account, equals);
+  any createData.Status    = isnull(filter.Status, equals);
+  
+  // Event filtering is only by equality. As we are dealing with a date range
+  // we let all creations through and check in the dispatch function. This is
+  // OK because in this case we are only listening to our own data.
+  any createData.FromDate  = equals;
+  any createData.ToDate    = equals;
+
+  // returns
+  createData;
+}
+
+
+/**
+ * Amend an existing Order.
+ * @param order By convention a lower-case identifier indicates
+ * a structure (rather than an instance) whose principal member
+ * is (in this case) an Order instance. The structure may
+ * contain other things as well, such as any associations that
+ * are required. In our case we expect a structure like this:
+ *
+ * <pre>
+ *       order
+ *         |
+ *    -----------
+ *    |         |
+ *  Order     items
+ *              |
+ *          ----------------------
+ *          |          ....      |
+ *     ----------            ----------
+ *     |        |            |        |
+ *  LineItem OrderStatus  LineItem OrderStatus
+ * </pre>
+ *
+ * as built by the client support routines. All the instances
+ * in the structure are assumed to have been received from
+ * the client, that is they are not server-side managed
+ * instances.
+ * @param cancel if <code>true</code> then cancel the
+ * whole order by amending all constituent OrderStatus.
+ * Otherwise each OrderStatus is taken to have a new
+ * Status value. Any LineItem that do not yet have a
+ * initialised LineItem.LineItem field
+ * @param newItems a list of additional items for the
+ * Order.
+ */
+local function amendOrder(any order, any cancel, any newItems, any excHandler)
+{
+  // Read the server's Order instance. By default, read() assumes
+  // the primary key and places the instance on the stack by
+  // its name (or alias, if one was used in the typedef).
+  read(Order, order.Order);
+
+  // Lock the Order instance. This is a guard in case another
+  // Process tries to do something similar.
+  lock(Order);
+
+  if (cancel)
+  {
+    // Set all OrderStatus to 'cancelled'. If we were passed excHandler
+    // then it will be used for illegal status transitions, though we
+    // would hope that had been checked by the client before getting
+    // this far.
+    foreach(order.items)
+    {
+      read(OrderStatus, $loop.OrderStatus);
+
+      call modOrderStatus(OrderStatus,
+                          newState = enum(OStatus, C),
+                          excHandler);
+    }
+  }
+  else
+  {
+    // Update OrderStatus with the status of those in the
+    // argument structure. If a particular OrderStatus has
+    // not actually changed then nothing will happen.
+    // Update the corresponding LineItem as well, for any
+    // change to LineItem.Qty.
+    foreach(order.items)
+    {
+      read(OrderStatus, $loop.OrderStatus);
+
+      call modOrderStatus(OrderStatus,
+                          newState = $loop.OrderStatus.Status,
+                          excHandler);
+
+      read(LineItem, $loop.LineItem);
+
+      // Note - managed instance assignment assigns to all fields
+      // from corresponding named fields of the right-hand operand.
+      LineItem = $loop.LineItem;
+    }
+
+    // If any new items are to be added to the order, do that now.
+    if (newItems)
+    {
+      // Put the Order on the stack for the LineItem construct block.
+      any Order = order.Order;
+
+      // Create the new items
+      foreach(newItems)
+        create(new(LineItem, $loop.LineItem));
+    }
+  }
+}
+
+/**
+ * State machine to modify an OrderStatus.
+ * @param OrderStatus the OrderStatus to modify
+ * @param newState the new status to be applied, if legal
+ * @param handler if supplied, forbidden modifications will throw to
+ * this handler function. Otherwise caller must inspect the return
+ * value.
+ * @return true if the modification is applied, false if it
+ * cannot (and no exception handler function is passed)
+ * @throws if a handler is supplied and the modification
+ * is illegal.
+ */
+function modOrderStatus(any OrderStatus, OStatus newState, any excHandler)
+{
+  // Lock the OrderStatus instance. We will do a test and possible
+  // modify - these are two discrete steps and Inq does not prevent
+  // field reads while another process has the same instance held
+  // in a transaction for write.
+  lock(OrderStatus);
+
+  // A variable for the return value. For boolean, the default value is false.
+  boolean ret;
+
+  switch
+  {
+    when(OrderStatus.Status == enum(OStatus, O))
+    {
+      // From Open, new legal states are: Cancelled, Allocated
+      if (newState == enum(OStatus, C) ||
+          newState == enum(OStatus, A))
+      {
+        OrderStatus.Status = newState;
+        ret = true;
+      }
+    }
+
+    when(OrderStatus.Status == enum(OStatus, C))
+    {
+      // From Cancelled, new legal states are: Open. Cancelling more than
+      // once is OK too.
+      if (newState == enum(OStatus, O) ||
+          newState == enum(OStatus, C))
+      {
+        OrderStatus.Status = newState;
+        ret = true;
+      }
+    }
+
+    when(OrderStatus.Status == enum(OStatus, A))
+    {
+      // From Allocated, new legal states are: Cancelled, Shipped
+      // (We don't actually courier them or anything, that would be
+      // wrong)
+      if (newState == enum(OStatus, C) ||
+          newState == enum(OStatus, S))
+      {
+        OrderStatus.Status = newState;
+        ret = true;
+      }
+    }
+
+    when(OrderStatus.Status == enum(OStatus, S))
+    {
+      // From Shipped, new legal states are: none. A pet is for life,
+      // not just for Christmas...
+    }
+  }
+
+  if (excHandler && !ret)
+  {
+    // The second argument to throw() is passed to the handler
+    // function as 'exInfo' argument.
+    // By passing the stack itself (also given by `.'
+    // we can pass all the arguments to the handler
+    // function in one go. In the handler function, paths like
+    // exInfo.OrderStatus and exInfo.newState are valid.
+    // If we added extra arguments to this function then
+    // they would automatically make their way to the
+    // handler without further modification.
+    throw($catalog.{$root.i18n}.ps.exception.STATE_CHANGE,
+          $stack,
+          excHandler);
+  }
+
+  // The return value of a function is the last statement it executes.
+  // (which may not be the last in the function, as here)
+  ret;
+}
+
+/**
+ * Order creation service for use by the client. See gui/placeOrder.inq.
+ */
+service placeOrder(any Order, any items, any ack)
+{
+  call newOrder(Order, lineItems = items, ack);
+}
+
+service filterOrders(any filter, any at)
+{
+  any list = call filterOrders(filter);
+  
+  // Place the list in the context, raising an event as we do so.
+  // Any events now occurring within the structure will be propagated
+  // to the client.
+  add(list, at);
+  
+  // Listen for new orders being created so they can be added to
+  // the active list. This way the client is live for new Orders.
+  call listenForOrders(at, filter);
+}
+
+service webFilterOrders(any filter)
+{
+  call filterOrders(filter);
+}
+
+/**
+ * Make a LineItem-mastered structure comprising those LineItems associated
+ * with the given Order and place it in the context at the specified path. The
+ * ensuing event propagates the structure to the client.
+ */  
+service getItems(any Order, any at)
+{
+  if (Order)
+  {
+    any list = call getItems(Order);
+  
+    // Place the list in the context, raising an event as we do so.
+    // Any events now occurring within the structure will be propagated
+    // to the client.
+    add(list, at);
+  }
+  else
+  {
+    // When no Order is supplied remove any list that may already be
+    // in the context
+    remove($this.{at});
+  }
+}
+
+/**
+ * Cancel an item. If this means all items within the Order are cancelled
+ * then cancel the Order as well.
+ */
+service cxlItem(any OrderStatus)
+{
+  read(OrderStatus, OrderStatus);
+  call modOrderStatus(OrderStatus, newState = enum(OStatus, C));
+  
+  // Read all OrderStatus items for this Order. If they are
+  // all cancelled then set Order.Status to cancelled
+  any k = new(OrderStatus.ByOrder, OrderStatus);
+  read(OrderStatus, k, setname="items");
+  
+  // If the loop completes successfully then all items
+  // are cancelled
+  if (foreach(items)
+        if ($loop.OrderStatus.Status != enum(OStatus, C))
+          break(false);)
+  {
+    read(Order, OrderStatus);
+    Order.Status = enum(OStatus, C);
+  }
+}

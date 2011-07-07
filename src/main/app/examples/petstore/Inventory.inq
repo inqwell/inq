@@ -1,0 +1,64 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * PetStore Example
+ *
+ * Inventory type.
+ *
+ * This type is really just additional data that could have been held in
+ * the Item type. So it goes.
+ */
+
+package examples.petstore;
+
+#include <i18n.inq>
+
+typedef Inventory
+{
+  fields
+  (
+    Item.Item;
+    Qty;
+  )
+
+  construct
+  ({
+     call validate(Inventory = $this);
+  })
+
+  mutate
+  ({
+     call validate(Inventory = $this.new);
+  })
+
+  destroy
+  ({
+     // Can't delete a Inventory while there are also Items.
+     if (read(Item, $this))
+       throw("There is a corresponding Item");
+  })
+
+  pkey
+  (
+    fields (Item)
+
+    #include <{db}/Inventory.pkey.sql>
+  )
+  
+  // I/O resource binding
+  iobind (SimpleSqlIO, ps)
+}
+
+// Check Inventory instance is valid
+local function validate(any Inventory)
+{
+  if (!(Inventory.Item && 
+        Inventory.Qty >= 0))
+    throw("Illegal Inventory instance " + Inventory);
+}
+

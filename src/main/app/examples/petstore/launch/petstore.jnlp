@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright (C) 2011 Inqwell Ltd
+ 
+  You may distribute under the terms of the Artistic License, as specified in
+  the README file.
+-->
+<jnlp spec="1.0+" codebase="http://www.inqwell.com/inq/petstore/">
+  <information>
+    <title>Petstore Inq Example</title>
+    <vendor>Inqwell Ltd</vendor>
+    <description>Petstore Inq Example</description>
+    <description kind="tooltip">Petstore</description>
+    <homepage href="http://www.inqwell.com"/>
+    <icon href="images/jnlp.png"/>
+    <shortcut online="true">
+      <desktop/>
+      <menu submenu="Inq"/>
+    </shortcut>
+  </information>
+
+  <security>
+    <all-permissions/>
+  </security>
+
+  <resources>
+    <property name="sun.java2d.noddraw" value="true"/>
+    <jar href="lib/inqs.jar" main="true"/>
+    <j2se version="1.6+" initial-heap-size="64m" max-heap-size="256m"/>
+  </resources>
+
+
+  <application-desc main-class="com.inqwell.any.tools.AnyClient">
+    <argument>-serverHost</argument>
+    <argument>speakinqs://inqwell.com:8003?keepAlivePeriod=30000</argument>
+    <argument>-package</argument>
+    <argument>examples.petstore</argument>
+    <argument>-appName</argument>
+    <argument>Petstore</argument>
+    <argument>-i18n</argument>
+    <argument>en</argument>
+  </application-desc>
+
+</jnlp>
+
+

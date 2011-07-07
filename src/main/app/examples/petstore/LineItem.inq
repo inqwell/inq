@@ -1,0 +1,114 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * PetStore Example
+ *
+ * LineItem type. Items that make up a particular order.
+ */
+
+package examples.petstore;
+
+#include <i18n.inq>
+
+typedef LineItem
+{
+  fields
+  (
+    Order.Order;
+    SeqVal    LineItem;
+    Item.Item;
+    Qty;
+    Price     UnitPrice label={i18n}.ps.title.UNIT_PRICE;
+  )
+
+  construct
+  ({
+     // We expect to find the Order to which this LineItem
+     // relates on the stack. Initialise the Order field
+     // from it
+     $this.Order = Order.Order;
+
+     // Allocate the LineItem field
+     $this.LineItem = call getUniqueId(Sequence = "linenum");
+     call validate(LineItem = $this);
+
+     // Having got this far, alias $this as $stack.LineItem and add
+     // the creation of the corresponding OrderStatus to the
+     // transaction. See OrderStatus.<construct>
+     any LineItem = $this;
+     any OrderStatus = new(OrderStatus);
+     create(OrderStatus);
+  })
+
+  mutate
+  ({
+     // We don't need to check that the LineItem field has not been
+     // changed - as part of the primary key Inq prevents this.
+     call validate(LineItem = $this.new);
+  })
+
+  destroy
+  ({
+     // We never delete LineItems, we keep order history.
+     throw("LineItem - cannot destroy");
+  })
+
+  // In the schema definition we have inherited from the ibatis/spring example
+  // the primary key is defined as Order + LineItem. In fact, LineItem.LineItem is
+  // allocated for each instance created, so this could have been the pk. Instead
+  // we just define this as another unique key.
+  pkey
+  (
+    fields (Order, LineItem)
+
+    #include <{db}/LineItem.pkey.sql>
+  )
+
+  key ByLineItem unique
+  (
+    fields(LineItem)
+    auxcfg( map(
+    "prepared", true,
+    "read-sql", // column names must be in the same order as key fields spec
+      "
+        {select-stmt}
+        where L.linenum = ?
+      "
+    ))
+  )
+
+  key ByOrder
+  (
+    fields(Order)
+    auxcfg( map(
+    "prepared", true,
+    "read-sql", // column names must be in the same order as key fields spec
+      "
+        {select-stmt}
+        where L.orderid = ?
+      "
+    ))
+  )
+  
+  // I/O resource binding
+  iobind (SimpleSqlIO, ps)
+}
+
+// Check Item instance is valid
+local function validate(any LineItem)
+{
+  if (!(LineItem.Order && 
+        LineItem.LineItem &&
+        LineItem.Item &&
+        LineItem.Qty >= 0 &&
+        LineItem.UnitPrice >= 0
+       )
+     )
+    throw("Illegal LineItem instance " + LineItem);
+}
+

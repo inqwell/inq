@@ -1,0 +1,101 @@
+#! /bin/sh
+
+if [ "$INQHOME" = "" ]
+then
+  # Establish INQHOME from location of this script.
+  # Work around readlink and bash etc,. If all else
+  # fails then please set INQHOME externally
+  fp=`readlink -f $0 2> /dev/null`
+  if [ "$fp" = "" ]
+  then
+    fp=$0
+  fi
+  fp=`dirname $fp`
+  INQHOME=`dirname $fp`
+  export INQHOME
+fi
+
+LAUNCHER=java
+if [ "$JAVAHOME" != "" ]
+then
+  LAUNCHER=$JAVAHOME/bin/java
+fi
+
+# Set up the class path. $INQHOME/lib/inq-<filtered>.jar plus everything
+# in $INQHOME/lib/endorsed
+CLASSPATH=$INQHOME/lib/${project.artifactId}-${project.version}-runtime.jar
+if test -d $INQHOME/lib/endorsed
+then
+  for i in $INQHOME/lib/endorsed/*.jar
+  do
+    jar=$i
+    CLASSPATH=${CLASSPATH}:$jar
+  done
+fi
+export CLASSPATH
+
+# VM args to the client. Use whatever you wish
+if [ "$INQCLIENTARGS" = "" ]
+then
+  INQCLIENTARGS="-Dsun.java2d.nodddraw=true"
+fi
+
+# Args required for all modes - don't change these
+INQCOMMONARGS="-Dinq.home=$INQHOME -Djava.util.logging.config.file=$INQHOME/etc/log.properties -Djava.util.logging.manager=com.inqwell.any.AnyLogManager"
+
+# VM args to the server. Use whatever you wish
+if [ "$INQSERVERARGS" = "" ]
+then
+  INQSERVERARGS="-server -Xmx512m"
+fi
+# Add the headless system property
+INQSERVERARGS="$INQSERVERARGS -Djava.awt.headless=true"
+
+# If you use ioXMLX to produce a DOM tree then Inq needs to know
+# the class to instantiate for the root Document node. This
+# depends on what implementations you have available and
+# prefer to use.
+if [ "$INQDOMIMPL" = "" ]
+then
+  # By default assume the adopted Xerces implementation
+  INQDOMIMPL="com.sun.org.apache.xerces.internal.dom.DocumentImpl"
+fi
+INQCOMMONARGS="$INQCOMMONARGS -Dinq.xml.dom=$INQDOMIMPL"
+
+# Likewise a JMS connection factory. JNDI etc is not implemented yet
+if [ "$INQJMSFACTORY" = "" ]
+then
+  # By default assume GlassFish Message Queue
+  INQJMSFACTORY="com.sun.messaging.ConnectionFactory"
+fi
+INQCOMMONARGS="$INQCOMMONARGS -Dinq.jms.connectionfactory=$INQJMSFACTORY"
+
+if [ "$1" = "-server" ]
+then
+  # Launch Inq server
+  shift
+
+  # Some JDBC drivers, though there are others
+  INQJDBCARGS=-Djdbc.drivers=com.mysql.jdbc.Driver:oracle.jdbc.driver.OracleDriver:com.sybase.jdbc.SybDriver
+
+  # Look for $INQHOME/ssl/inqstore. If found enable SSL. May be your keystore
+  # has a password
+  if [ -f "$INQHOME/ssl/inqstore" ]
+  then
+    SSL="-Djavax.net.ssl.keyStore=$INQHOME/ssl/inqstore -Djavax.net.ssl.keyStorePassword=$INQKEYPASSWD"
+  fi
+  $LAUNCHER $INQSERVERARGS $INQCOMMONARGS $INQJDBCARGS $SSL com.inqwell.any.server.Server $*
+elif [ "$1" = "-client" ]
+then
+  # Launch Inq client
+  shift
+  $LAUNCHER $INQCLIENTARGS $INQCOMMONARGS com.inqwell.any.tools.AnyClient $*
+elif [ "$1" = "-load" ]
+then
+  # Launch Inq server loader
+  shift
+  $LAUNCHER $INQCOMMONARGS com.inqwell.any.tools.Inqs $*
+else
+  # Assume interactive mode
+  $LAUNCHER $INQCLIENTARGS $INQCOMMONARGS com.inqwell.any.parser.Inq $*
+fi

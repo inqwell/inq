@@ -1,0 +1,199 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * PetStore Example
+ *
+ * My Account GUI
+ */
+
+package examples.petstore;
+
+/**
+ * Create and show the GUI.
+ */
+local function createGUI()
+{
+  // Set this up as a shorthand for later use
+  any i18n = path($catalog.{$root.i18n});
+  
+  // Create a window
+  gWindow myAccount;
+  
+  // The window is a "context node" meaning that
+  // event handlers run with $this == myAccount
+  myAccount.properties.contextNode = true;
+  
+  myAccount.properties.title = {i18n}.ps.title.MY_ACCOUNT;
+  myAccount.properties.icon  = $catalog.icons.my_account16;
+
+  // Create the components
+  gTextField tfAccount;
+  gTextField tfEmail;
+  gTextField tfFirstName;
+  gTextField tfLastName;
+  gComboBox  cbStatus;
+  gTextField tfAddr1;
+  gTextField tfAddr2;
+  gTextField tfCity;
+  gTextField tfState;
+  gTextField tfZIP;
+  gTextField tfCountry;
+  gTextField tfPhone;
+  
+  gButton bSave;
+  gButton bCancel;
+  gButton bDiscard;
+  
+  bSave.properties.text = {i18n}.ps.button.SAVE;
+  bCancel.properties.text = {i18n}.ps.button.CANCEL;
+  bDiscard.properties.text = {i18n}.ps.button.DISCARD;
+  bSave.properties.icon  = $catalog.icons.save;
+  bCancel.properties.icon  = $catalog.icons.delete;
+  bDiscard.properties.icon = $catalog.icons.discard;
+
+  // Put a gContext event handler on one of the components.
+  // The event will go off when the context for the component
+  // becomes known, that is when it goes into the permanent
+  // node space and it has a parent that defines itself as
+  // a context node. Then $this will be the correct node
+  // for the event to run at. We use it to load our server-side
+  // data.
+  gEvent(bCancel, call contextEstablished(), event=(gContext));
+  
+  // Set the renderinfo property of the components prior to
+  // laying them out. This property associates the GUI component (view)
+  // with its data (model) and its meta-model. Setting the property now
+  // means we can use the Label construct in the layout string.
+  // TODO: Debug property write on unknown property.
+  tfAccount.properties.renderInfo   = renderinfo($this.vars.Account.Account, typedef=Account.Account);
+  tfEmail.properties.renderInfo     = renderinfo($this.vars.Account.Email, typedef=Account.Email, editable=true);
+  tfFirstName.properties.renderInfo = renderinfo($this.vars.Account.FirstName, typedef=Account.FirstName, editable=true);
+  tfLastName.properties.renderInfo  = renderinfo($this.vars.Account.LastName, typedef=Account.LastName, editable=true);
+  tfAddr1.properties.renderInfo     = renderinfo($this.vars.Account.Addr1, typedef=Account.Addr1, editable=true);
+  tfAddr2.properties.renderInfo     = renderinfo($this.vars.Account.Addr2, typedef=Account.Addr2, editable=true);
+  tfCity.properties.renderInfo      = renderinfo($this.vars.Account.City, typedef=Account.City, editable=true);
+  tfState.properties.renderInfo     = renderinfo($this.vars.Account.State, typedef=Account.State, editable=true);
+  tfZIP.properties.renderInfo       = renderinfo($this.vars.Account.ZIP, typedef=Account.ZIP, editable=true);
+  tfCountry.properties.renderInfo   = renderinfo($this.vars.Account.Country, typedef=Account.Country, editable=true);
+  tfPhone.properties.renderInfo     = renderinfo($this.vars.Account.Phone, typedef=Account.Phone, editable=true);
+  
+  // layout the components
+  layout(., myAccount, "Scroll Margin d:3
+                        Caption {i18n}.ps.title.ACCOUNT_DETAILS;
+                        Table  Columns labels1=GRID_PREF, 5, comps1=GRID_FILL, 10, labels2=GRID_PREF, 5, comps2=GRID_FILL
+                          Gap 3 Rows
+                               GRID_PREF,
+                               GRID_PREF,
+                               GRID_PREF,
+                               GRID_PREF,
+                               GRID_PREF,
+                               GRID_PREF,
+                               GRID_FILL,
+                               buttons=GRID_PREF;
+                        {
+                          Column labels1
+                          {
+                            Label tfAccount
+                            Label tfFirstName
+                            Label tfLastName
+                            Label tfAddr1
+                            Label tfAddr2
+                            Label tfEmail
+                          }
+                          
+                          Column comps1
+                          {
+                            tfAccount
+                            tfFirstName
+                            tfLastName
+                            tfAddr1
+                            tfAddr2
+                            HSpan comps2 tfEmail
+                          }
+                          
+                          Column labels2
+                          {
+                            Label tfPhone
+                            Label tfCity
+                            Label tfState
+                            Label tfZIP
+                            Label tfCountry
+                          }
+                          
+                          Column comps2
+                          {
+                            tfPhone
+                            tfCity
+                            tfState
+                            tfZIP
+                            tfCountry
+                          }
+                          
+                        } // end Table
+                        
+                        Geometry xy:vf
+                        Margin d:3
+                        Table  Columns 0.25, GRID_FILL, 0.25, 5, 0.25
+                          Rows GRID_PREF;
+                        {
+                          Cell 0 0 bSave
+                          Cell 2 0 bDiscard
+                          Cell 4 0 bCancel
+                        }
+                        ");
+
+  gEvent(bSave, call saveMyAccount());
+  gEvent(bCancel, call cancelMyAccount());
+  gEvent(bDiscard, call discardMyAccount());
+  
+  // Place the window in the permanent node space
+  any $this.myAccount = myAccount;
+}
+
+local function contextEstablished()
+{
+  // When this function, the event handler for the gContext event we
+  // set up runs, $this is the node of the window myAccount.
+  
+  send initAccount();
+}
+
+local function saveMyAccount()
+{
+  func ack = call accountSaved();
+  send saveMyAccount(account = $this.vars.Account, ack);
+}
+
+local function accountSaved()
+{
+  call inq.gui.util:messageDialog(dialog       = $root.dialogs.ps.message,
+                                  messageText  = $catalog.{$root.i18n}.ps.account.SAVED);
+}
+
+local function cancelMyAccount()
+{
+  hide($this);
+  
+  // Just re-request the data
+  send initAccount();
+}
+
+local function discardMyAccount()
+{
+  // Just re-request the data
+  send initAccount();
+}
+
+function showMyAccount()
+{
+  if (!$this.myAccount)
+    call createGUI();
+
+  show($this.myAccount);
+}
+

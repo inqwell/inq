@@ -1,0 +1,143 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+// Some examples of referring to other typedefs when
+// defining fields. See also the petstore example
+
+package reftest;
+
+typedef double Money;
+typedef double Rate = 0.25 format="#,###.000";
+
+typedef string DaysOfWeek
+(
+  D: "DY" : "Daily";
+  W: "WK" : "Weekly";
+  M: "MO" : "Monthly";
+  Q: "QU" : "Quarterly";
+  S: "SA" : "SemiAnnual";
+  A: "AN" : "Annual";
+  I: "IR" : "Irregular";
+)
+
+typedef string Bread
+(
+  WHITE: "W" : "White";
+  BROWN: "B" : "Brown";
+)
+
+typedef BreadPrices
+{
+  fields
+  (
+    Bread  bread;
+    double price;
+  )
+
+  pkey(fields(bread))
+}
+
+typedef Referrer2
+{
+  fields
+  (
+    int    ProductId = -1;
+    Referred.HotFlag HotFlagHere;
+    Referred.HotFlag HotFlagHereAgain = "Hello";
+  )
+
+  pkey
+  (
+    fields(ProductId)
+  )
+
+  key AllByHotFlag
+  (
+    fields(HotFlagHere, BreadPrices.bread)
+  )
+
+  key All
+  (
+    fields()
+  )
+}
+
+typedef Referrer1
+{
+  fields
+  (
+    int    ProductId;
+    Referrer2.HotFlagHere;
+    Money  money;
+    Rate   rate;
+    DaysOfWeek daysOfWeek;
+  )
+
+  pkey
+  (
+    fields(ProductId)
+  )
+
+  key AllByHotFlag
+  (
+    fields(HotFlagHere)
+  )
+
+  key All
+  (
+    fields()
+  )
+}
+
+typedef Referred
+{
+  fields
+  (
+    int    ProductId;
+    string HotFlag        width=5
+    (
+      H: "H": "Hot";
+      M: "M": "Warm";
+      E: "E": "Cold";
+    )
+    string Comment        width=32;
+    float  Rate           width=5    format="0.000";
+    date   LastUpdated               format="dd MMM yyyy@zone='Europe/London'@";
+  )
+
+  pkey
+  (
+    fields(ProductId)
+  )
+
+  key AllByHotFlag
+  (
+    fields(HotFlag)
+  )
+
+  key All
+  (
+    fields()
+  )
+}
+
+
+writeln($catalog.system.out, $catalog.reftest.types);
+writeln($catalog.system.out, new(Referred));
+writeln($catalog.system.out, "Referrer1" + new(Referrer1));
+writeln($catalog.system.out, "Referrer2" + new(Referrer2));
+writeln($catalog.system.out, new(Money));
+writeln($catalog.system.out, new(Rate));
+
+
+
+writeln ($catalog.system.out, "DaysOfWeek symbol W is " + enum(DaysOfWeek, W));
+writeln ($catalog.system.out, "DaysOfWeek symbol D is " + enum(DaysOfWeek, D));
+writeln ($catalog.system.out, "Referrer1 daysOfWeek symbol W is " + enum(Referrer1.daysOfWeek, W));
+writeln ($catalog.system.out, "Referrer1 daysOfWeek symbol D is " + enum(Referrer1.daysOfWeek, D));

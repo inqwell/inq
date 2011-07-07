@@ -1,0 +1,25 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+// A solution to problem 1 on projecteuler.net, see
+//   http://projecteuler.net/index.php?section=problems&id=1
+
+// To find the sum of the natural numbers less than 1000
+// that are multiples of 3 or 5.
+
+int total = 0;
+int num   = 1000;
+
+while (--num)
+{
+  if (num % 3 == 0 || num % 5 == 0)
+    total += num;
+}
+
+writeln($catalog.system.out, "The answer is " + total);

@@ -1,0 +1,40 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * PetStore Example
+ *
+ * Utility functions
+ */
+
+package examples.petstore;
+
+/**
+ * Resolve the icon from its name.
+ * In the ibatis/spring example Product.Icon is a string. Via
+ * the service "initialise" in psLogin.inq we have loaded
+ * these as images and sent them to the client where they reside
+ * at $catalog.icons. This function accepts the former and
+ * returns the latter.
+ */
+function resolveIcon(any Icon)
+{
+  if (Icon)
+  {
+    // Overall this is a bit ugly. Probably better to store the
+    // image itself in the type as a blob column, but we have not
+    // perturbed the original schema that much.
+    
+    // At least we get to demonstrate a little of Inq's string functions
+    any s = leftstring(Icon, strindex(Icon, '.'));
+    
+    // Return the icon
+    $catalog.icons.{s};
+  }
+  else
+    null;
+}

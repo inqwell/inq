@@ -1,0 +1,120 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * PetStore Example
+ *
+ * Common types
+ */
+
+package examples.petstore;
+
+#include <i18n.inq>
+
+// Throughout this file and elsewhere, labels are paths that
+// include an indirection through {i18n}, see ./i18n/inq. At
+// the moment, Inq evaluates these at parse time. In a future
+// release they will be evaluated when the types are sent to
+// the client (automatically during login). For now, we define
+// {i18n} in the Petstore root internationalisation file, i18.inq.
+
+typedef string ItemStatus = "P" label={i18n}.ps.general.ITEM_STATUS
+(
+  // Its a pet
+  P  : "P" : "Pet";
+
+  // Unfortunately its feral - best to warn customer
+  F  : "F" : "Feral";
+
+  // No longer available
+  N  : "N" : "Not Available";
+);
+
+typedef string OStatus label={i18n}.ps.general.ORDER_STATUS
+(
+  O : "O" : "Open";
+  C : "C" : "Cancelled";
+  A : "A" : "Allocated";
+  S : "S" : "Shipped";   // We don't really ship the pets. This is not a real petstore
+);
+
+typedef string SupplierStatus label={i18n}.ps.general.SUPPLIER_STATUS
+(
+  AC : "AC" : "Actual";
+  VC : "VS" : "Virtual";
+);
+
+typedef string AccountStatus label={i18n}.ps.general.ACCOUNT_STATUS
+(
+  OK : "OK" : "OK";
+  SU : "SU" : "Suspended";
+  CA : "CA" : "Cancelled";
+);
+
+// Define a type called Name that is a string carrying a width hint
+typedef string Name width=10;
+
+// Similarly AddressLine
+typedef string AddressLine width=16;
+
+typedef string City width=12 label={i18n}.ps.title.CITY;
+
+typedef string State width=2 label={i18n}.ps.title.STATE;
+
+typedef string ZIP width=5 label={i18n}.ps.title.ZIP;
+
+typedef string Country width=16 label={i18n}.ps.title.COUNTRY;
+
+typedef string Phone width=16 label={i18n}.ps.title.PHONE;
+
+typedef string Description width=32 label={i18n}.ps.title.DESCRIPTION;
+
+typedef string ShortName width=16 label={i18n}.ps.title.NAME;
+
+typedef string Attribute width=16;
+
+typedef string Locale width=2;
+
+typedef string CreditCard width=16 label={i18n}.ps.title.CARD_NUMBER;
+
+// This is a character field in the petstore schema. Hmmm...
+typedef string ExpiryDate width=7 label={i18n}.ps.title.EXPIRY_DATE;
+
+typedef int Qty = 0 width=5 format="#,###" label={i18n}.ps.title.QUANTITY;
+
+typedef decimal:0 SeqVal format="#";
+
+// Price defaults to zero, not null.
+typedef decimal:2 Price = 0 width=9 format="#,##0.00" label={i18n}.ps.title.PRICE;
+
+typedef string LastPriceMove
+(
+  SAME  : "S" : "Same";
+  UP    : "U" : "Up";
+  DOWN  : "D" : "Down";
+);
+
+typedef date DateTime width=19 format="dd MMM yyyy HH:mm:ss";
+
+typedef date Date width=12 format="dd MMM yyyy";
+
+typedef string CardType label={i18n}.ps.general.CARD_TYPE
+(
+  VISA   : "VISA"   : "Visa/Delta/Electron";
+  MASTER : "MASTER" : "MasterCard/EuroCard";
+  AMEX   : "AMEX"   : "American Express";
+  DINERS : "DINERS" : "Diners Club";
+);
+
+// Just a two-state flag
+typedef string Flag label={i18n}.ps.general.FLAG
+(
+  Y  : "Y" : "Yes";
+  N  : "N" : "No";
+);
+
+

@@ -1,0 +1,149 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+// Demonstrate the platform's progress bar, tool bar and use of timers.
+//  Ok - swing's tool bar is a bit naff. As mentioned elsewhere,
+//  incorporation of Docking Frames (see http://dock.javaforge.com/)
+//  is an ambition
+
+local function startDemo()
+{
+  call stopDemo();
+
+  $this.vars.pbVal = 0;
+  $this.vars.progStr = "";
+
+  $this.pb.properties.foreground       = colour ("#FF0000");
+
+  func $this.vars.showProgress = call showProgress();
+
+  $this.pb.properties.caption = "Interval is " + $this.vars.interval + " ms";
+  $this.pb.properties.captionFont = $this.pb.properties.captionFont.properties.bold;
+  $this.pb.properties.captionColor = color("0xaf9227");
+
+  // Creates and starts a timer.
+  // Args:
+  //  1. Timer handler function
+  //  2. If a date then when the timer will fire
+  //     otherwise the delay in ms before firing
+  //  3. If supplied, the period for repeat firings
+  //  4. Named argument "start" defaults to true so
+  //     timer starts running.
+  any $this.vars.pbtimer = createtimer($this.vars.showProgress, $this.vars.speed, $this.vars.speed);
+}
+
+local function stopDemo()
+{
+  // Prevent further firings of this timer
+  canceltimer($this.vars.pbtimer);
+}
+
+// The timer's function
+local function showProgress()
+{
+  any maxVal = $this.pb.properties.maximum;
+
+  $this.vars.pbVal += $this.vars.interval;
+
+  $this.vars.progStr = renderf("Doing {0} out of {1}", $this.vars.pbVal, maxVal);
+
+  if ($this.vars.pbVal >= maxVal)
+  {
+    $this.pb.properties.foreground = colour ("#00A000");
+    $this.vars.progStr = "Finished";
+    call stopDemo();
+  }
+}
+
+gWindow win;
+win.properties.contextNode = true;
+win.properties.defaultCloseOperation = EXIT_ON_CLOSE;
+
+gProgressBar pb;
+gTextField interval;
+gTextField speed;
+gButton bStart;
+gButton bStop;
+gButton tbStart;
+gButton tbStop;
+
+bStart.properties.text  = "Start";
+bStop.properties.text   = "Stop";
+tbStart.properties.icon = image("TickGreenS.gif");
+tbStop.properties.icon  = image("delete.gif");
+array margin = (0,0,0,0);
+tbStop.properties.margin = margin;
+tbStart.properties.margin = margin;
+tbStart.properties.toolTipText  = "Start";
+tbStop.properties.toolTipText   = "Stop";
+
+gToolBar tb;
+tb.properties.name="Tool Bar";
+
+gHBox buttonBox;
+
+// This GUI layout combines Row/Column boxes with an enclosing Table
+// The buttons are laid out in a horizontal box explicitly created
+// above. The effect we are looking for is to right-justify the
+// buttons, so the cell at "speed", "buttons" suffices for that
+layout(., win, "Table  Columns interval=0.5, speed=0.5
+                          Rows progress=GRID_PREF,
+                               textfields=GRID_PREF,
+                               buttons=GRID_PREF;
+                {
+                  Row
+                  {
+                    HSpan speed Caption \"Progress\"; pb
+                  }
+                  Row
+                  {
+                    Caption tl \"Interval\"; interval
+                    Caption tl \"Speed\"; speed
+                  }
+                  Cell speed buttons buttonBox
+                  {
+                    bStart
+                    bStop
+                  }
+                }
+                ");
+
+layout(., win, tb, "tbStart Separator tbStop");
+
+win.properties.toolBar = tb;
+
+any $this.win = win;
+
+timer win.vars.pbtimer;
+
+int win.vars.pbVal;
+pb.properties.renderInfo       = renderinfo($this.vars.pbVal);
+pb.properties.stringPainted    = true;
+
+string win.vars.progStr;
+gProperty(pb, paintString, renderinfo($this.vars.progStr));
+
+int win.vars.interval;
+interval.properties.renderInfo = renderinfo($this.vars.interval, editable = true);
+int win.vars.speed;
+speed.properties.renderInfo = renderinfo($this.vars.speed, editable = true);
+
+gEvent(bStart, call startDemo());
+gEvent(bStop,  call stopDemo());
+gEvent(tbStart, call startDemo());
+gEvent(tbStop,  call stopDemo());
+
+win.vars.pbVal    = 0;
+win.vars.interval = 5;
+win.vars.speed    = 250;
+win.vars.progStr  = "";
+win.properties.title = "Progress Bar";
+
+show(win);
+

@@ -1,0 +1,97 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * GUI functions for meta data usage
+ *
+ */
+
+package inq.meta;
+
+function createMetaTree(any    guiParent,
+                        string name = "meta")
+{
+  gBox top;
+  top.properties.contextNode = true;
+
+  gTree treeMeta;
+	gEvent(treeMeta, call contextEstablished(), event=(gContext));
+
+  layout(., guiParent, guiParent, name, "top { treeMeta }");
+
+  // Root element
+  treeMeta.properties.renderInfo = renderinfo("Server Meta Data");
+
+  // Return the function entry points
+  //writeln($catalog.system.out, "2222 " + top.funcs);
+  top.funcs;
+}
+
+local function contextEstablished()
+{
+  smap $this.funcs;
+  func $this.funcs.setShowPackages = call setShowPackages(showPackages);
+}
+
+local function setShowPackages(boolean showPackages)
+{
+  // TODO: check what type of model we have already (level names?)
+  any treeModel = showPackages ? call packageModel() : call typedefModel();
+  $this.treeMeta.properties.levels = treeModel;
+
+  send metaTree(byPackage = showPackages,
+                dataPath  = path($this.metaTree.data));
+}
+
+local function packageModel()
+{
+  any pkgLevel.levelRoot     = path($this.metaTree.data);
+  any pkgLevel.renderInfo    = renderinfo(typedef=Package.Package);
+  any pkgLevel.name          = "packages";
+
+  // There's no leaf expression and leaf status at a given
+  // level defaults to false (i.e. all nodes are branch nodes).
+
+  call typedefModel(packageModel = pkgLevel);
+}
+
+local function typedefModel(any packageModel)
+{
+  // If there is a package model then augment with the typedef model.
+  // Otherwise the typedefs are the first level in the tree.
+  if (packageModel)
+  {
+    any typedefLevel.levelRoot  = path($this.typedefs);
+    any typedefLevel.renderInfo = renderinfo(typedef=Typedef.Typedef);
+  	array typedefSort = ( path($loop.Typedef.Typedef) );
+  	any typedefLevel.modelSort = typedefSort;
+
+    any packageModel.nextLevel  = typedefLevel;
+    any ret = packageModel;
+  }
+  else
+  {
+    any typedefLevel.levelRoot  = path($this.metaTree.data);
+    any typedefLevel.renderInfo = renderinfo(typedef=Typedef.FQName);
+  	array typedefSort = ( path($loop.Typedef.FQName) );
+  	any typedefLevel.modelSort = typedefSort;
+    any ret = typedefLevel;
+  }
+
+  // Put in a name whatever
+  any typedefLevel.name = "typedefs";
+
+  // Add the fields as the second (or third) level. These are leaves.
+  any fieldLevel.levelRoot  = path($this.fields);
+  any fieldLevel.renderInfo = renderinfo(typedef=Field.Field);
+  any fieldLevel.isLeaf     = true;
+  any fieldLevel.name       = "fields";
+
+  any typedefLevel.nextLevel = fieldLevel;
+
+  ret;
+}

@@ -1,0 +1,92 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+// Logging tests
+// Assumes the following jvm arguments are specified:
+//     -Djava.util.logging.manager=com.inqwell.any.AnyLogManager
+//     -Djava.util.logging.config.file=$INQHOME/etc/log.properties
+// The file $INQHOME/etc/log.properties refers
+
+// A function for the logger to call
+local function exampleLogFunc(any level,
+                              any loggerName,
+                              any message,
+                              any atTime,
+                              any seq,
+                              any sourceUrl,
+                              any sourceFunc,
+                              any procName,
+                              any params)
+{
+  // Just show the stack. writeln returns true so the record
+  // will be logged.
+  writeln($catalog.system.out, .);
+
+  if (level >= LOG_SEVERE)
+    writeln($catalog.system.out, "HELP send an email!");
+
+  true;
+}
+
+// Place the logger in the node space
+any logger = getlogger("foo.test");
+//any logger = getlogger("inq.filexfer");
+
+// Example of property access - switch off logging to
+// the parent handler
+logger.properties.useParentHandlers = false;
+
+writeln($catalog.system.out, "Logger " + logger.properties.name + " has level " + logger.properties.logLevel);
+
+// Log a message without parameters
+logmessage(logger, LOG_INFO, "A log message");
+
+// Change the level at runtime
+logger.properties.logLevel = LOG_INFO;
+
+// We won't see this one
+logmessage(logger, LOG_CONFIG, "Log message 2");
+
+// We will see this one - include some parameters
+logmessage(logger, LOG_INFO, "Log message 3", "param1", "param2");
+
+logger.properties.logFunc = cfunc f = call exampleLogFunc();
+
+logmessage(logger, LOG_SEVERE, "Log message 4 1st param is {0} second param is {1}", "p1", "p2");
+
+// Ok now remove the filter we had above.
+logger.properties.logFunc = null;
+
+// Get the handlers. They are an array.
+any handlers = logger.properties.logHandlers;
+writeln($catalog.system.out, "Logger " + logger.properties.name + " has " + count(handlers) + " handlers");
+
+// We can establish a function filter at the handler level
+// as well.
+handlers[0].properties.logFunc = f;
+
+// This time the filter does not cry out for an email
+logmessage(logger, LOG_INFO, "Log message 5");
+
+// Dump out some logger info
+any loggers = loggernames();
+writeln($catalog.system.out, loggers);
+writeln($catalog.system.out, "***");
+
+// Take a peek at the root logger
+any logger = getlogger("");
+any handlers = logger.properties.logHandlers;
+writeln($catalog.system.out, handlers);
+writeln($catalog.system.out, "***");
+
+any logger2 = getlogger("foo.test");
+writeln($catalog.system.out, logger2);
+any handlers2 = logger2.properties.logHandlers;
+writeln($catalog.system.out, handlers2);
+

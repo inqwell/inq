@@ -1,0 +1,316 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/*
+ * This is a small demonstration program written in Inq.  It converts
+ * degrees celcius to fahrenheit and vice versa.  Inq is a scripting language
+ * written entirely in Java.
+ *
+ * In this example, although the program runs perfectly well, we are executing
+ * Inq so as to mockup the application for testing purposes.  This is also the
+ * easiest way to create demonstrations.
+ *
+ * Normally Inq would either be run as a client (handles GUI) or a
+ * server (to which several clients connect). The server runs a thread for
+ * each connected client, supports a transaction model, persists user-defined
+ * types to any sql database and propagates events about data life-cycle to
+ * the connected clients (amongst other things!)
+ *
+ * Whether writing and running client or server code, much of what the
+ * programmer wants to happen, such as notifying connected clients of
+ * data events, updating a GUI view from an event, writing a modified object
+ * to the database, joining an object into a transaction and locking it and
+ * much else besides, is handled automatically by the Inq runtime.  Inq has been
+ * written to allow the developers of complex applications to concentrate
+ * entirely on exactly that - only the application.  Inq removes two major
+ * facets of application development that are often traumatic:
+ *   1) The engraining of the chosen view of the "real world" in the code.
+ *      Inq is not an OO language.  It has user-defined types but its simple
+ *      functional approach means that application areas are not tightly
+ *      coupled to each other. Maintenance for anything unanticipated is unlikely
+ *      to cause major rework or result in duplicated or spaghetti code.
+ *   2) There are no multiple layers of software to integrate and write against
+ *      the API of. So no JDBC, no endless classes implementing this or that
+ *      interface, no transaction calls to make.  No table models to continually
+ *      implement and to adapters to write.  Inq is RAD in the extreme.
+ *
+ * Inq is not just a language, it is a complete execution environment. There is
+ * much more to it than this demonstration shows, of course.
+ */
+
+package demo;
+
+// Use the -i18n command line argument to determine which language to use
+if (!$catalog.argsMap.i18n)
+{
+  string $catalog.argsMap.i18n = "en";
+}
+else
+{
+  if ($catalog.argsMap.i18n != "fr")
+    $catalog.argsMap.i18n = "en";
+}
+
+string $root.i18n = $catalog.argsMap.i18n;
+
+// Include the file that defines our internationalised strings.
+// The {} syntax refers to the command line arguments.
+#include <{i18n}.inq>
+
+writeln($catalog.system.out, "i18n is " + $catalog.argsMap.i18n);
+
+// --------------------- Event Callbacks 1 ------------------
+
+// The callbacks for the GUI controls update the opposite model data.
+// This one converts C to F ....
+local function celciusToFahrenheitCB()
+{
+  // Uncomment this line to see what the stack looks like in a callback.
+  // writeln($catalog.system.out, $stack);
+
+  $this.vars.fahr = call celciusToFahrenheit(celcius = $this.vars.celcius);
+
+  // Uncomment these lines to demonstrate protection against field ripping
+  // any x = $this.vars.fahr;
+  // x = 3;
+
+  // call some Java
+  // callmethod("foo", class="MyClass", $this.vars.fahr);
+}
+
+function fromJava(any a)
+{
+  writeln($catalog.system.out, "\e called: " + a);
+
+  //throw("hello world");
+}
+
+// .... and this one F to C
+local function fahrenheitToCelciusCB()
+{
+  $this.vars.celcius = call fahrenheitToCelcius(fahrenheit = $this.vars.fahr);
+}
+
+// --------------------- Event Callbacks 2 ------------------
+// See the alternative gEvent calls referring to these.
+
+local function celciusToFahrenheitCB2(any temperatures)
+{
+  temperatures.fahr = call celciusToFahrenheit(celcius = temperatures.celcius);
+
+  // Uncomment these lines to demonstrate protection against field ripping
+  // any x = $this.vars.fahr;
+  // x = 3;
+}
+
+local function fahrenheitToCelciusCB2(any temperatures)
+{
+  temperatures.celcius = call fahrenheitToCelcius(fahrenheit = temperatures.fahr);
+}
+
+// Just utility functions that don't make explicit reference to $this.
+// What's $this ?  It is a node prefix that resolves references from something
+// called the "current context".  Its a bit like the current working directory
+// of a Unix process.  If absent then the reference is resolved with respect to
+// the current stack frame.
+local function celciusToFahrenheit(any celcius)
+{
+  celcius * 9 / 5 + 32;
+}
+
+local function fahrenheitToCelcius(any fahrenheit)
+{
+  (fahrenheit - 32) * 5 / 9;
+}
+
+// Create and show the GUI. Comments within, read on...
+local function createGUI()
+{
+  // A top-level window.  By setting its contextNode property to true we
+  // are saying that events occurring at or below this point in the Inq
+  // hierarchy will run with $this set to "win".
+  gWindow win;
+  win.properties.contextNode = true;
+  win.properties.defaultCloseOperation = EXIT_ON_CLOSE;
+
+  // Create some GUI components. Labels are used to display the flag icons.
+  gSlider    slCelsius;
+  gTextField tfCelsius;
+  gLabel     lCelcius;
+
+  gSlider    slFahr;
+  gTextField tfFahr;
+  gLabel     lFahr;
+
+  // Set some properties of the GUI components.  All the underlying Java
+  // properties of a GUI component, as well as those that Inq defines itself,
+  // are accessible via the "properties" child node.  It is also possible
+  // to bind any property to variables, so that changing the variable will
+  // set a property of one or more components.
+  slCelsius.properties.orientation =
+    slFahr.properties.orientation = ORIENT_VERTICAL;
+
+  slCelsius.properties.minimum    = -273;
+  slCelsius.properties.maximum    = 100;
+  slFahr.properties.minimum = call celciusToFahrenheit(celcius = -273);
+  slFahr.properties.maximum = call celciusToFahrenheit(celcius = 100);
+
+  slCelsius.properties.majorTickSpacing = 13;
+  slFahr.properties.majorTickSpacing    = 27;
+  slCelsius.properties.paintTicks  = slFahr.properties.paintTicks  = true;
+  slCelsius.properties.paintLabels = slFahr.properties.paintLabels = true;
+
+  // Set up the images
+  // Well, the Americans still use fahrenheit, don't they?
+  lCelcius.properties.icon = image("uk.jpg");
+  lFahr.properties.icon    = image("us.jpg");
+
+  // Create two variables - the "model" data if you like. We use fixed-precision
+  // numbers for convenience, as the maths cannot be accurate.  Note that
+  // sliders can only yield integers, but Inq can handle model data of any
+  // non-integer type for them. Try swapping these.
+  decimal:2 win.vars.celcius;
+  decimal:2 win.vars.fahr;
+//  double win.vars.celcius;
+//  double win.vars.fahr;
+
+  // Bind the two celcius views to the same model data....
+  slCelsius.properties.renderInfo = renderinfo($this.vars.celcius);
+  tfCelsius.properties.renderInfo = renderinfo($this.vars.celcius, editable = true);
+  tfCelsius.properties.selectOnFocus = true;
+
+  // .... and the same for the fahrenheit views.  These statements mean
+  // that the GUI will update the model and changes to the model will update
+  // the GUI.
+  slFahr.properties.renderInfo = renderinfo($this.vars.fahr);
+  tfFahr.properties.renderInfo = renderinfo($this.vars.fahr, editable = true);
+  tfFahr.properties.selectOnFocus = true;
+
+  // We could have declared win directly under $this (which at the moment
+  // is the root of our node space) instead of adding it now.  Although we
+  // know the window locally as "win", when we put it into the *current*
+  // context we'll call it "C2F"
+  any $this.C2F = win;
+
+  // The task of GUI layout is often vexing. Traditional code does not express
+  // the task in a way that makes it easy to see what the result will be, but
+  // what if you don't like (or don't want to use) GUI builders?  The Inq
+  // solution is to parse a layout string that expresses the layout as a nested
+  // set of rows and columns.
+  // Arguments:
+  //   1) "." means the current stack.  The layout function will look for
+  //      the components named in the layout string here.
+  //   2) win - the component to which the first level components
+  //      named in (or created during the parse of) the layout string will
+  //      will be added.
+  //   3) the layout string.  What does this example do?
+  //        i) Row - the only first level component for the window.  It is
+  //           created during the parse and cannot be accessed afterwards.
+  //           A row lays out its children left to right horizontally, a
+  //           column lays out vertically.
+  //       ii) Margin d:3 - one of a number of qualifiers that can be put
+  //           before a Row, Column or named component.  In this case the result
+  //           is three pixels around the component.
+  //      iii) Etched Lowered Caption tl <expression> - establishes a border
+  //           around the component with the specified style, caption and
+  //           positioning. The expression yields the caption text. The caption
+  //           can be changed later via a property as long as one was established
+  //           in the first place by the layout.
+  //       iv) Geometry xy:fv - specifies resize constraints for the component.
+  //           By default a component's geometry is variable on both axes. By using
+  //           appropriate constraints (fixed, variable) and row/column
+  //           containment it is quite straightforward to create a GUI that
+  //           resizes correctly.  In fully-fledged Inq applications, components
+  //           like text fields, combo boxes etc and dimensions of table columns
+  //           are specified by width hints in the user-defined types. Absolute
+  //           sizes are generally not used.
+  //        v) Nofocus - this component will not receive the focus
+  //      There are other qualifiers, try rerunning this example
+  //      adding a "Split {...}" block enclosing the two columns inside the Row
+  //      block.
+  layout(., win,  "Row
+                  {
+                    Margin d:3 Caption tl $catalog.{$root.i18n}.celcius; Column
+                    {
+                      Geometry d:f lCelcius
+                      Nofocus Geometry xy:fv slCelsius
+                      Geometry xy:vf tfCelsius
+                    }
+                    Margin d:3 Caption tl $catalog.{$root.i18n}.fahrenheit; Column
+                    {
+                      Geometry d:f lFahr
+                      Nofocus Geometry xy:fv slFahr
+                      Geometry xy:vf tfFahr
+                    }
+                  }");
+
+
+
+  // Just some initialisation
+  win.vars.celcius = 0;
+  win.vars.fahr = call celciusToFahrenheit(celcius = win.vars.celcius);
+
+  // Setup the "validateInsert" property on the text fields.
+  // $catalog.guiFuncs.numericFloat is a predefined function that allows
+  // only numeric characters to be entered.
+  // See classpath://inq/gui/verifiers.inq
+  tfCelsius.properties.validateInsert =
+     tfFahr.properties.validateInsert = $catalog.guiFuncs.numericFloat;
+
+  // Set up some callbacks on the components so that we will do the conversion
+  // in either direction.  The "firemodel" parameter is optional and defaults
+  // to false. In this case we switch it on so that altering the text component
+  // will update the corresponding slider and vice versa.  Normally, updating
+  // the model via the GUI will not raise an event on the model.  There are
+  // often several events that could be used (for example, losing focus on a
+  // text field). We might not want all of them to raise model events or we might
+  // choose to code something explicitly.
+  gEvent(slCelsius, call celciusToFahrenheitCB(), firemodel=true);
+  gEvent(tfCelsius, call celciusToFahrenheitCB(), firemodel=true);
+  gEvent(tfCelsius, call celciusToFahrenheitCB(), event=(gFocuslost), firemodel=true);
+
+  gEvent(slFahr, call fahrenheitToCelciusCB(), firemodel=true);
+  gEvent(tfFahr, call fahrenheitToCelciusCB(), firemodel=true);
+
+  /*
+  // An alternative way to call the event handlers, passing the container
+  // of the model variables.
+  gEvent(slCelsius, call celciusToFahrenheitCB2(temperatures = $this.vars), firemodel=true);
+  gEvent(tfCelsius, call celciusToFahrenheitCB2(temperatures = $this.vars), firemodel=true);
+
+  gEvent(slFahr, call fahrenheitToCelciusCB2(temperatures = $this.vars), firemodel=true);
+  gEvent(tfFahr, call fahrenheitToCelciusCB2(temperatures = $this.vars), firemodel=true);
+  */
+
+  colour win.vars.blue  = "#0000FF";
+  color  win.vars.red   = "#FF0000"; // UK and US supported...
+  gProperty(tfFahr,
+            foreground,
+            renderinfo({ $this.vars.celcius < 0 ? $this.vars.blue
+                                                : $this.vars.red; }));
+  gProperty(tfCelsius,
+            foreground,
+            renderinfo({ $this.vars.celcius < 0 ? $this.vars.blue
+                                                : $this.vars.red; }));
+
+  // Set the title to an internationalised string
+  win.properties.title = $catalog.{$root.i18n}.title;
+
+  // The range of the sliders is quite large, so we set an initial window
+  // size explicitly.
+  win.properties.size  = array size = (250,650);
+
+  // Show it!
+  show(win);
+}
+
+call createGUI();
+
+// Using the method of counting lines with semi-colons in them, there
+// are approximately 50 lines of code in this example.  Think about that.

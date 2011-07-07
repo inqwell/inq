@@ -1,0 +1,246 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/*
+ * $Archive:  $
+ * $Author: sanderst $
+ * $Revision: 1.5 $
+ * $Date: 2011-04-10 22:19:25 $
+ */
+
+/**
+ * Utilities for the JMS examples.
+ *
+ * This file may be #included into any interactively run example
+ * that wants to use the functions defined here, or parsed into
+ * a server environment if the examples are run there.
+ */
+
+/**
+ * Initialise JMS.
+ * 
+ * Common functionality for producer and consumer.
+ *
+ * This function initialises JMS by
+ *  1) Obtaining a ConnectionFactory. At the moment Inq
+ *     has no bindings for JNDI and the like. Instead (and
+ *     to illustrate how Java methods can be called) the
+ *     static method getJMSConnectionFactory is invoked on
+ *     class com.inqwell.any.jms.JMSHelper. This, in turn,
+ *     assumes that the GlassFish MessageQueue implementation
+ *     is the JMS provider.
+ *  2) Create a connection and a session
+ *  3) Create a topic and/or queue according to the names
+ *     provided in the arguments.
+ *  4) If listener functions for the topic/queue have been
+ *     provided, establish them on the consumer. This makes
+ *     message receipt anynchronous.
+ *  5)
+ * @param topic the topic name
+ * @param queue the queue name
+ */
+function initJMS(any topic, any queue, any topicListener, any queueListener)
+{
+  any connFactory = call getConnectionFactory();
+
+  //writeln($catalog.system.out, connFactory);
+
+  // Create a connection
+  any ret.connection = mqcreateconnection(connFactory);
+
+  // Create a session from the connection:
+  //   auto-acknowledge mode
+  //   not transacted
+  any ret.session = mqcreatesession(ret.connection, false, AUTO_ACKNOWLEDGE);
+
+  if (topic)
+  {
+    // We are creating the topic (as opposed to looking it up in an
+    // object store of some sort)
+    any ret.dest  = mqcreatetopic(ret.session, topic);
+    any ret.topic = ret.dest;
+    //writeln($catalog.system.out, ret.topic);
+  }
+
+  if (queue)
+  {
+    // Similarly for a queue
+    any ret.dest  = mqcreatequeue(ret.session, queue);
+    any ret.queue = ret.dest;
+    //writeln($catalog.system.out, ret.queue);
+  }
+
+  // Commonly the publisher and subscriber components of the examples
+  // create a producer and consumer. In the one case the producer
+  // sends the data message and in the other the consumer sends
+  // a control message to say it has received it.
+  // The consumer has no selector and does not receive things
+  // published locally (nolocal is true).
+  if (topic && queue)
+  {
+    // When we have both a topic and a queue (see AsynchTopicExample.inq)
+    // then create the producer as an unassigned producer. This means
+    // the producer has no associated destination, so to use it a
+    // destination must set its _producer_ property. mqsend() can
+    // then accept the destination its first argument, i.e. we
+    // can say mqsend(queue, msg) instead of mqsend(producer, msg)
+    // for example.
+    any ret.topicProducer = mqcreateproducer(ret.session);
+    any ret.queueProducer = mqcreateproducer(ret.session);
+    ret.topic.properties.producer = ret.topicProducer;
+    ret.queue.properties.producer = ret.queueProducer;
+
+    any ret.topicConsumer = mqcreateconsumer(ret.session, ret.topic, null, true);
+    any ret.queueConsumer = mqcreateconsumer(ret.session, ret.queue, null, true);
+
+    // If we have a listener function apply it before starting the
+    // connection
+    if (topicListener)
+      mqsetmessagelistener(ret.topicConsumer, topicListener);
+
+    if (queueListener)
+      mqsetmessagelistener(ret.queueConsumer, queueListener);
+
+  }
+  else
+  {
+    // For topic or queue the producer and consumer are tied
+    // to the destination
+    any ret.producer = mqcreateproducer(ret.session, ret.dest);
+    any ret.consumer = mqcreateconsumer(ret.session, ret.dest, null, true);
+
+    // If we have a listener function apply it before starting the
+    // connection
+    if (topicListener)
+      mqsetmessagelistener(ret.consumer, topicListener);
+
+    if (queueListener)
+      mqsetmessagelistener(ret.consumer, queueListener);
+
+  }
+
+  // Don't start the connection here. Seemingly some strange
+  // behaviour with GlassFish Message Queue if you do so
+  // before *sending* your first message. It seems to get
+  // stuck somewhere on the way to the destination. Leave
+  // starting the connection to the caller.
+  // Hmmm..
+  mqstart(ret.connection);
+
+  // return what we've created
+  ret;
+}
+
+function getTopic(any topic, any connection)
+{
+  if (!connection)
+  {
+    any connFactory = call getConnectionFactory();
+
+    // Create a connection
+    any ret.connection = mqcreateconnection(connFactory);
+  }
+  else
+  {
+    // Just return what we've been given
+    any ret.connection = connection;
+  }
+
+  // Create a session from the connection:
+  //   auto-acknowledge mode
+  //   not transacted
+  any ret.session = mqcreatesession(ret.connection, false, AUTO_ACKNOWLEDGE);
+
+  any ret.topic  = mqcreatetopic(ret.session, topic);
+
+  // Return what we've created
+  ret;
+}
+
+function receiveSynchronizeMessages(any prefix, any queue, int counter)
+{
+  // This function follows the pattern of the GlassFish examples in that
+  // it creates another Connection Factory and Connection. Bit heavy, we're
+  // told.
+
+  any connFactory = call getConnectionFactory();
+
+  // Create a connection
+  any connection = mqcreateconnection(connFactory);
+
+  // Create a session from the connection:
+  //   auto-acknowledge mode
+  //   not transacted
+  any session = mqcreatesession(connection, false, AUTO_ACKNOWLEDGE);
+
+  any q = call getQueue(queue, session);
+
+  mqstart(connection);
+
+  writeln($catalog.system.out, "Receiving synchronize messages from " +
+                               queue +
+                               "; count = " + counter);
+
+  any consumer = mqcreateconsumer(session, q, null, true);
+  while(counter > 0)
+  {
+    any msg = mqreceive(consumer);
+    counter--;
+    writeln($catalog.system.out, "Received synchronize message; expect " +
+                                 counter +
+                                 " more");
+  }
+
+  mqclose(connection);
+}
+
+function sendSynchronizeMessage(any prefix, any controlQueueName)
+{
+  any connFactory = call getConnectionFactory();
+
+  // Create a connection
+  any connection = mqcreateconnection(connFactory);
+
+  // Create a session from the connection:
+  //   auto-acknowledge mode
+  //   not transacted
+  any session = mqcreatesession(connection, false, AUTO_ACKNOWLEDGE);
+
+  any controlQueue = call getQueue(queue = controlQueueName, session);
+
+  any queueProducer = mqcreateproducer(session, controlQueue);
+
+  any txtmsg = mqcreatetextmessage(session, "synchronize");
+
+  writeln($catalog.system.out, prefix + " Sending synchronize message to " 
+                                      + controlQueueName);
+
+  mqsend(queueProducer, txtmsg);
+
+  mqclose(connection);
+}
+
+function getConnectionFactory()
+{
+  any connFactory = callmethod("getJMSConnectionFactory", class="com.inqwell.any.jms.JMSHelper", $catalog.argsMap);
+}
+
+function getConnection()
+{
+  any connFactory = call getConnectionFactory();
+
+  // Create a connection (and return it)
+  any connection = mqcreateconnection(connFactory);
+}
+
+function getQueue(any queue, any session)
+{
+  mqcreatequeue(session, queue);
+}
+

@@ -1,0 +1,1215 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * Inqwell Client Tool
+ *
+ * Create a login window and provide callbacks to post
+ * login details to process's i/p channel.
+ *
+ */
+
+package system.client;
+
+syncgui service handleException(string  msg,
+                                string  stackTrace,
+                                func    handler,
+                                boolean isUser,
+                                any     exInfo,
+                                date    exTime)
+{
+  // If there is a handler then try to use it. If, for any reason, the
+  // handler itself fails then revert to the default of popping up the
+  // log window.
+  if (handler)
+  {
+    //writeln($catalog.system.out, "EH PATH " + $path);
+    //writeln($catalog.system.out, "EH INFO " + exInfo);
+    try
+    {
+      xfunc(handler, msg, stackTrace, exInfo, isUser, exTime);
+    }
+    catch
+    {
+      // Oh dear. The user's handler threw. Just write out his
+      // exception (later: log)
+      writeln($catalog.system.err, @exception);
+      writeln($catalog.system.out, stackTrace);
+    }
+  }
+  else
+  {
+    // Hard-coded to run at context $root.login unless the
+    // exception had a user-supplied function carrying a context.
+    // Exceptions, either client or server, arrive here.  May be
+    // we should include a flag saying which it is.
+    // The code of an exception handler should be protected
+    // with a try/catch block in case the handling code itself
+    // incurs an exception.  If this happens and there is no
+    // try/catch then an infinite loop can ensue.
+    // writeln($catalog.system.out, "EH got exception at \e \l ", stackTrace);
+    try
+    {
+      any styledMsg.@style = $this.vars.baseStyle;
+      any styledMsg.@txt   = "Exception generated at " + exTime + '\n';
+      add(styledMsg, path($this.login.ew.ep.model.root[last]));
+  
+      any styledMsg.@style = $this.vars.baseStyle.msgStyle;
+      any styledMsg.@txt   = msg + '\n';
+      if (exInfo)
+      {
+        // Don't assume that exInfo is a string
+        string s = exInfo;
+        styledMsg.@txt += s + '\n';
+      }
+  
+      any styledStack.@style = $this.vars.baseStyle.stackTraceStyle;
+      any styledStack.@txt   = stackTrace;
+      //string styledFrom.@txt   = stackTrace;
+  
+      add(styledMsg, path($this.login.ew.ep.model.root[last]));
+      add(styledStack, path($this.login.ew.ep.model.root[last]));
+      int entries = count($this.login.ew.ep.model.root);
+      //writeln($catalog.system.out, "EW entries: " + entries);
+      while (entries > 1024) // arbitrary buffer size of exception/log window
+      {
+        remove($this.login.ew.ep.model.root[0]);
+        entries -= 1;
+      }
+      // Note that this way of scrolling is OK but a bit slow when a lot
+      // of lines are added at once (like an exception stack trace!)
+      // so fix this by adding a document property that constrains the
+      // number of paragraphs and do it in Java code. TBD.
+      show($this.login.ew);
+    }
+    catch
+    {
+      //writeln($catalog.system.out, "EH got exception at \e \l ");
+      writeln($catalog.system.out, @exception);
+      writeln($catalog.system.out, stackTrace);
+    }
+  }
+}
+
+local function login(any argsMap, any context)
+{
+  any showWin = !call commandLineLogin(argsMap, context);
+  call loginWindow(argsMap, showWin, context);
+}
+
+/**
+ * Must run at context of $root.login so window is known
+ * as $root.login.login.
+ *
+ * Create the login window if necessary and popup.
+ */
+local function loginWindow(any argsMap, boolean showWin, any context)
+{
+  if (!context.login)
+  {
+    //writeln($catalog.system.out, "\e \l");
+    gWindow login;
+    gEvent(login, call Exit(), event=(gWclosing));
+    login.properties.title = argsMap.appName ? argsMap.appName
+                                             : "Login";
+    login.properties.contextNode=true;
+    //login.properties.icon = image("classpath:///com/inqwell/any/tools/q16.gif");
+    gLabel        lusr;
+    gLabel        lpwd;
+    gLabel        lpkg;
+    gLabel        lsrv;
+    gLabel        lurl;
+    gLabel        luseProxy;
+    lusr.properties.text = "User Name";
+    lpwd.properties.text = "Password";
+    lpkg.properties.text = "Package";
+    lsrv.properties.text = "Server";
+    lurl.properties.text = "URL";
+    luseProxy.properties.text = "Use Proxy";
+
+    gLabel        lpxysrv;
+    gLabel        lpxyprt;
+    gLabel        lpxyusr;
+    gLabel        lpxypwd;
+    lpxysrv.properties.text = "Proxy Server";
+    lpxyprt.properties.text = "Proxy Port";
+    lpxyusr.properties.text = "Proxy User Name";
+    lpxypwd.properties.text = "Proxy Password";
+
+    gComboBox     tusr;
+    gPasswdField  tpwd;
+    gComboBox     tpkg;
+    gComboBox     tsrv;
+    gComboBox     turl;
+    gTextField    tStatus;
+
+    gTextField    tpxysrv;
+    gTextField    tpxyprt;
+    gTextField    tpxyusr;
+    gPasswdField  tpxypwd;
+
+    gCheck        useProxy;
+    gEvent(useProxy, call showHideProxy());
+
+    gButton       ok;
+    gButton       quit;
+    gEvent(ok,   call loginOk());
+    gEvent(quit, call Exit());
+    ok.properties.text   = "OK";
+    quit.properties.text = "Quit";
+    quit.properties.mnemonic = keycode(VK_Q);
+
+    gEvent(lusr, call loginContextEstablished(), event=(gContext));
+
+    // layout the login window
+    /*
+    layout($stack, login, "Geometry xy:vf Row
+                           {
+                             Geometry xy:fv Column
+                             {
+                               Margin d:3 lusr
+                               Margin d:3 lpwd
+                               Margin d:3 lpkg
+                               Margin d:3 lsrv
+                               Margin d:3 lurl
+                               Margin d:3 luseProxy
+                             }
+                             Geometry xy:vf Column
+                             {
+                               Margin d:3 tusr
+                               Margin d:3 tpwd
+                               Margin d:3 tpkg
+                               Margin d:3 tsrv
+                               Margin d:3 turl
+                               Margin d:3 useProxy
+                             }
+                           }
+                           Geometry xy:vf Row proxyDetails
+                           {
+                             Geometry xy:fv Column
+                             {
+                               Margin d:3 lpxysrv
+                               Margin d:3 lpxyprt
+                               Margin d:3 lpxyusr
+                               Margin d:3 lpxypwd
+                             }
+                             Geometry xy:vf Column
+                             {
+                               Margin d:3 tpxysrv
+                               Margin d:3 tpxyprt
+                               Margin d:3 tpxyusr
+                               Margin d:3 tpxypwd
+                             }
+                           }
+                           Margin d:10 Geometry xy:vf Row
+                           {
+                             <>
+                             Geometry d:f ok
+                             ~~~
+                             Geometry d:f quit
+                             <>
+                           }
+                           ~
+                           Geometry xy:vf Margin d:3 tStatus
+                          ");
+                          */
+
+    layout($stack, login, "Table loginDetails Columns 5, labels=GRID_PREF, 5, widgets=GRID_FILL, 5
+                           Gap 5 Rows 5,
+                                  GRID_PREF,  // user
+                                  GRID_PREF,  // pwd
+                                  GRID_PREF,  // pkg
+                                  GRID_PREF,  // srvr
+                                  GRID_PREF,  // url
+                                  GRID_PREF,  // use proxy
+                            proxy=0,  // proxy details (nested table)
+                                  GRID_PREF,  // buttons
+                                  5;
+                           {
+                             Column labels
+                             {
+                               ~
+                               lusr
+                               lpwd
+                               lpkg
+                               lsrv
+                               lurl
+                               ~ //useProxy
+                               HSpan widgets Table proxyDetails Columns labels=GRID_PREF, 5, widgets=GRID_FILL
+                                         Gap 5 Rows GRID_PREF, // pxy svr
+                                                    GRID_PREF, // pxy port
+                                                    GRID_PREF, // pxy user
+                                                    GRID_PREF; // pxy pwd
+                               {
+                                 Column labels
+                                 {
+                                   lpxysrv
+                                   lpxyprt
+                                   lpxyusr
+                                   lpxypwd
+                                 }
+                                 Column widgets
+                                 {
+                                   tpxysrv
+                                   tpxyprt
+                                   tpxyusr
+                                   tpxypwd
+                                 }
+                               }
+                             }
+                             Column widgets
+                             {
+                               ~
+                               tusr
+                               tpwd
+                               tpkg
+                               tsrv
+                               turl
+                             }
+                           }
+                           Table  Columns 5, GRID_FILL, 0.2, 5, 0.2, GRID_FILL, 5
+                             Rows 5, GRID_PREF, 10 , GRID_PREF ;
+                           {
+                             Cell 2 1 ok
+                             Cell 4 1 quit
+                             Cell 0 3 6 3 Margin d:3 tStatus
+                           }
+                          ");
+
+    add(login, path(context.login));
+
+    login.properties.defaultButton = ok;
+
+    // After the layout is done and the Inq hierarchy established we can
+    // do the bound properties and renderInfo property
+
+    boolean login.vars.canOk;
+    gProperty (login.ok, enabled, renderinfo($this.vars.canOk), true);
+
+    call editableCombo(context=login, combo=tusr, name="tusr");
+    call editableCombo(context=login, combo=tpkg, name="tpkg");
+    call editableCombo(context=login, combo=tsrv, name="tsrv");
+    call editableCombo(context=login, combo=turl, name="turl");
+
+    // Set up variables under context
+    boolean login.saved.useProxy;
+    string  login.saved.tpxysrv;
+    int     login.saved.tpxyprt;
+    string  login.saved.tpxyusr;
+
+    // Proxy visibility row
+    any login.vars.proxy = login.loginDetails.properties.rows.proxy;
+
+    useProxy.properties.renderInfo = renderinfo($this.saved.useProxy, label="Use Proxy");
+    tpxysrv.properties.renderInfo = renderinfo($this.saved.tpxysrv, editable=true);
+    tpxyprt.properties.renderInfo = renderinfo($this.saved.tpxyprt,    editable=true);
+    tpxyusr.properties.renderInfo = renderinfo($this.saved.tpxyusr, editable=true);
+    tpxyusr.properties.selectOnFocus = true;
+    string login.vars.status;
+    tStatus.properties.renderInfo = renderinfo($this.vars.status);
+
+    string login.vars.cpwd;
+
+    // Just to get initial visibility when any data read from the login file.
+    //gProperty(login.proxyDetails, visible, renderinfo($this.saved.useProxy), true);
+
+    login.saved.useProxy = false;
+
+    call setupCheckOk(component=tusr);
+    call setupCheckOk(component=tpwd);
+    call setupCheckOk(component=tpkg);
+    call setupCheckOk(component=tsrv);
+    call setupCheckOk(component=turl);
+
+    // Try to read the last login details.  Because the node path where we place
+    // anything we read matches the renderInfo properties above, this
+    // initialises the GUI components.
+    string   .file = "file:///" +  $properties.user_home + $properties.file_separator + ".inqLogin";
+    ioXML stream;
+    if (open(stream, .file, OPEN_READ))
+    {
+      any saved = readstream(stream);
+      close(stream);
+      //writeln($catalog.system.out, "\l eek");
+      //writeln($catalog.system.out, saved);
+      if (saved)
+        add(saved, path(login.saved));
+      //writeln ($catalog.system.out, "**** SAVED " + saved);
+    }
+
+    // Put in any overrides from system properties/command args.
+    // Note that we don't use the command line for the username
+    // in either the Inq or Proxy Server cases - instead we use
+    // the system properties.  That way you always get a default
+    // derived from the underlying platform.  The command line
+    // argument is only used when all the required login details are
+    // specified there.
+    //call initOverride(from=login, renderAt="saved.tusr.vars.selected", initValueAt=path($properties.user_name));
+    call initOverride(from=login, renderAt="saved.tpkg.vars.selected", initValueAt=path(argsMap.package), argsMap);
+    call initOverride(from=login, renderAt="saved.tsrv.vars.selected", initValueAt=path(argsMap.serverHost), argsMap);
+    call initOverride(from=login, renderAt="saved.turl.vars.selected", initValueAt=path(argsMap.url), argsMap);
+    call initOverride(from=login, renderAt="saved.tpxyusr", initValueAt=path($properties.user_name));
+
+    // If the command line tells us to hide the url input
+    // field explicitly then hide it.
+    //if (argsMap.hideUrl)
+    //{
+      turl.properties.visible = false;
+      lurl.properties.visible = false;
+      any login.vars.hideUrl  = true;
+    //}
+
+    //writeln($catalog.system.out, $this);
+
+    // create the exception window
+    add(call exceptionWindow(), path(login.ew));
+
+    // create the styles to be used for the exception window
+    string baseStyle.@fontFamily = "Courier"; // basic style
+    colour msgStyle.@fg               = "#FF0000";   // Exception message in red
+    colour stackTraceStyle.@fg        = "#0000FF";   // Stack trace in blue
+    style context.vars.baseStyle = baseStyle;
+    style context.vars.baseStyle.msgStyle = msgStyle;
+    style context.vars.baseStyle.stackTraceStyle   = stackTraceStyle;
+
+
+  }
+
+  if (showWin)
+    show(context.login);
+  setfocus(context.login.tpwd);
+}
+
+/**
+ * Argument must raise document events.  Set up event handlers
+ * for document alterations.  See event handler function
+ * for further information.
+ */
+local function setupCheckOk(any component)
+{
+  gEvent(component, call checkOk(), event=(gDocchange, gDocinsert, gDocremove));
+}
+
+local function initOverride(any from,
+                            any renderAt,
+                            any initValueAt,
+                            any argsMap)
+{
+  if ({initValueAt})
+    from.{renderAt} = {initValueAt};
+}
+
+
+local function showHideProxy()
+{
+  $this.vars.proxy = $this.saved.useProxy ? GRID_PREF : 0;
+  //$this.proxyDetails.properties.visible = $this.saved.useProxy;
+  show($this, true); // force resize of window
+}
+
+local function Exit()
+{
+  exit(0);
+}
+
+local function loginOk()
+{
+  string tpwd = crypt($this.tpwd.model.root);
+  empty($this.tpwd.model.root);
+  $this.vars.cpwd = tpwd; // save for use if we ignore expiry
+
+  smap    $catalog.proxyServer;
+  any     $catalog.proxyServer.httpUseProxy    = $this.saved.useProxy;
+  any     $catalog.proxyServer.httpProxyServer = $this.saved.tpxysrv;
+  any     $catalog.proxyServer.httpProxyPort   = $this.saved.tpxyprt;
+  any     $catalog.proxyServer.httpProxyUser   = $this.saved.tpxyusr;
+  string  $catalog.proxyServer.httpProxyPwd    = $this.tpxypwd.model.root;
+
+  //writeln($catalog.system.out, "PROXY " + $catalog.proxyServer);
+
+  $this.vars.status = "Connecting...";
+  call sendLogin(user=$this.saved.tusr.vars.selected,
+                 pwd=tpwd,
+                 pkg=$this.saved.tpkg.vars.selected,
+                 initUrl=$this.saved.turl.vars.selected,
+                 server=$this.saved.tsrv.vars.selected);
+
+  // Blank out the password.
+  //empty($this.tpwd.model.root);
+
+  // Always make sure that the command args map has the server host
+  string $catalog.argsMap.serverHost = $this.saved.tsrv.vars.selected;
+
+  call checkAddNewItem(name="tusr");
+  call checkAddNewItem(name="tpkg");
+  call checkAddNewItem(name="turl");
+  call checkAddNewItem(name="tsrv");
+
+  // write the login details to a file
+  string   .file = "file:///" +  $properties.user_home + $properties.file_separator + ".inqLogin";
+  ioXML stream;
+  if (open(stream, .file, OPEN_WRITE))
+  {
+    writestream(stream, $this.saved);
+    close(stream);
+  }
+}
+
+local function checkOk()
+{
+  // Return true if all the input fields have something
+  // in them, otherwise false.
+
+  // The document within the password component must be converted
+  // to a string before we test it.
+  string tpwd = $this.tpwd.model.root;
+
+  $this.vars.canOk = $this.saved.tusr.vars.selected &&
+                     tpwd &&
+                     ($this.saved.turl.vars.selected || $this.vars.hideUrl) &&
+                     $this.saved.tpkg.vars.selected &&
+                     $this.saved.tsrv.vars.selected;
+}
+
+// Set up the given combo box as editable and with
+// an appropriate model and rendering information
+local function editableCombo(any context, any combo, string name)
+{
+  // Set up the list model and rendering info for the new
+  // combo.  Remember that this path is relative to the
+  // model root, so $this is only to prevent the assumed
+  // stack.
+  any listmodel.internal = renderinfo($this*listItem.itemValue);
+  combo.properties.model = listmodel;
+
+  // Set up the renderinfo and data where the selected/typed item
+  // will be.
+  string context.saved.{name}.vars.selected;
+  combo.properties.renderInfo = renderinfo(path($this.saved.{name}.vars.selected),
+                                           editable=true);
+
+  // Set up the structure for the model and tell the combo
+  // where it is.
+  hmap context.saved.{name}.vars.listItems;
+  combo.properties.modelRoot = path($this.saved.{name}.vars.listItems);
+}
+
+// Determine if the rendered item of the given combo
+// is in its selection list and if not, add it.
+local function checkAddNewItem(string name)
+{
+  foreach($this.saved.{name}.vars.listItems)
+  {
+    if ($loop.listItem.itemValue == $this.saved.{name}.vars.selected)
+      return();
+  }
+
+  string newItem   = $this.saved.{name}.vars.selected; // copy the selection!
+  any    newItemId = identity(newItem);                // use VMid as the key
+
+  hmap   {newItemId}.listItem;
+  any    {newItemId}.listItem.itemValue = newItem;
+  add({newItemId}, path($this.saved.{name}.vars.listItems.{newItemId}));
+}
+
+// create and return the exception window
+local function exceptionWindow()
+{
+  gWindow   ew;
+  //ew.properties.icon  = image("classpath:///com/inqwell/any/tools/inqwell.gif");
+
+  // TEMPORARY!
+  if ($catalog.argsMap.serverHost)
+    ew.properties.title = "Log Window " + $catalog.argsMap.serverHost;
+  else
+    ew.properties.title = "Log Window ";
+
+  ew.properties.size = array size = (900,500);
+
+
+  gTextPane ep;
+
+  gMenuBar  menuBar;
+  ew.properties.menuBar=menuBar;
+
+  gMenu fileMenu;
+  fileMenu.properties.text="File";
+
+  gMenuButton fileClear;
+  fileClear.properties.text="Clear+Close";
+  gEvent(fileClear, call clearEw());
+
+  gMenuButton fileClose;
+  fileClose.properties.text="Close";
+  gEvent(fileClose, call closeEw());
+
+  gMenuButton fileExit;
+  fileExit.properties.text="Exit";
+  gEvent(fileExit, call Exit());
+
+  // Layouts
+  layout(., ew, "ep");
+  layout(., ew, menuBar, "fileMenu
+                            {
+                              fileClear fileClose
+                              Separator
+                              fileExit
+                            }
+                            ");
+
+  // return the window
+  ew;
+}
+
+local function clearEw()
+{
+  // Clear the exception window
+  empty($this.ew.ep.model.root);
+  call closeEw();
+}
+
+local function closeEw()
+{
+  // Close the exception window
+  hide($this.ew);
+}
+
+local function commandLineLogin(any argsMap, any context)
+{
+  // If the login window is already created then we have lost the connection
+  // to the server and we want to popup the window in all cases
+  if (context.login)
+    return (false);
+
+  any user     = argsMap.u;
+  any pkg      = argsMap.package;
+  any srvr     = argsMap.serverHost;
+  any url      = argsMap.url;
+  any hideUrl  = true; //argsMap.hideUrl;
+  any pwd      = crypt(argsMap.p);
+
+  any     $catalog.proxyServer.httpUseProxy    = $properties.inq_client_useProxy;
+  any     $catalog.proxyServer.httpProxyServer = $properties.inq_client_httpProxyServer;
+  any     $catalog.proxyServer.httpProxyPort   = $properties.inq_client_httpProxyPort;
+  any     $catalog.proxyServer.httpProxyUser   = argsMap.pu;
+  any     $catalog.proxyServer.httpProxyPwd    = argsMap.pp;
+
+  // if we've got all the details then return true for direct command
+  // line login possible
+  any loggedIn = ($properties.inq_client_useProxy ? $catalog.proxyServer.httpProxyServer &&
+                                                   $catalog.proxyServer.httpProxyPort   &&
+                                                   $catalog.proxyServer.httpProxyUser   &&
+                                                   $catalog.proxyServer.httpProxyPwd
+                                                 : true) &&
+                 user &&
+                 pkg  &&
+                 srvr &&
+                 (url  || hideUrl) &&
+                 pwd;
+
+  //writeln($catalog.system.out, "\l ****************" + $stack);
+  if (loggedIn)
+  {
+    argsMap.p = "";
+    call sendLogin(user, pwd, pkg, initUrl=url, server=srvr, procExit=true);
+  }
+
+  // return
+  loggedIn;
+}
+
+local function sendLogin(string  user,
+                         string  pwd,
+                         string  pkg,
+                         string  initUrl,
+                         string  server,
+                         any     cert,
+                         boolean ignoreExp,
+                         boolean procExit)
+{
+  //writeln($catalog.system.out, "sendLogin", .);
+  serverlogin(user,
+              pwd,
+              pkg,
+              initUrl,
+              server,
+              cert,
+              ignoreExp,
+              procExit);
+}
+
+local function certWindow(any loginInfo)
+{
+  // Runs at the context $root.login.login so has access to the login params.
+  // Augments these with the trusted cert info if the user accepts.
+  // NB: This test is always true if the dialog is disposed (on the
+  // assumption that we only need it once).
+  if (!$this.certDialog)
+  {
+    // Create the certificate warning dialog
+    gDialog($this) certDialog;
+
+    certDialog.properties.title = "Authorise Certificate";
+    certDialog.properties.defaultCloseOperation = DISPOSE_ON_CLOSE;
+
+    gTextArea txtMsg;
+    gLabel    lIcon;
+    lIcon.properties.icon = $uidefaults.OptionPane.warningIcon;
+
+    gRadio    rIndefinite;
+    gRadio    rForNow;
+    gRadio    rReject;
+
+    gButtonGroup bgAcceptGroup;
+    rIndefinite.properties.buttonGroup = bgAcceptGroup;
+    rForNow.properties.buttonGroup     = bgAcceptGroup;
+    rReject.properties.buttonGroup     = bgAcceptGroup;
+
+    rIndefinite.properties.text = "Accept this certificate permanently";
+    rForNow.properties.text     = "Accept this certificate temporarily for this login";
+    rReject.properties.text     = "Do not accept this certificate and do not log in to this server";
+
+    gButton bOk;
+    gButton bCancel;
+    bOk.properties.text     = "OK";      // Hmmm... the more built-in GUI we have
+    bCancel.properties.text = "Cancel";  // the more we need to internationalise it
+
+    txtMsg.properties.editable = false;
+    txtMsg.properties.lineWrap = true;
+    txtMsg.properties.wrapStyleWord = true;
+    txtMsg.properties.font = $uidefaults.OptionPane.font;
+    txtMsg.properties.background = $uidefaults.Panel.background;
+    txtMsg.properties.margin = array a = (5,5,5,5);
+
+    rReject.properties.renderInfo     = renderinfo(0);
+    rForNow.properties.renderInfo     = renderinfo(1);
+    rIndefinite.properties.renderInfo = renderinfo(2);
+
+    int $this.vars.certAction = 1; // forNow is the default
+
+    bgAcceptGroup.properties.renderInfo = renderinfo($this.vars.certAction);
+
+    layout(., certDialog, "
+                              Margin d:3 Row
+                              {
+                                ~
+                                Geometry xy:fv Column { ~ Geometry d:f lIcon <> }
+                                ~
+                                Column
+                                {
+                                  txtMsg
+                                  Geometry xy:vf Column
+                                  {
+                                    Align l Geometry d:f rIndefinite
+                                    Align l Geometry d:f rForNow
+                                    Align l Geometry d:f rReject
+                                    bgAcceptGroup
+                                  }
+                                  Geometry xy:vf Row
+                                  {
+                                    <>
+                                    Geometry d:f Row
+                                    {
+                                      bOk
+                                      ~
+                                      bCancel
+                                    }
+                                  }
+                                }
+                              }
+                            "
+          );
+
+
+    add(certDialog, path($this.certDialog));
+
+    // Put the login info under the dialog node (not under $this in
+    // this case) then it gets thrown away when the dialog does.
+    add(loginInfo, path(certDialog.vars.loginInfo));
+
+    gEvent(bCancel, gDialog=gDialogcancel);
+    gEvent(bOk, gDialog=gDialogok);
+    gEvent(certDialog, call certOK(), event=(gDialogok));
+  }
+
+  // Check the certificate for problems. The possibilities are
+  //  1) expired or not yet valid
+  //  2) untrusted
+  // We know something must be wrong or we wouldn't be here in the
+  // first place.
+
+  ioPrint errStream;
+  string  errMsg;
+  open(errStream, "string://errMsg", OPEN_WRITE);
+
+  writestream(errStream, "The following problems have occurred while connecting ");
+  writeln(errStream, "to the secure server at " + $catalog.argsMap.serverHost + "\n");
+
+  date now = getdate();
+  string fmt = "dd MMM yyyy\n";
+  if (loginInfo.cert[0].certificate.startDate > now ||
+      loginInfo.cert[0].certificate.endDate < now)
+  {
+    if (loginInfo.cert[0].certificate.startDate > now)
+      writeln(errStream,
+              "The certificate is not valid until " +
+              render(loginInfo.cert[0].certificate.startDate, format=fmt));
+    else
+      writeln(errStream,
+              "The certificate expired on " +
+              render(loginInfo.cert[0].certificate.endDate, format=fmt));
+
+    writeln(errStream, "\n  - Please check your computer's time is set correctly\n");
+  }
+
+  //if (loginInfo.cert[0].unverified)
+  //{
+    writeln(errStream, "Unable to verify the identity of " +
+                       $catalog.argsMap.serverHost +
+                       " as a trusted domain\n");
+    writeln(errStream, "Possible reasons for this error are:\n");
+    writeln(errStream, "  - the Certificate Authority that issued the domain's certificate is not recognised\n");
+    writeln(errStream, "  - the domain's certificate is incomplete due to a server misconfiguration\n");
+    writeln(errStream, "  - you are connected to a site pretending to be " +
+                            $catalog.argsMap.serverHost +
+                            ", possibly to obtain your confidential information.\n");
+  //}
+
+  writeln(errStream, "Before accepting the certificate you may wish to examine \
+the fingerprint shown and if necessary verify it with \
+a contact at " + $catalog.argsMap.serverHost + "\n");
+
+  writeln(errStream, "MD5:\t" + loginInfo.cert[0].certificate.MD5Fingerprint);
+  writestream(errStream, "SHA1:\t" + loginInfo.cert[0].certificate.SHA1Fingerprint);
+
+  close(errStream);
+
+  //writeln($catalog.system.out, errMsg);
+  $this.certDialog.txtMsg.properties.text = errMsg;
+
+  $this.certDialog.properties.size = array s = (650, 350);
+  show($this.certDialog);
+}
+
+local function certOK()
+{
+//  writeln($catalog.system.out, "\e " + $path);
+//  writeln($catalog.system.out, "ACCEPTED");
+//  writeln($catalog.system.out, $this.certDialog.vars.loginInfo);
+//  writeln($catalog.system.out, $this.vars.certAction);
+//  writeln($catalog.system.out, "GROUP " + $this.certDialog.bgAcceptGroup);
+//  writeln($catalog.system.out, "VARS " + $this.vars);
+
+  if ($this.vars.certAction != 0)
+  {
+    any loginInfo = $this.certDialog.vars.loginInfo;
+
+    // We've accepted the certificate in some way, put the permanent flag
+    // in if appropriate
+    if ($this.vars.certAction == 2)
+      any loginInfo.cert.permanent = true;
+
+    $this.vars.status = "Connecting...";
+    call sendLogin(user=loginInfo.user__,
+                   pwd=loginInfo.passwd,
+                   pkg=loginInfo.package,
+                   initUrl=loginInfo.url,
+                   server=loginInfo.host,
+                   cert=loginInfo.cert);
+  }
+}
+
+local function loginContextEstablished()
+{
+  // Establish a func that the exception
+  // raised when there are certificate problems can use.
+  // The standard handler passes control to the certificate
+  // dialog.
+  func $catalog.guiFuncs.certificateError = call certificateError();
+
+  // Same for login denials
+  func $catalog.guiFuncs.loginDenied = call loginDenied();
+}
+
+local function certificateError(string  msg,
+                                string  stackTrace,
+                                date    exTime,
+                                boolean isUser,
+                                any     exInfo)
+{
+  call certWindow(loginInfo = exInfo);
+}
+
+// Some sort of error logging in
+local function loginDenied(string  msg,
+                           string  stackTrace,
+                           date    exTime,
+                           boolean isUser,
+                           any     exInfo)
+{
+  writeln($catalog.system.out, msg);
+  $this.vars.status = msg;
+  setfocus($this.tpwd);
+}
+
+/**
+ * Creates a GUI subtree for changing a password and places the components
+ * in <code>context</code>.
+ * <p>
+ * Also used by AdminGUI.inq
+ */
+function createPasswordGUI(any   context,
+                           any   guiParent,
+                           cfunc okCb,
+                           cfunc cancelCb)
+{
+  gPasswdField pCurPwd;
+  gPasswdField pNewPwd;
+  gPasswdField pConfPwd;
+  gLabel       lCurPwd;
+  gLabel       lNewPwd;
+  gLabel       lConfPwd;
+  gButton      bApply;
+  gButton      bCancel;
+
+  bApply.properties.text      = "Apply";
+  bApply.properties.mnemonic  = keycode(VK_A);
+  bCancel.properties.text     = "Cancel";
+  bCancel.properties.mnemonic = keycode(VK_C);
+  gEvent(bApply, call pwdOk());
+  gEvent(bCancel, call pwdCancel());
+
+  lCurPwd.properties.text      = "Current Password";
+  lNewPwd.properties.text      = "New Password";
+  lConfPwd.properties.text     = "Confirm Password";
+
+  layout(., context, guiParent,
+                "
+                 Margin d:5 Column
+                 {
+                   Geometry xy:vf Row
+                   {
+                     Geometry xy:fv Column
+                     {
+                       lCurPwd
+                       lNewPwd
+                       lConfPwd
+                     }
+                     ~~
+                     Geometry xy:vf Column
+                     {
+                       pCurPwd
+                       ~
+                       pNewPwd
+                       ~
+                       pConfPwd
+                     }
+                   }
+                   ~
+                   Geometry xy:vf Row
+                   {
+                     <> Geometry d:f bCancel ~ Geometry d:f bApply
+                   }
+                   <>
+                 }
+                 ");
+
+
+  // Property bindings (can only be bound when context is known)
+  boolean context.vars.pwdCanApply;
+  gProperty (bApply, enabled, renderinfo($this.vars.pwdCanApply));
+
+  // Remember given callbacks
+  cfunc context.vars.pwdOkCb;//     = okCb;
+  context.vars.pwdOkCb = okCb;
+  cfunc context.vars.pwdCancelCb;//     = cancelCb;
+  context.vars.pwdCancelCb = cancelCb;
+
+  call setupCanApply(component = pCurPwd);
+  call setupCanApply(component = pNewPwd);
+  call setupCanApply(component = pConfPwd);
+
+  // Return given gui sub-tree root
+  guiParent;
+}
+
+local function setupCanApply(any component)
+{
+  gEvent(component, call pwdCanApply(), event=(gDocchange, gDocinsert, gDocremove));
+  component.properties.selectOnFocus = true;
+}
+
+local function pwdCanApply()
+{
+  string curPwd  = $this.pCurPwd.model.root;
+  string newPwd  = $this.pNewPwd.model.root;
+  string confPwd = $this.pConfPwd.model.root;
+
+  $this.vars.pwdCanApply = newPwd == confPwd && length(newPwd) != 0 && curPwd;
+}
+
+local function pwdOk()
+{
+  //writeln($catalog.system.out, "PWD CHANGE " + $this.vars.pwdOkCb);
+  xfunc($this.vars.pwdOkCb);
+}
+
+local function pwdCancel()
+{
+  xfunc($this.vars.pwdCancelCb);
+}
+
+local function changePwdOk()
+{
+  string curPwd  = $this.pCurPwd.model.root;
+  string newPwd  = $this.pNewPwd.model.root;
+  //writeln($catalog.system.out, "USER ", $this.saved.tusr.vars.selected);
+  //writeln($catalog.system.out, "STACK ", .);
+  send inq.auth:userPwdChange(UserName=$this.saved.tusr.vars.selected,
+                              curPwd = crypt(curPwd),
+                              newPwd = crypt(newPwd),
+                              okCallback = func fn = call pwdChangeSuccess(),
+                              errorHandler = func fe = call passwordError());
+}
+
+local function pwdChangeSuccess()
+{
+  canceltimer($this.vars.connectTimer);
+  any pwd = crypt($this.pNewPwd.model.root);
+
+  // Throw away GUI stuff
+  remove($this.pwdDialog);
+  remove($this.messageDialog);
+  remove($this.questionDialog);
+  //writeln($catalog.system.out, "pwdChangeSuccess ", .);
+
+  //show($this);
+
+  $this.vars.status = "Connecting...";
+  call sendLogin(user=$this.saved.tusr.vars.selected,
+                 pwd,
+                 pkg=$this.saved.tpkg.vars.selected,
+                 initUrl=$this.saved.turl.vars.selected,
+                 server=$this.saved.tsrv.vars.selected);
+}
+
+local function ignoreExpiry()
+{
+  canceltimer($this.vars.connectTimer);
+
+  // Throw away GUI stuff
+  remove($this.pwdDialog);
+  remove($this.messageDialog);
+  remove($this.questionDialog);
+
+  $this.vars.status = "Connecting...";
+  call sendLogin(user=$this.saved.tusr.vars.selected,
+                 pwd=$this.vars.cpwd,
+                 pkg=$this.saved.tpkg.vars.selected,
+                 initUrl=$this.saved.turl.vars.selected,
+                 server=$this.saved.tsrv.vars.selected,
+                 ignoreExp=true);
+}
+
+local function changePwd()
+{
+  // Blank out the passwords.
+  empty($this.login.tpwd.model.root);
+  empty($this.login.tpxypwd.model.root);
+
+  gDialog($this) pwdDialog;
+  add(pwdDialog, path($this.pwdDialog));  // or context won't propagate into subtree
+  pwdDialog.properties.defaultCloseOperation = DISPOSE_ON_CLOSE;
+
+  call createPasswordGUI(context   = $this,
+                         guiParent = pwdDialog,
+                         okCb      = cfunc f1 = call changePwdOk(),
+                         cancelCb  = cfunc f2 = call Exit());
+  show(pwdDialog);
+}
+
+local function timerTick()
+{
+  array msg = ("Exiting in ", $this.vars.timeRemaining);
+  $this.vars.status = render(msg, format="{0} {1,date,m:ss}");
+
+  if (($this.vars.timeRemaining -= 1000l) == 0l)
+    call Exit();
+}
+
+// Handles errors while setting a new password
+local function passwordError(string  msg,
+                             string  stackTrace,
+                             date    exTime,
+                             boolean isUser,
+                             any     exInfo)
+{
+  call inq.gui.util:messageDialog(dialog       = $this.messageDialog,
+                          messageTitle = msg,
+                          icon         = $uidefaults.OptionPane.warningIcon,
+                          messageText  = exInfo);
+  setfocus($this.pCurPwd);
+}
+
+function msgError(string  msg,
+                  string  stackTrace,
+                  boolean isUser,
+                  any     exInfo)
+{
+  // exInfo is the current object. Show error and...
+  call inq.gui.util:messageDialog(messageTitle = msg,
+                                  messageText  = exInfo.text);
+
+}
+
+//service Login()
+//{
+//  call login(argsMap=$catalog.argsMap);
+//}
+
+service PostLogin(any expired, any expiresIn)
+{
+  setnull($this.vars.status);
+  if (expired)
+  {
+    setnull($this.vars.cpwd);
+    call inq.gui.util:createQuestionDialog(parent = $this);
+    call inq.gui.util:createMessageDialog(parent = $this);
+    call inq.gui.util:questionDialog(dialog       = $this.questionDialog,
+                             questionText = "Your password has expired. Please change it now.",
+                             cancelText   = "Exit",
+                             okExpr       = func f1 = call changePwd(),
+                             cancelExpr   = func f2 = call Exit());
+    date $this.vars.timeRemaining = 1000l * 60 * 3; // Hard coded at 3 minutes
+    any  $this.vars.connectTimer = createtimer(func ft = call timerTick() , 1000, 1000);
+  }
+  else if (expiresIn)
+  {
+    call inq.gui.util:createQuestionDialog(parent = $this);
+    call inq.gui.util:createMessageDialog(parent = $this);
+    array msg = (expiresIn);
+    any msg = render(msg, format="Your password expires in {0,number,integer} days. Would you like to change it now?");
+    call inq.gui.util:questionDialog(dialog       = $this.questionDialog,
+                             questionText = msg,
+                             okText       = "Yes",
+                             cancelText   = "No",
+                             okExpr       = func f1 = call changePwd(),
+                             cancelExpr   = func f2 = call ignoreExpiry());
+
+    date $this.vars.timeRemaining = 1000l * 60 * 3; // Hard coded at 3 minutes
+    any  $this.vars.connectTimer = createtimer(func ft = call timerTick() , 1000, 1000);
+  }
+  else
+  {
+    setnull($this.vars.cpwd);
+    hide($this);
+  }
+}
+
+/**
+ * Logout request. If there is a message then popup a dialog to show it
+ * and run the timer, otherwise just terminate.
+ * Must be run at the context $root.login.login (the login window) which
+ * is used to parent the message dialog
+ */
+service logoutRequest(long delay = 30000, string message)
+{
+  //writeln($catalog.system.out, .);
+
+  // If there is no message then log out immediately
+  if (!message)
+    call Exit();
+
+  call inq.gui.util:createMessageDialogAt(parent = $this);
+
+  // If there's no delay then just popup the administrator message
+  if (delay == 0)
+    call inq.gui.util:messageDialog(messageTitle = "Administrator Message",
+                                  icon         = $uidefaults.OptionPane.warningIcon,
+                                  messageText  = message);
+  else
+  {
+    timer logoutTimer;
+    any  timerInfo.message = message;
+    date timerInfo.timeRemaining = delay;
+    logoutTimer.properties.func = func f = call logoutTimer(fromTimer);
+    logoutTimer.properties.userInfo = timerInfo;
+    logoutTimer.properties.period   = 1000;
+    call inq.gui.util:messageDialog(messageTitle = "Exiting....",
+                                    icon         = $uidefaults.OptionPane.warningIcon,
+                                    messageText  = message,
+                                    okText = "Exit Now",
+                                    okExpr = func f = call Exit());
+    starttimer(logoutTimer, 0);
+  }
+}
+
+local function logoutTimer(any fromTimer)
+{
+  any m = fromTimer.properties.userInfo;
+
+  if ((m.timeRemaining -= 1000l) <= 0l)
+    call Exit();
+
+  array msg = ("Exiting in ", m.timeRemaining);
+  call inq.gui.util:messageDialog(messageTitle = render(msg, format="{0} {1,date,m:ss}"),
+                                  icon         = $uidefaults.OptionPane.warningIcon,
+                                  messageText  = m.message,
+                                  okText = "Exit Now",
+                                  okExpr = func f = call Exit(),
+                                  resize = false);
+}
+
+/**
+ * Receive a positive update acknowledgement from the server and call the given function.
+ * General-purpose version.
+ */
+service updateOk(any clientInfo, func okCallback)
+{
+  // Provide the callback with the optional argument
+  //writeln($catalog.system.out, "AnyClient okCallback", .);
+  xfunc(okCallback, clientInfo);
+}
+
+/**
+ * Receive a positive update acknowledgement from the server and call the
+ * given function.
+ * This version expects obj to be a typedef instance (or at least its a map) and
+ * its uniquekey value is extracted.
+ */
+service updateObjOk(any obj, any clientInfo, func okCallback)
+{
+  // we provide the callback with the whole object and its ukey,
+  // so the function can pick what it needs
+  xfunc(okCallback, obj, ukey = getuniquekey(obj), clientInfo);
+}
+
+/**
+ * Receive a data structure from the server and call the given function.
+ */
+service receiveData(any dataItem, any dataPath, func dataCallback)
+{
+  if (dataCallback)
+    xfunc(dataCallback, dataItem, dataPath);
+  else
+    add(dataItem, dataPath);
+}
+
+exec("classpath:///inq/gui/verifiers.inq");
+exec("classpath:///inq/gui/messagedialog.inq");
+exec("classpath:///inq/gui/questiondialog.inq");
+
+$catalog.inq.system.Client.properties.serverLostHandler =
+  func f = call login(argsMap=$catalog.argsMap, context=$this.login);
+remove($stack.f);
+
+
+// Build the login window at the node $root.login, just to keep $root uncluttered
+// NB. $this == $root for execution of the initial script.
+hmap $this.login;
+
+call login(argsMap=$catalog.argsMap, context=$this.login);

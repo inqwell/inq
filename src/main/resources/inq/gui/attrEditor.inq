@@ -1,0 +1,1084 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * A general-purpose attribute editor. May be used when editing
+ * one or more selected items rendered in a table.
+ *
+ * TODO...how it works!
+ *
+ * Copyright c Inqwell Ltd 2009-2011. All Rights Reserved
+ */
+
+package inq.gui.util;
+
+/**
+ * Edit a set of attributes within a list of items. If confirmation
+ * is required then TODO: this code assumes a default Question Dialog has
+ * been created - that is inq.gui.util:questionDialog() is called.
+ *
+ * @param parent A suitable dialog parent.
+ *
+ * @param table The gTable displaying the items to be edited.
+ * The row selection comprises the editing list.
+ *
+ * @param columns a list of column names specifying the
+ * attributes to be edited, for example:
+ *   columns = array columns = ("LongSpread", "ShortSpread")
+ * Notes: The specified attributes' renderinfos (that is those
+ * in the original table) must support a simple path to
+ * access the rendered data.
+ *
+ * @param renderers a list of renderinfos representing data in
+ * the table (for use when that data is not actually rendered by
+ * the table so we cannot retrieve the meta data from its columns).
+ * Same notes as above apply.
+ *
+ * @param title the dialog title
+ *
+ * @param confirm whether final confirmation is requested on OK
+ *
+ * @param keyri an optional renderinfo to display as a key in
+ * the "before" preview table
+ */
+function editAttrs(any  parent,
+                   any  table,
+                   any  columns,
+                   any  renderers,
+                   any  title,
+                   any  keyri,
+                   boolean confirm,
+                   func okExpr,
+                   func cancelExpr)
+{
+  if (table.model.selectCount)
+  {
+    call createGui(parent,
+                   table,
+                   columns,
+                   renderers,
+                   title,
+                   confirm,
+                   keyri,
+                   okExpr,
+                   cancelExpr);
+  }
+}
+
+// Create a table model to define the editing table.
+local function editorTableModel()
+{
+  omap editorCols;
+  any editorCols.AttrName = renderinfo(typedef = inq.meta:EditableAttribute.Field);
+  any editorCols.Action   = renderinfo(typedef = inq.meta:EditableAttribute.Action);
+  any editorCols.Units    = renderinfo(typedef = inq.meta:EditableAttribute.Units);
+  any editorCols.Value    = renderinfo(typedef = inq.meta:EditableAttribute.Value);
+
+  // return
+  editorCols;
+}
+
+local function createGui(any parent,
+                         any table,
+                         any columns,
+                         any renderers,
+                         string title = "Edit Attributes",
+                         any confirm,
+                         any keyri,
+                         any okExpr,
+                         any cancelExpr)
+{
+  // Define a context so we can easily tidy the server side by
+  // just removing the context node. This will also have the effect,
+  // via event propagation, to remove and dispose the dialog
+  gDialog(parent) $this.attrEditor;
+  $this.attrEditor.properties.contextNode = true;
+  $this.attrEditor.properties.modal = true;
+  $this.attrEditor.properties.title = title;
+  $this.attrEditor.properties.modality = MODAL_PARENT;
+
+  call createData(context = $this.attrEditor,
+                  table,
+                  renderers,
+                  columns);
+
+  // There are three tables, one to drive the editing,
+  // one to display the current values and another
+  // showing the new values.
+  gTable editorTable;
+  gTable oldTable;
+  gTable newTable;
+
+  // Link the old/new table's vertical scrolling
+  newTable.properties.linkedVertical = oldTable;
+
+  // When an attribute value is edited we use the row number to
+  // index into saved meta data so we can save the value to the
+  // vars.newVals structure. We therefore don't want the user to be
+  // able to sort the table.
+  editorTable.properties.clickSortEnabled = false;
+
+  // Disable these too - they are two separate tables with linked
+  // scrolls so we don't want the user sorting them (no sort linkage)
+  oldTable.properties.clickSortEnabled = false;
+  newTable.properties.clickSortEnabled = false;
+
+  // Create the remaining GUI components, set properties and
+  // establish event handlers... 
+  gButton bOk;
+  gButton bCancel;
+  gButton bReset;
+  gButton bSelectChanged;
+
+  bOk.properties.text     = "OK";
+	bOk.properties.mnemonic = keycode(VK_O);
+  bCancel.properties.text = "Cancel";
+  bReset.properties.text  = "Reset All";
+	bReset.properties.mnemonic = keycode(VK_R);
+  bSelectChanged.properties.text  = "Select All Changed";
+	bSelectChanged.properties.mnemonic = keycode(VK_A);
+
+  // Hang the gContext event (context is established) on to
+  // the OK button. When this happens (during layout) the
+  // dialog is complete and defines $this for event callbacks
+  // and service invocations to the server.
+  gEvent(bOk, call contextEstablished(), event=(gContext));
+  
+  gEvent(bCancel, gDialog=gDialogcancel);
+  gEvent(bReset, call reset());
+  gEvent(bSelectChanged, call selectAllChanged());
+
+  gEvent (bOk, gDialog=gDialogok);
+
+  gButton bRedo;
+  gEvent (bRedo, call redo());
+  bRedo.properties.icon = image("images/redo32.png");
+  bRedo.properties.toolTipText = "Redo specified changes";
+
+  gLabel lInstr;
+  lInstr.properties.text = "Double-click on an old value to reset a cell";
+
+  gEvent(oldTable, call oldSelected(), event=(gSelection));
+  gEvent(oldTable, call resetCell(), event=(gMclicked), gModify=(count=2));
+
+  gEvent($this.attrEditor, call closeEditor(), event=(gDialogcancel));
+  gEvent($this.attrEditor, gDialog=gDialogcancel, event=(gWclosing));
+  $this.attrEditor.properties.defaultCloseOperation = DO_NOTHING_ON_CLOSE;
+  gEvent($this.attrEditor, call dialogOK(), event=(gDialogok));
+
+  // Remember the expressions/flags supplied by the caller
+  any $this.attrEditor.vars.okExpr = okExpr;
+  any $this.attrEditor.vars.cancelExpr = cancelExpr;
+  any $this.attrEditor.vars.confirm = confirm;
+
+  // Perform the GUI layout
+  // In this example nested Row/Col suits the tables section best
+  // while a Table works better for the buttons.
+  layout(., $this.attrEditor,
+         "Geometry xy:vf Caption tl \"Attributes\"; Row
+         {
+           editorTable
+           ~~
+           Geometry d:f bRedo
+           ~~
+         }
+         ~
+         Row
+         {
+           // The Row { } s containing the tables
+           // are just to preserve the border on
+           // the table in GTK. This L&F uses borders
+           // much more than others to achieve the
+           // effects it wants...
+           Caption tl \"Old\"; Row { oldTable }
+           Caption tl \"New\"; Row { newTable }
+         }
+         Geometry xy:vf Table Gap 5 Columns 110, GRID_FILL, GRID_PREF, 20, 75, 75
+                                      Rows GRID_PREF;
+         {
+           Row
+           {
+             bReset
+             lInstr
+             bSelectChanged
+             ~
+             bCancel
+             bOk
+           }
+         }
+         ~
+         ");
+
+  // Declare a row header table to be placed on oldTable
+  gTable oldTableRH;
+  
+  // Must do this before setting the model into oldTableRH or it has
+  // no context node. Note - the rowHeader property is not very advanced
+  // as yet...
+	oldTable.properties.rowHeader = oldTableRH;
+	
+	// The row header table has one column. Its renderinfo is the one
+	// supplied by the caller to supply the label the entities being
+	// edited.
+	omap rhTableModel;
+	any  rhTableModel.Name  = keyri;
+	
+	// Set the remaining properties of the row header, including
+	// a style function (that does bolding) 
+	oldTableRH.properties.clickSortEnabled = false;
+	oldTableRH.properties.columns = rhTableModel;
+  oldTableRH.properties.columns.Name.renderer.properties.style = cfunc f = call renderBold();
+
+  oldTable.properties.rowStyle    = $catalog.guiFuncs.tableStripe;
+  newTable.properties.rowStyle    = $catalog.guiFuncs.tableStripe;
+  editorTable.properties.rowStyle = $catalog.guiFuncs.tableStripe;
+
+  // Find the longest of the key values of the entities being
+  // edited...
+  // TODO: can we use maxof?
+  any atPath = keyri.path;
+  int attrWidth;
+  int len;
+  foreach($this.attrEditor.vars.oldVals)
+  {
+    len = length($loop.{atPath});
+    if (len > attrWidth)
+      attrWidth = len;
+  }
+  // ...then use it to set the preferred character width of the
+  // row header table's only column
+  oldTableRH.properties.columns.Name.widths.properties.preferredCharWidth = len + 2;
+
+  // Pick up selection events from the row header
+  gEvent(oldTableRH, call headerSelected(), event=(gSelection));
+}
+
+/**
+ * Make all the dialog's working data
+ */
+local function createData(any context, any table, any renderers, any columns)
+{
+  // Create all the working data used by the attribute editor:
+
+  // Take some copies of the selected rows.
+  // Make copies for *old* and *new* values tables.
+  // Notes 
+  //   1. The internal map myTable.model.selection contains
+  //      the node-set children of the selected rows.
+  //   2. Copy these rows to new structures for old and new
+  //      values at context.vars.oldVals and context.vars.newVals.
+  //      These must be hmaps so vector access and events
+  //      are supported.
+  //   3. By reversing the (empty) collection we ensure that
+  //      entries we add later in the loop below are in the
+  //      order they were added, because we have touched the
+  //      map in such a way as to initialise its ordered nature.
+  call cloneModelData(to   = reverse(hmap context.vars.oldVals),
+                      from = table.model.selection);
+  call cloneModelData(to   = reverse(hmap context.vars.newVals),
+                      from = table.model.selection);
+
+
+  // Using the column names given, extract the rendering path
+  // and use it to make the values rendered by the *editing* table
+
+  // First, get a selected row. We use it to resolve the rendered value
+  any row = table.model.selection[0];
+
+  // Create a hmap for the editor table's root. 
+  hmap root;
+  reverse(root);
+
+  // An array to hold the typedef/field for the specified table
+  // columns/renderers. Will be sent to the server to get
+  // the relevant meta-data instances.
+  array meta;
+
+  // Fetch out the column properties from the source table
+  any tableCols = table.properties.columns;
+
+
+  foreach(columns)
+  {
+    any col = $loop;
+
+    // Get the specific column property from which we can retrieve
+    // the rendering path, label, field and typedef
+    any col = tableCols.{col};
+
+    // Make an EditableAttribute instance for this column
+    call makeEditableAttr(col, meta, row, root);
+  }
+
+  // Repeat for any explicit renderers
+  foreach(renderers)
+  {
+    any col = $loop;
+
+    // Make an EditableAttribute instance for this column
+    call makeEditableAttr(col, meta, row, root);
+  }
+
+  // Save the client-side meta data (typedef, field name, path
+  // and formatter) under the context for later use.
+  any context.vars.meta = meta;
+
+  // Save the editor table's data under the context
+  any context.vars.editList = root;
+
+  // Create a bold style for later use in cell rendering.
+	boolean boldStyle.@bold   = true;
+	style   context.styles.bold = boldStyle;
+}
+
+local function makeEditableAttr(any col, any meta, any row, any root)
+{
+  // Fetch the path used to reach the rendered value for this column.
+  // This will throw if the renderinfo for the column cannot yield
+  // a path, so it must specify either a node ref like $this.MyType.MyField
+  // or use typedef=MyType.MyField
+  any atPath = col.path;
+
+  // Create a rendered value from the row and initialise the
+  // row data for the editor table
+  any EditableAttribute = new(inq.meta:EditableAttribute);
+
+  // Unique key. Not really important so just for thoroughness
+  // Hmmm, in the Client, Inq creates hmaps when making new instances
+  // of keys. This is a convenience as they are usually used for
+  // rendered data. Because hmaps compare equals by identity Inq
+  // event dispatching fails when the key gets cloned. For now,
+  // use this slightly ugly way to ensure a value map gets initialised
+  // as the uk. A better solution would be to have a "new" function
+  // hook in the typedef that performed this task.
+  // TODO: review this
+  EditableAttribute.EditableAttribute = identity(EditableAttribute);
+  //any uk = new(inq.meta:EditableAttribute.pkey);
+  //uk.EditableAttribute = EditableAttribute.EditableAttribute;
+  any uk = EditableAttribute.EditableAttribute; // ripped so therefore const anyway
+  setuniquekey(EditableAttribute, uk);
+
+  // Reuse the column's label
+  EditableAttribute.Field = col.label;
+
+  // Replace the (place-holder) Value field with a clone
+  // of what is found at the column's render path.
+  any EditableAttribute.Value = clone(row.{atPath});  // Don't try this at home!
+
+  // We will ask the server about the meta-data instances
+  // used for each column. Again, this places restrictions
+  // on the original column's renderinfo setup - it must
+  // specify a typedef=MyType.MyField.
+  // Getting the meta-data means we can:
+  //   1) initialise the editing value to the default
+  //      value for the column
+  //   2) Create the appropriate editor component (that
+  //      is a tf or a combo for enums)
+  // Remember the path for the data as well, since it allows
+  // us to create the renderinfos for the old/new table models
+  // and create a formatter (so we can override the default
+  // provided by Inq table handling) to use when rendering the
+  // edit value.
+  smap m;
+  any m.typedef = col.typedef;
+  any m.field   = col.field;
+  any m.path    = atPath;
+  any m.formatter  = format(col.formatString, EditableAttribute.Value);
+  if (isnull(m.typedef))
+    throw("No typedef/field: column " + col);
+  meta + m;
+
+  // Add the row for this attribute to the editor table's data
+  any root.{uk}.EditableAttribute = EditableAttribute;
+  
+  // Put the meta data there as well. Useful during for when the
+  // cell functions run
+  any root.{uk}.meta = m;
+
+  // TODO: explain
+  setuniquekey(root.{uk}, uk);
+}
+
+local function contextEstablished()
+{
+  // Initialisation proceeds from this event handler by
+  // invoking the server to send back server-side meta data
+  // for the typedefs+fields being edited. A call to the
+  // local function gotMeta is passed so when the server
+  // replies exceution resumes there.
+  // See cp://com/inqwell/any/server/Meta.inq
+  if (count($this.vars.meta))
+    send inq.meta:fetchFieldList($this.vars.meta, callback = func f = call gotMeta(args.meta));
+}
+
+local function gotMeta(any meta)
+{
+  // Having got the meta-data back we can finish off creating the GUI
+  // and show it to the user.
+
+  // Columns config for the editor table
+  $this.editorTable.properties.columns = call editorTableModel();
+  $this.editorTable.properties.visibleColumns = 0;
+  $this.editorTable.properties.visibleRows = count(meta) + 1; // Hmmm
+
+  // Having set them into the editor table (by which we have caused
+  // the table to set up it's column properties), alias the
+  // column properties back out so we can establish editor
+  // components on them.
+  any tableCols = $this.editorTable.properties.columns;
+  
+  // Bold the name of the attribute
+  tableCols.AttrName.renderer.properties.style = cfunc f = call renderBold();
+
+  // Where we will keep the editor components for the editor table.
+  // 
+  array $this.vars.valueEditors;  // TODO: this is not used.
+  
+  // An Inq table column supports a single editor component. If a
+  // choice amongst several available components is required these
+  // are laid out in a gCard and the appropriate component made
+  // visible when editing commences. One component is created
+  // for each attribute being edited (that is one for each row in
+  // the table)
+  gCard cEditors;
+  string layoutStr = ""; // see below
+  
+  // There are also editor components for newTable so that the
+  // values can be edited on an instance basis. In this table the
+  // attributes are the columns and the entity instances
+  // the rows, so this is the more conventional case of a single
+  // editor component per column for all the table's rows. Prepare
+  // an ordered map to store them temporarily while they are created
+  // and before they are established in newTable.
+  omap newEditors;
+                      
+  // Prepare an ordered map for the column model of old/newTable 
+  omap previewCols;
+  
+  int attrWidth;
+  
+  // Loop over the received server-side meta-data to
+  //   1.  Create the component for the editorTable's compound
+  //       cell editor.
+  //   2.  Create the component for newTable's individual
+  //       attribute columns. 
+  //   3.  Initialise the editor table's data to the default values for
+  //       non-enum fields.
+  //   4.  Build the table column model for old/newTable.
+  foreach(meta)
+  {
+    any Field = $loop;
+
+    if (Field.IsEnum)
+    {
+      any valueEditor = call comboEditor(meta = $this.vars.meta[@count],
+                                         counter = @count,
+                                         Field);
+      any newEditor   = call comboEditor2(meta = $this.vars.meta[@count],
+                                          counter = @count);
+    }
+    else
+    {
+      $this.vars.editList[@count].EditableAttribute.Value = Field.Data;
+      any valueEditor = call tfEditor(meta = $this.vars.meta[@count],
+                                      counter = @count,
+                                      Field);
+      any newEditor   = call tfEditor2(meta = $this.vars.meta[@count],
+                                       counter = @count,
+                                       Field);
+    }
+    // Save the Field instance returned by the server in the editor
+    // table's data structure
+    any $this.vars.editList[@count].Field = Field;
+
+    // Set the AttrName column to a suitable width
+    int len = length($this.vars.editList[@count].EditableAttribute.Field);
+    if (len > attrWidth)
+      attrWidth = len;
+
+    // Dynamic layouts are a bit tricky at the moment, we can only satisfy
+    // the (unique-name) Inq requirement and the gCard constraints
+    // by building the layout string up and declaring the components
+    // via {}. Something to think about...
+    any editorName = "editor" + @count;
+    any {editorName} = valueEditor;
+    layoutStr += " " + editorName;
+
+    // Preview old/new column
+    any m = $this.vars.meta[@count];
+    any col = renderinfo(path($this.{m.path}),
+                         typeof=(m.typedef, m.field));
+
+    any previewCols.{editorName} = col;
+    any newEditors.{editorName} = newEditor;
+  }
+
+  tableCols.AttrName.widths.properties.preferredCharWidth = attrWidth + 1; // allow for bolding
+
+  layout(., cEditors, layoutStr);
+
+  func startF = call startValueCell();
+  func stopF  = call stopValueCell();
+  tableCols.Value.editor.properties.component = cEditors;
+  tableCols.Value.editor.properties.canStartEdit = startF;
+  tableCols.Value.editor.properties.onStopEdit = stopF;
+  tableCols.Value.editor.properties.clickCountToStart = 1;
+  tableCols.Value.renderer.properties.setValueToComponent = null;
+  tableCols.Value.renderer.properties.style = cfunc f = call renderValue();
+
+  func startF = call startUnitsCell();
+  func stopF  = call stopUnitsCell();
+  tableCols.Units.editor.properties.component = call unitsEditor();
+  tableCols.Units.editor.properties.canStartEdit = startF;
+  tableCols.Units.editor.properties.onStopEdit = stopF;
+  tableCols.Units.editor.properties.clickCountToStart = 1;
+
+  func startF = call startActionCell();
+  func stopF  = call stopActionCell();
+  tableCols.Action.editor.properties.component = call actionEditor();
+  tableCols.Action.editor.properties.canStartEdit = startF;
+  tableCols.Action.editor.properties.onStopEdit = stopF;
+  tableCols.Action.editor.properties.clickCountToStart = 1;
+
+  // Tell the editor table where its editing values are
+  $this.editorTable.properties.modelRoot = path($this.vars.editList);
+
+  // Set up the preview tables.
+  // 1. Columns. We are sharing the renderinfos between two tables. Not
+  //    tried this before but ok I reckon. Note = we can't use the sort
+  //    of expression a = b = c (right-to-left association assign to b
+  //    then read it out again) because the columns property returns
+  //    something different when read to what it expects when written.
+  //    Further (in this case) we are using an array, that is the
+  //    colunms are not named and the property then is not readable
+  //    at all.
+  $this.oldTable.properties.columns = previewCols;
+  $this.newTable.properties.columns = previewCols;
+
+  // 2. Model roots.
+  $this.oldTable.properties.modelRoot = path($this.vars.oldVals);
+  $this.newTable.properties.modelRoot = path($this.vars.newVals);
+
+  // 3. All cols visible
+  $this.oldTable.properties.visibleColumns = 0;
+  $this.newTable.properties.visibleColumns = 0;
+
+  // 4. Visible rows initially
+  $this.oldTable.properties.visibleRows = 4;
+  $this.newTable.properties.visibleRows = 4;
+
+  // 5. New Table Editors/Renderers. With the editor the user can
+  //    set individual attribute values on specific instances.
+  //    The renderer style function renders the cell differently
+  //    when new value != old value
+  any tableCols = $this.newTable.properties.columns;
+  foreach(newEditors)
+  {
+    tableCols.{@name}.editor.properties.component = newEditors.{@name};
+    //tableCols.{@name}.editor.properties.clickCountToStart = 1;
+    tableCols.{@name}.renderer.properties.style = cfunc f = call renderNewValue();
+  }
+
+  // Popup the window
+  show($this);
+}
+
+/**
+ * Create a Combo Box to act as an editor for an enumerated value attribute.
+ *
+ * @param meta - a Map containing the fields "typedef" and "field" that
+ * we use to create a suitable renderinfo
+ *
+ * @param counter - a unique value that is used as a path element
+ * for the combo's rendered value. *Note* this is declared as a value
+ * parameter so the caller can reuse the variable passed, therefore
+ * don't change this.
+ *
+ * @param Field the instance of inq.meta:Field that corresponds to the
+ * typedef/field in the meta argument.
+ */
+local function comboEditor(any meta, int counter, any Field)
+{
+  // Create the data for the combo to render. This is where
+  // the cell editor's value is held.
+  any $this.vars.editVals.{counter} = clone(Field.Data);
+
+  any cb = call comboEditor2(meta, counter);
+
+  // See comments below...
+  gEvent(cb, gCellEdit=gCellEditStop);
+
+  // return
+  cb;
+}
+
+local function comboEditor2(any meta, int counter)
+{
+  // The combo box
+  gComboBox cb;
+
+  // combo box properties.
+  // Using the dynamic form of typedef= here
+  any cbModel.internal = renderinfo(typeof=(meta.typedef, meta.field));
+  cb.properties.model        = cbModel;
+  cb.properties.renderInfo   = renderinfo($this.vars.editVals.{counter}, typeof=(meta.typedef, meta.field));
+
+  cb;
+}
+
+local function tfEditor(any meta, int counter, any Field)
+{
+  // Create the data for the text field to render
+  any $this.vars.editVals.{counter} = clone(Field.Data);
+
+  any tf = call tfEditor2(meta, counter, Field);
+
+
+  // Because our editor is complex (the root component passed to the
+  // table is not the actual editor component but instead the root
+  // of a hierarchy containing many possible editor components) we have
+  // to explicitly script the edit-stop event.
+  gEvent(tf, gCellEdit=gCellEditStop);
+
+  // return
+  tf;
+}
+
+local function tfEditor2(any meta, int counter, any Field)
+{
+  // The text field
+  gTextField tf;
+
+  // text field properties.
+  // renderinfo. Note the use of a value (not reference) declaration
+  // for the counter argument.
+  // Otherwise we are squirreling away an integer into the render path
+  // that, because it is a reference, can be altered later! Take care.
+  tf.properties.renderInfo = renderinfo($this.vars.editVals.{counter},
+                                        typeof = (meta.typedef, meta.field),
+                                        format = Field.Format,
+                                        editable = true);
+
+  // Try to use appropriate inputVerifier and validateInsert
+  // properties
+  if (isnumeric(Field.Data))
+  {
+    tf.properties.inputVerifier = $catalog.guiFuncs.validNumeric;
+    if (scale(Field.Data))
+      tf.properties.validateInsert = $catalog.guiFuncs.numericFloat;
+    else
+      tf.properties.validateInsert = $catalog.guiFuncs.numericInteger;
+  }
+
+  tf;
+}
+
+// Create a combo box to select the units for the attribute edit
+local function unitsEditor()
+{
+  // Create the data for the combo to render
+  any $this.vars.units = new(inq.meta:EditUnits);
+
+  // The combo box
+  gComboBox cb;
+
+  // combo box properties.
+  any cbModel.internal = renderinfo(typedef=inq.meta:EditUnits);
+  cb.properties.model        = cbModel;
+  cb.properties.renderInfo   = renderinfo($this.vars.units, typedef=inq.meta:EditUnits);
+
+  // return
+  cb;
+}
+
+local function actionEditor()
+{
+  // Create the data for the combo to render. It's only required to hold
+  // the value of the cell during the cell editing process.
+  any $this.vars.action = new(inq.meta:EditableAttribute.Action);
+
+  // Create two combo models using the two enums in the inq.meta package,
+  // one for values (that can be set, increased and decreased) and the other
+  // for enums (that can only be set)
+  any valueModel.internal = renderinfo(typedef=inq.meta:EditBy);
+  any enumModel.internal  = renderinfo(typedef=inq.meta:EditByEnum);
+  // Note - the combination of statements used here will give subtly
+  // different results. valueModel and enumModel are smaps (stack built
+  // above). Something like
+  //   any $this.vars.valueModel.internal = renderinfo(typedef=inq.meta:EditBy);
+  // would have made valueModel a hmap. Extra baggage not necessary. Just
+  // pointing that out...
+  any $this.vars.valueModel = valueModel;
+  any $this.vars.enumModel  = enumModel;
+
+  // The combo box
+  gComboBox cb;
+
+  // combo box properties.
+  any cbModel.internal = renderinfo(typedef=inq.meta:EditableAttribute.Action);
+  cb.properties.model        = cbModel;
+  cb.properties.renderInfo   = renderinfo($this.vars.action, typedef=inq.meta:EditableAttribute.Action);
+
+  // return
+  cb;
+}
+
+/*
+For testing only (event grabs in combos on X11 env)
+local function actionEditor()
+{
+  // Create the data for the combo to render
+  any $this.vars.action = new(inq.meta:EditableAttribute.Action);
+  gCheck c;
+
+  c.properties.checkedValue = enum(inq.meta:EditableAttribute.Action, SET);
+  c.properties.uncheckedValue = enum(inq.meta:EditableAttribute.Action, NONE);
+
+  c.properties.renderInfo   = renderinfo($this.vars.units, typedef=inq.meta:EditableAttribute.Action);
+
+  c;
+}
+*/
+
+local function startValueCell(
+                                any component,  // editor component
+                                any rowRoot,    // node set child of the editing row
+                                any value,      // current value of the cell; made const during the function call
+                                any row,        // row number
+                                any rowKey,     // map key of the node set child in the node set root
+                                any columnName  // name of the column from the table's original columns property
+                              )
+{
+  //writeln($catalog.system.out, "\p:\e(\l):: value is " + columnName);
+  //writeln($catalog.system.out, "\p:\e(\l):: value is " + value);
+
+  // Make the editor for the editing row the visible component
+  any editorName = "editor" + row;
+  component.{editorName}.properties.layoutVisible = true;
+
+  // return
+  true;
+}
+
+local function stopValueCell(
+															any parent, 		// parent component i.e. the table
+															any component,	// editor component
+															any formatter,	// formatter for the cell specified in the table's column configuration
+															any rowRoot,		// node set child of the editing row
+															any value,			// current value of the cell; made const during the function call
+															any row,				// row number
+															any rowKey,			// map key of the node set child in the node set root
+															any column,			// column number in model coordinates
+															any columnName,	// name of the column from the table's original columns property
+															any mouseCell,	// always false in canStartEdit
+															any level,			// if a treetable, the level
+															any isLeaf,			// if a treetable, whether the tree node is a leaf
+															any expanded,		// if a treetable and not a leaf, whether the tree node is expanded.
+															any newValue, 	// newValue of the Cell after the edit
+															any after,			// true on 2nd invocation
+															any isUser			// true when user has selected something else false
+															)
+{
+  //writeln($catalog.system.out, "\p:\e(\l):: isUser is " + isUser);
+
+  if(after)
+    call setNewValue(rowRoot,
+                     meta     = $this.vars.meta[row],
+                     newValue = rowRoot.EditableAttribute.Value);
+}
+
+local function startUnitsCell(
+                                any component,  // editor component
+                                any rowRoot,    // node set child of the editing row
+                                any value,      // current value of the cell; made const during the function call
+                                any row,        // row number
+                                any rowKey,     // map key of the node set child in the node set root
+                                any columnName  // name of the column from the table's original columns property
+                              )
+{
+  // We can set the units if the action is anything other than "set"
+  // and the value is numeric
+  rowRoot.EditableAttribute.Action != enum(inq.meta:EditableAttribute.Action, SET) &&
+  isnumeric(rowRoot.EditableAttribute.Value);
+}
+
+local function stopUnitsCell(
+                              any rowRoot,    // node set child of the editing row
+                              any value,      // current value of the cell; made const during the function call
+                              any row,        // row number
+															any after			  // true on 2nd invocation
+                            )
+{
+  if (after)
+    call setNewValue(rowRoot,
+                     meta     = $this.vars.meta[row],
+                     newValue = rowRoot.EditableAttribute.Value);
+}
+
+local function startActionCell(
+															any component,	// editor component
+															any rowRoot 		// node set child of the editing row
+															)
+{
+  // Put the appropriate model into the action editor combo.
+  // If the value is an Enum or is non-numeric the only action
+  // allowed is Set. Otherwise Increase and Decrease are also
+  // possible.
+  if (rowRoot.Field.IsEnum || !isnumeric(rowRoot.EditableAttribute.Value))
+    component.properties.model = $this.vars.enumModel;
+  else
+    component.properties.model = $this.vars.valueModel;
+
+  // We can always edit, so return true
+  true;
+}
+
+local function stopActionCell(
+															any parent, 		// parent component i.e. the table
+															any component,	// editor component
+															any formatter,	// formatter for the cell specified in the table's column configuration
+															any rowRoot,		// node set child of the editing row
+															any value,			// current value of the cell; made const during the function call
+															any row,				// row number
+															any rowKey,			// map key of the node set child in the node set root
+															any column,			// column number in model coordinates
+															any columnName,	// name of the column from the table's original columns property
+															any mouseCell,	// always false in canStartEdit
+															any level,			// if a treetable, the level
+															any isLeaf,			// if a treetable, whether the tree node is a leaf
+															any expanded,		// if a treetable and not a leaf, whether the tree node is expanded.
+															any newValue, 	// newValue of the Cell after the edit
+															any after,			// true on 2nd invocation
+															any isUser			// true when user has selected something else false
+															)
+{
+  if(after)
+  {
+    // If the user selected SET then set the units to null
+    if (newValue == enum(inq.meta:EditableAttribute.Action, SET))
+      rowRoot.EditableAttribute.Units = null;
+
+    call setNewValue(rowRoot,
+                     meta     = $this.vars.meta[row],
+                     newValue = rowRoot.EditableAttribute.Value);
+  }
+}
+
+local function cloneModelData(any to, any from)
+{
+  // The Inq clone() function performs a deep copy preserving the
+  // type transactional state of Maps found within.
+  any from = clone(from);
+  foreach(from)
+    any to.{@name} = $loop;
+
+  // return "to";
+  to;
+}
+
+local function redo()
+{
+  foreach($this.vars.meta)
+    call setNewValue(rowRoot = $this.vars.editList[@count],
+                     meta     = $loop,
+                     newValue = $this.vars.editList[@count].EditableAttribute.Value);
+}
+
+/**
+ *
+ */
+local function setNewValue(any rowRoot, any meta, any newValue)
+{
+  // Iterate over all the new values applying the (evaluated) new
+  // value for the current attribute
+  foreach($this.vars.newVals)
+  {
+    switch
+    {
+      when(rowRoot.EditableAttribute.Action == enum(inq.meta:EditableAttribute.Action, SET))
+        $loop.{meta.path} = newValue;
+
+      when(rowRoot.EditableAttribute.Action == enum(inq.meta:EditableAttribute.Action, INCR))
+        $loop.{meta.path} = call adjust(newValue,
+                                        value = $this.vars.oldVals.{@name}.{meta.path},
+                                        rowRoot.EditableAttribute.Units);
+
+      when(rowRoot.EditableAttribute.Action == enum(inq.meta:EditableAttribute.Action, DECR))
+        $loop.{meta.path} = call adjust(newValue,
+                                        value = $this.vars.oldVals.{@name}.{meta.path},
+                                        rowRoot.EditableAttribute.Units,
+                                        sign = -1);
+    }
+  }
+}
+
+local function adjust(any newValue, any value, any Units, any sign)
+{
+  // If the user has left the units as null (after switching away
+  // from SET) then leave the the value as it is)
+  if (Units == null)
+    value;
+  else
+  {
+    if (Units == enum(inq.meta:EditableAttribute.Units, P))
+      any newValue = abs(value) * newValue / 100;
+
+    if (sign)
+      any newValue = newValue * sign;
+
+    // return
+    value + newValue;
+  }
+}
+
+local function oldSelected()
+{
+  if (@component.model.selectCount)
+    $this.bReset.properties.text = "Reset Selected";
+  else
+    $this.bReset.properties.text = "Reset All";
+}
+
+local function headerSelected()
+{
+  // Propagate selection to old and new tables
+  any i = @component.properties.indexSelection;
+
+  $this.newTable.properties.indexSelection = i;
+  $this.oldTable.properties.indexSelection = i;
+}
+
+local function renderBold(any value, any rowRoot)
+{
+  $this.styles.bold;
+}
+
+local function renderValue(any component,
+                           any row,
+                           any rowRoot,
+                           any value,
+                           any formatter)
+{
+  if (rowRoot.Field.IsEnum)
+    component.properties.text =
+      enumext(typeof=(rowRoot.meta.typedef, rowRoot.meta.field),
+              .value);  // value is an identifier (symbol)
+                        // .value is an expression ($stack.value)
+  else
+    component.properties.text = render(value, format=rowRoot.meta.formatter); // format=formatter);
+
+  // no style (so to speak)
+  null;
+}
+
+local function renderNewValue(any value, any rowRoot, any row, any column)
+{
+  any oldRoot = $this.vars.oldVals[row];
+  any atPath  = $this.vars.meta[column].path;
+
+  if (rowRoot.{atPath} != oldRoot.{atPath})
+    $this.styles.bold;
+  else
+    null;
+}
+
+local function findAllChanged()
+{
+  // Traverse the new values list and note indices of those rows
+  // that have changed.
+
+  // Return value
+  array changed;
+  foreach($this.vars.newVals)
+  {
+    any newRoot = $loop;
+    any row = @count;
+
+    foreach($this.vars.meta)
+    {
+      if (newRoot.{$loop.path} != $this.vars.oldVals[row].{$loop.path})
+      {
+        // NB make a new integer - don't store the reference
+        // to (outer) @count or we'll just have a list of numbers
+        // whose values are all equal to count(newVals)
+        int i = row;
+        changed + i;
+
+        // no point in continuing comparing fields for this row
+        break();
+      }
+    }
+  }
+
+  // return
+  changed;
+}
+
+local function closeEditor()
+{
+  if ($this.vars.cancelExpr)
+    xfunc($this.vars.cancelExpr);
+
+  send removeContext();
+}
+
+local function reset()
+{
+  if ($this.oldTable.model.selectCount)
+    foreach($this.oldTable.model.indexSelection)
+      call resetRow(row = $loop);
+  else
+  {
+    foreach($this.vars.newVals)
+    {
+      any newRoot = $loop;
+      any row = @count;
+
+      foreach($this.vars.meta)
+        newRoot.{$loop.path} = $this.vars.oldVals[row].{$loop.path};
+    }
+  }
+}
+
+local function resetRow(any row)
+{
+  any newRoot = $this.vars.newVals[row];
+  any oldRoot = $this.vars.oldVals[row];
+
+  foreach($this.vars.meta)
+    newRoot.{$loop.path} = oldRoot.{$loop.path};
+}
+
+local function resetCell()
+{
+  if (@event.row >= 0 && @event.column >= 0)
+  {
+    any newRoot = $this.vars.newVals[@event.row];
+    any oldRoot = $this.vars.oldVals[@event.row];
+    any atPath  = $this.vars.meta[@event.column].path;
+
+    newRoot.{atPath} = oldRoot.{atPath};
+  }
+}
+
+local function selectAllChanged()
+{
+  // It's the row header table that drives the selection across
+  // the three tables overall.
+  $this.oldTable.properties.rowHeader.properties.indexSelection = call findAllChanged();
+}
+
+local function dialogOK()
+{
+  xfunc($this.vars.okExpr, results = $this.vars.newVals);
+  send removeContext();
+}
+
+// Load client support for meta data
+
+exec("guiutil.inq");
+exec("metafuncs.inq");

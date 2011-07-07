@@ -1,0 +1,457 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * PetStore Example
+ *
+ * Browse items GUI
+ */
+
+package examples.petstore;
+
+local function createGUI()
+{
+  // Set this up as a shorthand for later use
+  any i18n = path($catalog.{$root.i18n});
+  
+  // Create a window
+  gWindow browseItems;
+  browseItems.properties.contextNode = true;
+  browseItems.properties.title = {i18n}.ps.title.BROWSE_ITEMS;
+  browseItems.properties.icon = $catalog.icons.items16;
+
+  // Menu Bar
+  browseItems.properties.menuBar = call createMenu(context=browseItems, i18n);
+
+  gTable itemTable;
+
+  any filterBar = call createFilterBar(context = browseItems, i18n);
+  gEvent(filterBar, call setupPriceListener(), event=(gContext));
+  
+  // Use a simple map for variables not bound to components
+  smap browseItems.svars;
+  
+  // Perform the layout.
+  // Notes:
+  //   1. Complex components like tables must know their context before
+  //      properties (like columns and modelRoot) can be set up so we
+  //      must place it into the Inq node space beneath the node (the
+  //      window) that defines the context before setting those up.
+  layout(., browseItems, "Geometry xy:vf filterBar
+                          itemTable
+                       "  );
+
+  call setupItemTable(context = browseItems,
+                      itemTable,
+                      i18n);
+
+  // Place in the node space
+  any $this.browseItems = browseItems;
+}
+
+local function createMenu(any context, any i18n)
+{
+  // Set up the menu bar
+  gMenuBar menuBar;
+
+  gMenu fileMenu;
+  fileMenu.properties.text={i18n}.ps.button.FILE;
+
+  // We can go to the New Order screen from My Orders
+  gMenuButton fileEdit;
+  fileEdit.properties.text={i18n}.ps.button.EDIT_ITEMS;
+  gEvent(fileEdit, call editItems());
+
+  // Close the window
+  gMenuButton fileClose;
+  fileClose.properties.text={i18n}.ps.button.CLOSE;
+  gEvent(fileClose, call menuClose());
+
+  // Layout the menu
+  layout(., context, menuBar,
+         "fileMenu
+          {
+            fileEdit
+            Separator
+            fileClose
+          }
+          ");
+
+  // Bind properties
+  gProperty(fileEdit, enabled, renderinfo($this.itemTable.model.selectCount));
+
+  // Return value
+  menuBar;
+}
+
+local function createFilterBar(any context, any i18n)
+{
+  // Create the data the filter bar components will operate on.
+  // This is an instance of Item.Filter
+  any context.vars.filter = new(Item.Filter);
+  
+  // Create a combo box whose contents are the available Category instances
+  any cbCategory = call categoryCombo(renderInfo    = renderinfo($this.vars.filter.Category, typedef=Category.Category),
+                                      modelRoot     = path($this.vars.categoryList),
+                                      anyComboValue = {i18n}.ps.general.ALL
+                                     );
+    
+  // Two text fields for the price range
+  gTextField tfMinPrice;
+  gTextField tfMaxPrice;
+  tfMinPrice.properties.renderInfo = renderinfo($this.vars.filter.MinPrice, typedef=Item.ListPrice, label={i18n}.ps.general.MIN_PRICE, editable=true);
+  tfMaxPrice.properties.renderInfo = renderinfo($this.vars.filter.MaxPrice, typedef=Item.ListPrice, label={i18n}.ps.general.MAX_PRICE, editable=true);
+  
+  call resetFilter(context.vars.filter);
+  
+  gButton bFilter;
+  bFilter.properties.text = {i18n}.ps.button.FILTER;
+  bFilter.properties.icon = $catalog.icons.query;
+
+  gButton bReset;
+  bReset.properties.text = {i18n}.ps.button.RESET;
+  bReset.properties.icon = $catalog.icons.reset;
+
+  // Something to lay out the filter bar components in
+  gBox filterBar;
+  
+  // We can only decorate components with things like captions and
+  // borders within the layout, so here we do filterBar { <contents> }
+  // The alternative would have been layout(,. context, filterBar, "..."); 
+  layout(., context,
+         "Caption tl {i18n}.ps.title.FILTER; Geometry xy:vf filterBar
+          {
+            Table  Gap 5 Columns cat=GRID_PREF, minp=GRID_PREF, maxp=GRID_PREF, reset=GRID_PREF, GRID_FILL, filter=GRID_PREF
+              Rows GRID_PREF;
+            {
+              Row 0
+              {
+                // A Caption is an alternative to using 'Label ...' in a
+                // separate Row as some other layouts do in the petstore
+                // example. In some ways this is perhaps a little more clumsy
+                // and because the Caption contributes to the size of the
+                // component and we need to use Align on the buttons to make
+                // them look right. On the other hand, the Caption and Component
+                // are all one thing together. You decide....
+                // The None keyword suppresses the default border that otherwise
+                // comes with a Caption.
+                Caption {i18n}.ps.general.CATEGORY; None cbCategory
+                Caption {i18n}.ps.general.MIN_PRICE; None tfMinPrice
+                Caption {i18n}.ps.general.MAX_PRICE; None tfMaxPrice
+                Align b bReset
+                ~
+                Align b bFilter
+              }
+            }
+          }
+          ");
+
+  gEvent(bFilter, call doFilter());
+  gEvent(bReset,  call resetFilter($this.vars.filter, reload = true));
+  
+  // Return the parent filter bar container
+  filterBar;
+}
+
+local function doFilter()
+{
+  // TODO look at using properties as arguments in other windows too
+  send filterItems($this.vars.filter,
+                   at = $this.itemTable.properties.modelRoot);
+}
+
+local function resetFilter(any filter, boolean reload)
+{
+  filter.Category = null;
+  filter.MinPrice = null;
+  filter.MaxPrice = null;
+  
+  if (reload)
+    send loadCategories(at = $this.cbCategory.properties.modelRoot);
+    
+}
+
+local function editItems()
+{
+  // Demonstrate the reusable AttributeEditor. It can accept either
+  // 1) data rendered in the table, using the table's metadata...  
+  array columns = ("itemstatus", "listprice");
+  // 2) ...or attributes not rendered by explicitly describing them
+  array renderers = (renderinfo(typedef=Item.Attr1));
+  
+  // Then presto - reuse at its finest...
+  call inq.gui.util:editAttrs(parent = $this,
+                              table = $this.itemTable,
+                              columns,
+                              renderers,
+                              title = $catalog.{$root.i18n}.ps.title.EDIT_ITEMS,
+                              keyri = renderinfo(typedef=Item.Item),
+                              okExpr = func f = call attrCb(results));
+}
+
+local function attrCb(any results)
+{
+  send updateItems(items = results,
+                   thing = path($this.Item));
+}
+
+local function menuClose()
+{
+  hide($this);
+}
+
+/**
+ * Creates a table to browse the items.
+ */
+local function setupItemTable(any context,
+                              any itemTable,
+                              any i18n)
+{
+  // Specify the columns to render. An ordered map is used, columns
+  // can later be referenced by their map key.
+  // All column definitions use a renderinfo. The simplest case just
+  // specifies the meta-data, which assumes a path of $this.<type>.<field>
+  // beneath the table's data root. 
+  omap columns;
+  any columns.itemid      = renderinfo(typedef=Item.Item);
+  any columns.Category    = renderinfo(typedef=Category.Name);
+  any columns.name        = renderinfo(typedef=Product.Name);
+  any columns.itemstatus  = renderinfo(typedef=Item.Status);
+  any columns.listprice   = renderinfo(typedef=Item.ListPrice);
+  // The lastprice cell will be rendered when either a row's
+  // ValueHelper.Count or Item.LastPrice changes. The value of
+  // the render expression is Item.LastPrice because that is the
+  // last expression in the block statement.
+  any columns.lastprice   = renderinfo({
+                                         $this.ValueHelper.Count;
+                                         $this.Item.LastPrice;
+                                       },
+                                       typedef=Item.LastPrice);
+  any columns.description = renderinfo(typedef=Product.Description);
+  any columns.inventory   = renderinfo(typedef=Inventory.Qty);
+  
+  itemTable.properties.columns = columns;
+  
+  // Establish a custom renderer component to display an icon
+  // and the rendered value as normal. Unfortunately, the standard
+  // label (which Inq creates internally), although capable of
+  // painting an icon and some text, cannot left-justify the
+  // text and right-justify the icon to give the desired effect.
+  // Therefore, use two labels and lay them out with the necessary
+  // constraints.
+  gLabel icon;
+  gLabel price;
+  price.properties.horizontalAlignment = GUI_RIGHT;
+    
+  // Create a box explicitly (instead of using Row{...}) as this
+  // becomes the renderer component for the column
+  gBox   lastPriceRenderer;
+  lastPriceRenderer.properties.axis = X_AXIS;
+  layout(., lastPriceRenderer, "Geometry xy:fv icon price");
+
+  // Make it the renderer component of the lastprice column
+  itemTable.properties.columns.lastprice.renderer.properties.component = lastPriceRenderer;
+
+  // Tell Inq which component the value should be set into...
+  itemTable.properties.columns.lastprice.renderer.properties.setValueToComponent = price;
+
+  // ...and apply a style function
+  itemTable.properties.columns.lastprice.renderer.properties.style = cfunc f = call renderLastPrice();
+  
+  // ---
+      
+  // Tell the table where in the node space the root node of its
+  // data will be. 
+  itemTable.properties.modelRoot = path($this.vars.itemList);
+  
+  // These properties dimension the table in terms of its rows
+  // and columns
+  itemTable.properties.visibleColumns = 0;  // wide enough for all columns
+  itemTable.properties.visibleRows    = 10; // tall enough for 10 rows
+
+  // Put stripes on the table rows
+  itemTable.properties.rowStyle = $catalog.guiFuncs.tableStripe;
+  
+  // Selection event. There is nothing specific to do but the
+  // File->Edit menu button's enabled property is bound to
+  // the selection model. Therefore cause model firing to connect
+  // the two
+  gEvent(itemTable, event=(gSelection), firemodel=true);
+}
+
+/**
+ * Pattern for creating a data-driven combo box.
+ * 1. Create the component
+ * 2. Set up the model internal (yielded value) and optional
+ *    external (displayed value)
+ * 3. If a value was provided for no selection then establish
+ *    it in the nullText property.
+ * 4. Establish the given modelRoot property.
+ * 5. If load is requested establish contextEstablished event handler.
+ *    This will fire when the combp box is laid out, at which time
+ *    server asked to load the data
+ */
+local function categoryCombo(any     renderInfo,
+                             any     modelRoot,
+                             string  anyComboValue,
+                             boolean load = true)
+{
+  gComboBox cbCategory;
+  
+  any model.internal               = renderinfo(typedef = Category.Category);
+  any model.external               = renderinfo(typedef = Category.Name);
+  cbCategory.properties.model      = model;
+  cbCategory.properties.renderInfo = renderInfo;
+  
+  cbCategory.properties.modelRoot = modelRoot;
+
+  if (anyComboValue)
+    cbCategory.properties.nullText = anyComboValue;
+
+  // Order the data
+  array order = ( path($loop.Category.Name) );
+  cbCategory.properties.modelSort = order;
+
+  // By default send to the server to acquire the data for the
+  // combo box list. This can only be done when the component
+  // is placed into the context
+  if (load)
+    gEvent(cbCategory, call categoryInContext(), event=(gContext));
+
+  // returns
+  cbCategory;
+}
+
+local function categoryInContext()
+{
+  send loadCategories(at = @component.properties.modelRoot);
+}
+
+local function setupPriceListener()
+{
+  // When in context, set up the listener used to start the animation of
+  // the last price cell. Create the timer used and associated data
+  timer t;
+  t.properties.period   = 500;     // timer runs every 1/2 second
+  t.properties.syncGui  = true;    // dispatches to GUI thread
+  t.properties.userInfo = set s;   // the set of rows being timed
+  t.properties.func = func f = {
+                                 //writeln($catalog.system.out, "\l" + .);
+                                 any userInfo = fromTimer.properties.userInfo;
+                                 // Decrement the counter in each rowRoot
+                                 // being flashed. If it has reached zero then
+                                 // remove it from the set.
+                                 foreach(userInfo)
+                                 {
+                                   if ($loop.ValueHelper.Count)
+                                     --$loop.ValueHelper.Count;
+                                   else
+                                     removeiter();
+                                 }
+                                 // If the userInfo set has no items
+                                 // left in it then stop the timer.
+                                 // Otherwise leave it running.
+                                 if (count(userInfo) == 0)
+                                 {
+                                   //writeln($catalog.system.out, "\l " + "stopping timer");
+                                   canceltimer(fromTimer);
+                                 }
+                                 
+                                 $this.svars.timerState = !$this.svars.timerState;
+                               };
+  // Leave the timer in the context for later access
+  any $this.svars.lastPriceTimer = t;
+  
+  // 1 or 0 whether the icon is on or off
+  int $this.svars.timerState;
+
+  // This listen specification will fire when an update event
+  // arises from within the table structure at Item.LastPrice.
+  // The '%' wild-cards a single element and consumes the node-set child.
+  // When the listener fires the function, encapsulating the current
+  // context, executes.
+  listen ($this,
+          func f = 
+          {
+            // The event id is available on the stack as @eventId.
+            // This is, in fact, a map containing TODO
+            //writeln($catalog.system.out, "\l" + .);
+            // Translate the path the event originated at into
+            // an array of the nodes it has passed through before
+            // being dispatched at $this. The 4th element is
+            // the row root.
+            any nodes = nodesof($this, @eventId.path);
+            any rowRoot = nodes[3];
+            
+            // Put a counter into the row
+            any rowRoot.ValueHelper = new(ValueHelper);
+            // The icon will flash 5 times. By using timerState we make
+            // all icons flash together. May be that is the best effect.
+            rowRoot.ValueHelper.Count = $this.svars.timerState + 10;
+            
+            // Put the rowRoot into the set of those currently being
+            // flashed by the timer. 
+            any userInfo = $this.svars.lastPriceTimer.properties.userInfo;
+            userInfo + rowRoot;
+            
+            // If this was the first entry then start the timer
+            if (count(userInfo) == 1)
+            {
+              //writeln($catalog.system.out, "\l " + "starting timer");
+              starttimer($this.svars.lastPriceTimer, 500);
+            }
+          },
+          event  = (update),
+          path   = $this.vars.itemList.%.Item,
+          fields = (LastPrice));
+}
+
+local function renderLastPrice(any component,
+                               any rowRoot)
+{
+  switch
+  {
+    when (rowRoot.Item.LastPriceMove == enum(LastPriceMove, UP))
+    {
+      any .style = $catalog.ps.styles.up;
+      any icon   = $catalog.icons.arrowup;
+    }
+    when (rowRoot.Item.LastPriceMove == enum(LastPriceMove, DOWN))
+    {
+      any .style = $catalog.ps.styles.down;
+      any icon   = $catalog.icons.arrowdown;
+    }
+    otherwise
+    {
+      any .style = $catalog.ps.styles.none;
+      any icon   = $catalog.icons.clear16;
+    }
+  }
+    
+  component.price.properties.style = .style;
+
+  if (rowRoot.ValueHelper.Count && $this.svars.timerState)
+    component.icon.properties.icon = icon;
+  else
+  {
+    // If we always put an icon in (instead of setting it to null)
+    // then the cell width must always include enough space for it.
+    component.icon.properties.icon   = $catalog.icons.clear16;
+  }
+  
+  // returns no style for Inq to apply - everything required is already done
+  null;
+}
+
+function showBrowseItems()
+{
+  if (!$this.browseItems)
+    call createGUI();
+
+  show($this.browseItems);
+}
+

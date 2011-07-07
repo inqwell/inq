@@ -1,0 +1,59 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * PetStore Example
+ *
+ * Account functionality.
+ */
+
+package examples.petstore;
+
+/**
+ * TODO document
+ */
+service initAccount()
+{
+  // read it and if found place in the node space
+  if (any Account = call getAccount())
+    add(Account, path($this.vars.Account));
+}
+
+/**
+ * TODO document
+ */
+service webGetAccount()
+{
+  call getAccount();
+}
+
+service saveMyAccount(any account, any ack)
+{
+  transaction
+  {
+    // Read the managed instance in the server
+    read(Account, account);
+    
+    // Assign it from the updated version received from the client.
+    Account = account;
+  }
+  
+  if (ack)
+    send updateOk(item = Account, ack);
+}
+
+function getAccount()
+{
+  // Make the pkey
+  any k = new(Account.pkey);
+  
+  // Initialise the (only) field
+  k.Account = $process.loginName;
+  
+  // read our Account returning any result
+  read(Account, k);
+}

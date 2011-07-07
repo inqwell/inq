@@ -1,0 +1,89 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/*
+ * $Archive:  $
+ * $Author: sanderst $
+ * $Revision: 1.5 $
+ * $Date: 2011-04-10 22:19:25 $
+ */
+
+/**
+ * SenderToQueue.inq
+ *
+ * Sends a number of messages to a named queue, to be read
+ * by SynchQueueExample.inq
+ */
+local function usage()
+{
+  writeln($catalog.system.err, "usage: \i:");
+  writeln($catalog.system.err, "  -name <qname>");
+  writeln($catalog.system.err, " [-num  <number of msgs>]");
+  exit(1);
+}
+
+if (!$catalog.argsMap.name)
+  call usage();
+
+int msgCount = $catalog.argsMap.num ? $catalog.argsMap.num : 10;
+
+// Get the connection factory. Inq has no JNDI support yet so
+// instead we call the configurator (which could do JNDI if it
+// wanted to). The default configurator assumes the Sun Glassfish
+// JMS implementation is available (and the broker is started)
+any connFactory = callmethod("getJMSConnectionFactory", class="com.inqwell.any.jms.JMSHelper", $catalog.argsMap);
+writeln($catalog.system.out, connFactory);
+
+// Create a connection
+any connection = mqcreateconnection(connFactory);
+
+// Create a session from the connection:
+//   auto-acknowledge mode
+//   not transacted
+any session = mqcreatesession(connection, false, AUTO_ACKNOWLEDGE);
+
+// We are creating the queue (as opposed to looking it up in an
+// object store of some sort)
+any queue = mqcreatequeue(session, $catalog.argsMap.name);
+writeln($catalog.system.out, queue);
+
+// Create a message producer against the queue. The
+// queue is optional. We could create a producer and
+// associate it with any number of destinations like
+// this:
+//   queue.properties.producer = producer;
+// If we do that then we can specify the queue (or topic)
+// in the mqsend usage. Otherwise, we specify the
+// producer in mqsend, like in this example.
+any producer = mqcreateproducer(session, queue);
+
+// Create a text message
+//any txtmsg = mqcreatetextmessage(session, "Hello, world");
+any txtmsg = mqcreatetextmessage(session);
+
+int counter = 0;
+for (int counter = 0; counter < msgCount; counter++)
+//while (counter++ < msgCount)
+{
+  // Set the text
+  any txt = "Hello, world " + counter;
+  writeln($catalog.system.out, "Sending: " + txt);
+  txtmsg.properties.text = txt;
+
+  // Send it
+  mqsend(producer, txtmsg);
+}
+
+// Send an empty control message
+any ctlmsg = mqcreatemessage(session);
+mqsend(producer, ctlmsg);
+
+mqclose(connection);
+
+

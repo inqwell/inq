@@ -1,0 +1,66 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+// Date examples
+
+date date1;
+date date2;
+
+
+// The datepart function. Returns an integer whose value
+// is the specified part of a date. These are all the
+// date parts
+writeln ($catalog.system.out, "Day of week: " + datepart(DAY_OF_WEEK, date1));
+writeln ($catalog.system.out, "Week of year: " + datepart(WEEK_OF_YEAR, date1));
+writeln ($catalog.system.out, "Week of month: " + datepart(WEEK_OF_MONTH, date1));
+writeln ($catalog.system.out, "Day of month: " + datepart(DAY_OF_MONTH, date1));
+writeln ($catalog.system.out, "Day of week in month: " + datepart(DAY_OF_WEEK_IN_MONTH, date1));
+writeln ($catalog.system.out, "Day of year: " + datepart(DAY_OF_YEAR, date1));
+writeln ($catalog.system.out, "Hour of day: " + datepart(HOUR_OF_DAY, date1));
+writeln ($catalog.system.out, "Year: " + datepart(YEAR, date1));
+writeln ($catalog.system.out, "Month: " + datepart(MONTH, date1));
+writeln ($catalog.system.out, "Day: " + datepart(DAY, date1));
+writeln ($catalog.system.out, "Hour: " + datepart(HOUR, date1));
+writeln ($catalog.system.out, "Minute: " + datepart(MINUTE, date1));
+writeln ($catalog.system.out, "Second: " + datepart(SECOND, date1));
+writeln ($catalog.system.out, "Millisecond: " + datepart(MILLISECOND, date1));
+
+// You can add (or subtract using negative values) specified units
+// to a date, for example:
+writeln ($catalog.system.out, dateadd(DAY_OF_YEAR, 2, date1));
+
+date2 = dateadd(DAY_OF_YEAR, 2, date1);
+
+// Determine the difference between two dates, in the specified
+// units. Computes date2 - date1. Crossing the unit boundary is
+// the difference criteria eg 12:01 - 11:56 == 1.
+writeln ($catalog.system.out, datediff(DAY_OF_YEAR, date1, date2));
+
+date now;
+
+date then = "1 Jan 2000";
+
+writeln($catalog.system.out, "There are " + datediff(DAY, then, now) +
+                            " days between " + then + " and " + now);
+
+
+// Truncation. Truncate a date to the specified unit
+writeln ($catalog.system.out, "To the current hour it is " + datetrunc(HOUR, now));
+
+// The dateset function takes various forms
+// 1. Set a specific part of a date to the given value
+writeln ($catalog.system.out, "The 59th minute of the current time is " + dateset(MINUTE, now, 59));
+
+// 2. Set 5 [or 6] fields YEAR, MONTH, DAY_OF_MONTH, HOUR, MINUTE, [and SECOND]
+// If any value is null the field is left unchanged
+writeln ($catalog.system.out, "Back To The Future: " + dateset(now, 2005, 11, 25, null, null, null));
+
+// The datepartmax function
+// Returns the maximum value a datepart could have for the specified date
+writeln ($catalog.system.out, "The last day of the current month is " + datepartmax(DAY_OF_MONTH, now));

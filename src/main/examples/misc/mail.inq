@@ -1,0 +1,56 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+function doMail(string attachMe, any to, any smtp)
+{
+  hmap mail;
+
+  any    mail.to = to;  // recipients list - an array from the command line
+  string mail.subject  = "Inq Test Mail";
+  string mail.attachment[@last] = attachMe;
+  //string mail.smtphost     = "localhost";
+  string mail.smtphost     = smtp;
+  string mail.from     = "do-not-reply@someone.com";
+  any    mail.debug    = true;
+  string mail.body     = "Hello
+
+This mail has been sent to you by the attached Inq script.
+
+Please do not reply to this automatic mailing.
+
+Kind regards
+The Inq team";
+
+
+
+  if (!sendmail(mail))
+  {
+    writeln($catalog.system.out, "There was some problem with your mail");
+    writeln($catalog.system.out, mail.error);
+  }
+}
+
+local function usage()
+{
+  writeln($catalog.system.err, "usage: \i -to <recipients> -smtp <smtp-host>");
+  exit(1);
+}
+
+//writeln($catalog.system.out, .);
+//writeln($catalog.system.out, args);
+//writeln($catalog.system.out, count(args));
+//writeln($catalog.system.out, argsMap);
+if (!argsMap.to || !argsMap.smtp)
+  call usage();
+
+//writeln($catalog.system.out, argsMap.arrays.to);
+
+// Send this script to the listed recipients
+call doMail(attachMe = args[0], argsMap.arrays.to, argsMap.smtp);
+

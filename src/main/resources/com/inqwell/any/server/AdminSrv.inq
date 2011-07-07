@@ -1,0 +1,182 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * Inqwell Server - Admin Services
+ *
+ * Services to administer the Inq server
+ *
+ */
+
+package system.server;
+
+import inq.meta as META;
+
+function loadPackages(string setName = "list")
+{
+  hmap nodeSet;
+
+	// call the DB
+  read (META:Package, ., keyname = "All", target = nodeSet, setname = setName);
+
+  nodeSet;
+}
+
+function logoutSession(long delay = 30000, string message)
+{
+  // Send a logout notification to the client
+  send system.client:logoutRequest(@context = "$root.login.login",
+                                   delay,
+                                   message);
+}
+
+function adminMessage(string message)
+{
+  // Send a admin message to the client
+  send system.client:logoutRequest(@context = "$root.login.login",
+                                   message);
+}
+
+service Login(string loginName, string passwd, string .package)
+{
+  // Validate the password against the admin password file
+  // Connect the client if OK. Otherwise decline.
+
+  if (loginName == "admin")
+  {
+    // TODO: Temporary - if logging in as admin assume lenguage is en.
+    // It is common-place for packages to place their language setting
+    // at $root.i18n
+    any $root.i18n = "en";
+
+    string   pwdfile = "file:///" +  $properties.inq_home + "/etc/adminpasswd";
+    ioPrint stream;
+    if (open(stream, pwdfile, OPEN_READ))
+    {
+      any curpwd = readstream(stream);
+      close(stream);
+      if (passwd == curpwd)
+        call system:LoginOK(url="classpath:///com/inqwell/any/tools/AdminGUI.inq",
+                            privLevel=0);
+      else
+        call system:LoginDenied(reason="Invalid password");
+    }
+    else
+    {
+      call system:LoginDenied(reason="Cannot read password file " + pwdfile);
+    }
+  }
+  else
+    call system:LoginDenied(reason="Login denied");
+}
+
+service Logout()
+{
+}
+
+service loadPackages(string setName = "vars.pkgList")
+{
+  any nodeSet = call loadPackages();
+
+  // plug it under the path specified
+  add(remove(nodeSet.list), path($this.{setName}));
+}
+
+service loadClient(any obj)
+{
+  writeln($catalog.system.out, "Package is ", obj);
+  if (read(META:Package, obj))
+  {
+    writeln($catalog.system.out, "Read ", Package);
+    ioPrint src;
+    if (open(src, Package.ClientURL, OPEN_READ))
+    {
+      writeln($catalog.system.out, "Opened ", Package.ClientURL);
+      ioPrint srcout;
+      string srctxt;
+      open(srcout, "string://srctxt", OPEN_WRITE);
+      // Please Note: blank lines convert to boolean false, hence use isnull()
+      while(!isnull(any l = readstream(src)))
+        writeln(srcout, l);
+
+      close(src);
+
+      // If there is an initial statement then append it
+      if (Package.InitStmt)
+        writeln(srcout, Package.InitStmt);
+
+      close(srcout);
+
+      //writeln($catalog.system.out, "SRCTEXT", srctxt);
+
+      // Run in client. Specifying a service context of null causes the client service to
+      // execute at $root.
+      send system:RunInq(source="string://srctxt", srctxt, __baseURL=Package.ClientURL, sContext=null);
+    }
+    //else throw
+  }
+  //else throw
+}
+
+service changeAdminPwd(string oldPwd, string newPwd, func okCallback)
+{
+  // Is the path ok? Initialise a file with appropriate URL syntax to see.
+  file f = "file:///" +  $properties.inq_home + "/etc/adminpasswd";
+  file p = f.properties.parentFile;
+
+  if (!p.properties.exists)
+    mkdirs(p);
+
+  // There should be a password but if there isn't then don't worry. If there
+  // is then must match the given oldPwd
+  ioPrint pwdStream;
+  if (open(pwdStream, f, OPEN_READ))
+  {
+    any curpwd = readstream(pwdStream);
+    close(pwdStream);
+    if (!isnull(curpwd) && oldPwd != curpwd)
+    throw ("Password Change Error",
+           "Incorrect password",
+           func fn = call generalError());
+  }
+
+  // Try to delete the file first in case its read-only (which we set it to if we can)
+  deletefile(f);
+
+  // Rewrite file with new pwd
+  open(pwdStream, f, OPEN_WRITE);
+  writeln(pwdStream, newPwd);
+  close(pwdStream);
+
+  // Set to read-only
+  f.properties.readOnly = true;
+
+  // Send positive ack if there is a callback fn
+	if (okCallback)
+	  send updateOk(okCallback);
+}
+
+service runGC()
+{
+  garbagecollect();
+  send memoryStats(mstats=$catalog.system.vm);
+}
+
+service startMemoryStats()
+{
+  if ($this.statsTimer)
+    canceltimer($this.statsTimer);
+  any $this.statsTimer = createtimer(func f = { send memoryStats(mstats=$catalog.system.vm); },
+                                     0,
+                                     5000);
+}
+
+service stopMemoryStats()
+{
+  if ($this.statsTimer)
+    canceltimer($this.statsTimer);
+}

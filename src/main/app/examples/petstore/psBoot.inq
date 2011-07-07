@@ -1,0 +1,79 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * PetStore Example
+ *
+ * Server boot file.
+ *
+ * Loads the petstore application into an Inq server environment
+ */
+
+package examples.petstore;
+
+// Set up the logger
+any $catalog.ps.logger = getlogger("\p");
+
+// i18n
+#include <i18n.inq>
+
+// Sql resource
+#include <{db}/psIo.inq>
+
+// Common types
+#include <defs.inq>
+
+// Application types
+#include <Account.inq>
+#include <Order.inq>
+#include <LineItem.inq>
+#include <OrderStatus.inq>
+#include <Category.inq>
+#include <Product.inq>
+#include <Item.inq>
+#include <Supplier.inq>
+#include <Inventory.inq>
+#include <Sequence.inq>
+#include <ReportHelper.inq>
+#include <ValueHelper.inq>
+
+// Login support
+#include <psLogin.inq>
+
+// Utility functionality
+#include <allocSeq.inq>
+
+// Order functionality
+#include <psOrders.inq>
+
+// Account functionality
+#include <psAccount.inq>
+
+// Item functionality
+#include <psItem.inq>
+
+// Inventory functionality
+#include <psInventory.inq>
+
+// Category functionality
+#include <psCategory.inq>
+
+// Reports
+#include <psReports.inq>
+
+// Regulatory reporting (must come before psProcessOrders.inq
+// because immediate script there references initSendPrices)
+#include <psRegulatory.inq>
+
+// Spoof autonomous Order processing
+#include <psProcessOrders.inq>
+
+// Number of connected users variable. See psLogin.inq
+int $catalog.ps.vars.numUsers = 0;
+
+// Load the file transfer package
+#include <../../filexfer/fileXferBoot.inq>

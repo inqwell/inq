@@ -1,0 +1,125 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+
+/**
+* TODO:
+* A dialog supporting selection of a channel from a
+* presented list.  The list to be used is supplied
+* as an argument to the pop-up expression and must
+* be a string representing a path from the current
+* context that resolves to a node-set of ChatWith objects.
+* The context of the calling expression and that of the
+* instance of the dialog used must be the same or the list
+* will not be resolved.
+*/
+
+package examples.chat;
+
+local function createJoinChannelDialog(any parent)
+{
+  gDialog(parent) joinChannel;
+  gEvent(joinChannel, call joinChannelOK(), event=(gDialogok));
+
+  gLabel    message;
+  gComboBox joinList;
+  gButton   ok;
+  gButton   cancel;
+
+  gEvent(ok, gDialog=gDialogok);
+  gEvent(ok, gDialog=gDialogcancel, event=(gKpressed), gModify=(keycode=VK_ESCAPE));
+  gEvent(cancel, gDialog=gDialogcancel);
+  ok.properties.text="OK";
+  cancel.properties.text="Cancel";
+
+  set defaultable = (ok, cancel);
+  joinChannel.properties.defaultableButtons = defaultable;
+
+  layout ($stack, joinChannel, "Row
+                                {
+                                  Margin d:10 message Geometry xy:vf joinList
+                                }
+                                Margin d:10 Geometry xy:vf Row
+                                {
+                                   <> Geometry d:f ok ~~~~ Geometry d:f cancel <>
+                                }");
+
+  add(joinChannel, path($this.joinChannel));
+
+  // The func is currently null and it, together with
+  // the context at that time, are established when okExpr is set
+  // on raising the dialog.
+  func joinChannel.vars.okExpr;
+
+  // The combo box will update this variable with the internal
+  // list item when the selection changes.
+  // TODO: Can remove as we are passing the selected item
+  string joinChannel.vars.name;
+  joinList.properties.renderInfo = renderinfo($this.joinChannel.vars.name);
+
+  // We use this to create the correct path in the OK callback.
+  string joinChannel.vars.type;
+
+  // and this is where the list model is
+  //any listmodel.internal = renderinfo(typedef=OnLine.OnLine);
+
+  // TODO: The lists are sorted in initResponse. Do we need to do this?
+  //joinList.properties.model = listmodel;
+  //array sorting = (path($loop.ChatWith.name));
+  //joinList.properties.modelSort = sorting;
+}
+
+function joinDialog(any     parent,
+                    boolean isPublic,
+                    any     modelRootPath,
+                    func    okExpr,
+                    string  title = "Join Channel")
+{
+  if (!$this.joinChannel)
+    call createJoinChannelDialog(parent);
+
+  if (isPublic)
+  {
+    // label icon/text for public
+    $this.joinChannel.message.properties.text="Join Public:";
+
+    // The list model is
+    any listmodel.internal = renderinfo(typedef=ChatChannel.ChatChannel);
+    $this.joinChannel.joinList.properties.model = listmodel;
+    $this.joinChannel.vars.type = "ChatChannel";
+  }
+  else
+  {
+    $this.joinChannel.message.properties.text="New Private:";
+
+    // The list model is
+    any listmodel.internal = renderinfo(typedef=OnLine.OnLine);
+    $this.joinChannel.joinList.properties.model = listmodel;
+    $this.joinChannel.vars.type = "OnLine";
+  }
+
+  // Set up the model root from the main chat context node,
+  // which is also the context node of this dialog.
+  $this.joinChannel.joinList.properties.modelRoot = modelRootPath;
+
+  $this.joinChannel.properties.title = title;
+  $this.joinChannel.vars.okExpr      = okExpr;
+  $this.joinChannel.properties.title = title;
+  $this.joinChannel.properties.defaultButton = $this.joinChannel.ok;
+
+  show($this.joinChannel);
+}
+
+local function joinChannelOK()
+{
+  // This dialog gets used in two modes with lists of two
+  // different typedefs: OnLine and ChatChannel. At this
+  // point it doesn't matter which one we are dealing with, just
+  // pass the selected item.
+  xfunc($this.joinChannel.vars.okExpr,
+        item=@component.joinList.model.selection.{@component.vars.type});
+}

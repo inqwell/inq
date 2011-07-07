@@ -1,0 +1,35 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+local function itemTag(any node,
+                       any parent,
+                       any nodeName,
+                       any ordinal,
+                       any content,
+                       any last,    // always false - SAX parser does not know
+                       any descend,
+                       any attributes)
+{
+  nodeName + ordinal;
+}
+
+
+ioXMLX strm;
+
+// Default maps within the structure as ordered maps
+strm.properties.seed = omap m;
+
+object p = path($this*items.item);
+any tagFuncs.{p} = cfunc f = call itemTag();
+strm.properties.tagFuncs = tagFuncs;
+
+open(strm, "orderreport.xml", OPEN_READ);
+any i = readstream(strm);
+close(strm);
+writeln($catalog.system.out, i);

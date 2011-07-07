@@ -1,0 +1,149 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * PROVISIONAL
+ *
+ * A dialog to prompt the user for a free-format
+ * piece of simple text.
+ *
+ * Although text fields do update their Inq model
+ * when they lose focus or fire the action event,
+ * the model binding (vars.text-entry, see below)
+ * is not used to retrieve the text entered by the
+ * user.  We want closer control over whether the
+ * dialog should call back OK when it is compulsory
+ * to enter text, so we use the document event
+ * on the text field to track changes and retrieve
+ * the output text.  We still use the model
+ * binding to assign the default value, if one is
+ * provided but we don't use the Inq facility of
+ * designating component events to be dialog OK
+ */
+
+package inq.gui.util;
+
+function createTextPromptDialog(string dialogName = "textPrompt", any parent)
+{
+	gDialog(parent) {dialogName};
+  any topLevel = {dialogName};
+
+  topLevel.properties.hideOnOk     = true;
+  topLevel.properties.hideOnCancel = true;
+  topLevel.properties.contextNode  = true;
+
+  gLabel     message;
+  gButton    ok;
+  gButton    cancel;
+  gTextField textEntry;
+
+  textEntry.properties.columns = 10;
+
+  topLevel.properties.defaultButton = ok;
+
+  set defaultable = (ok, cancel);
+  topLevel.properties.defaultableButtons = defaultable;
+  message.properties.text="Prompt:";
+  ok.properties.text="OK";
+  cancel.properties.text="Cancel";
+
+  //gEvent(ok, gDialog=gDialogcancel, event=(gKpressed), gModify=(keycode=VK_ESCAPE));
+  gEvent(ok, call textPromptOK());
+  //gEvent(textEntry, gDialog=gDialogcancel, event=(gKpressed), gModify=(keycode=VK_ESCAPE));
+  gEvent(cancel, gDialog=gDialogcancel);
+
+  gEvent(topLevel,  call textPromptOK(), event=(gDialogok));
+  gEvent(topLevel,  call dialogCancel(), event=(gDialogcancel));
+	gEvent(textEntry, call checkOk(),      event=(gDocchange, gDocinsert, gDocremove));
+
+  layout ($stack, topLevel, "Row
+                             {
+                               Margin d:10 message Geometry xy:vf textEntry
+                             }
+                             Margin d:10 Geometry xy:vf Row
+                             {
+                               <> Geometry d:f ok ~~~~ Geometry d:f cancel <>
+                             }");
+
+  boolean topLevel.vars.canOk;
+  gProperty (topLevel.ok, enabled, renderinfo($this.vars.canOk));
+
+  // These are null funcs at present (because they have not been initialised yet)
+  // They may be set up by arguments to the global function textPrompt()
+  func topLevel.vars.okExpr;
+  func topLevel.vars.cancelExpr;
+
+  add(topLevel, path($this.{dialogName}));
+  topLevel;
+
+}
+
+local function checkOk()
+{
+  // Return true if all the text prompt has something
+  // in it, otherwise false.
+
+  // The document within the gui control must be converted
+  // to strings before we test
+  string textEntry = $this.textEntry.model.root;
+
+  $this.vars.canOk = textEntry;
+}
+
+/**
+ * This service is invoked either by the OK button or the
+ * text field action event.  The OK button is only enabled
+ * when it is valid to click OK but the text field can raise
+ * the action event even on empty so call checkOk anyway.
+ */
+local function textPromptOK()
+{
+  if (call checkOk())
+  {
+    hide($this);
+    xfunc($this.vars.okExpr, name=$this.textEntry.model.root);
+  }
+}
+
+
+local function dialogCancel()
+{
+	xfunc($this.vars.cancelExpr);
+}
+
+/**
+ * Raises the specified text prompt dialog or assumes $root.textPrompt if none.
+ */
+function textPrompt(any    dialog,
+                    string prompt        = "Text Prompt:",
+                    string title         = "Text",
+                    string okText        = "OK",
+                    string cancelText    = "Cancel",
+                    func   okExpr,
+                    func   cancelExpr,
+                    string defaultText)
+{
+	any dialog = dialog ? dialog : $root.textPrompt;
+
+	dialog.ok.properties.text      = okText;
+	dialog.cancel.properties.text  = cancelText;
+	dialog.message.properties.text = prompt;
+	dialog.properties.title        = title;
+
+	dialog.vars.okExpr     = okExpr;
+	dialog.vars.cancelExpr = cancelExpr;
+
+	if (defaultText)
+	  dialog.textEntry.properties.text = defaultText;
+
+  setfocus(dialog.textEntry);
+	show(dialog);
+}
+
+//call createTextPromptDialog();
+//show (call createTextPromptDialog());
+//call textPrompt(prompt="Hello");

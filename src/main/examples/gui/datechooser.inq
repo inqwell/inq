@@ -1,0 +1,151 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+// The date chooser
+//   JCalendar Copyright Kai Toedter available under LGPL
+//    (see http://www.toedter.com/en/jcalendar/index.html)
+// Here is what you can do with it
+
+// Event callback for the test sample date chooser
+function dateChanged()
+{
+  writeln($catalog.system.out, @component.renderedValue);
+}
+
+// An example date validator used by the date chooser.
+// Exclude Mondays, otherwise allow even numbered days.
+//    vDate     - the date to validate
+//    vCalendar - a calendar that can be used as the optional
+//                argument to Inq's various date manipulation
+//                functions
+//    value     - the value the component itself is rendering
+//    formatter - the formatter associated with this component's
+//                renderInfo property
+//    component - the component
+function verifier(any vDate,
+                  any vCalendar,
+                  any value,
+                  any formatter,
+                  any component)
+{
+  if (datepart(DAY_OF_WEEK, vDate, calendar=vCalendar) == MONDAY)
+    false;
+  else
+    datepart(DAY_OF_MONTH, vDate, calendar=vCalendar) % 2 == 0;
+}
+
+//
+// Create the test gui
+//
+
+gWindow win;
+win.properties.contextNode = true;
+win.properties.title = "Date Chooser";
+win.properties.defaultCloseOperation = EXIT_ON_CLOSE;
+
+// The component under test
+gDateChooser dcTest;
+date win.vars.aDate;
+dcTest.properties.renderInfo = renderinfo($this.vars.aDate);
+gEvent(dcTest, call dateChanged());
+
+// Variables for the minimum and maximum selectable dates. Rendered
+// by date choosers setup to fire their model and bound to the
+// test component's min/maxSelectableDate properties
+any win.vars.minSelectableDate = dateadd(WEEK_OF_YEAR, -1, getdate());
+any win.vars.maxSelectableDate = dateadd(WEEK_OF_YEAR, 1, getdate());
+gDateChooser dcMin;
+gDateChooser dcMax;
+dcMin.properties.renderInfo = renderinfo($this.vars.minSelectableDate, label="Min Selectable Date");
+dcMax.properties.renderInfo = renderinfo($this.vars.maxSelectableDate, label="Max Selectable Date");
+gEvent(dcMin, firemodel=true);
+gEvent(dcMax, firemodel=true);
+
+// Establish a dateVerifier - see function "verifier" above
+cfunc win.vars.dateVerifier;
+gCheck cVerifier;
+cVerifier.properties.checkedValue = func f = call verifier();
+cVerifier.properties.uncheckedValue = null;
+cVerifier.properties.renderInfo = renderinfo($this.vars.dateVerifier, label="Use Date Verifier");
+gEvent(cVerifier, firemodel=true);
+
+// Toggle the enabled property
+boolean win.vars.enabled = true;
+gCheck cEnabled;
+cEnabled.properties.renderInfo = renderinfo($this.vars.enabled, label="Enabled");
+gEvent(cEnabled, firemodel=true);
+
+// Toggle the selectOnFocus property
+boolean win.vars.selectOnFocus = true;
+gCheck cSelectOnFocus;
+cSelectOnFocus.properties.renderInfo = renderinfo($this.vars.selectOnFocus, label="Select On Focus");
+gEvent(cSelectOnFocus, firemodel=true);
+
+// Set the text displayed when the date chooser's date is null
+string win.vars.nullText;
+gTextField tfNullText;
+tfNullText.properties.renderInfo = renderinfo($this.vars.nullText, label="Null Text", editable=true);
+gEvent(tfNullText, firemodel=true);
+
+layout(., win, "Table Columns labels=GRID_PREF, 5, comps=GRID_FILL
+                        Gap 3
+                        Rows GRID_PREF,
+                             GRID_PREF,
+                             GRID_PREF,
+                             GRID_PREF,
+                             GRID_PREF,
+                             GRID_PREF,
+                             GRID_PREF;
+                {
+                  Cell labels 0 comps 0 Caption \"Test Component\"; dcTest
+                  Column labels
+                  {
+                    ~ // step over test component row
+                    ~ // Label cEnabled
+                    ~ // Label cSelectOnFocus  Note: label is set as the component's text...
+                    ~ // Label cVerifier
+                    Label dcMin
+                    Label dcMax
+                    Label tfNullText
+                  }
+                  Column comps
+                  {
+                    ~ // step over test component row
+                    cEnabled
+                    cSelectOnFocus
+                    cVerifier
+                    dcMin
+                    dcMax
+                    tfNullText
+                  }
+                }");
+
+
+// Bind the various properties of the component under test
+// to the model data fired by the components controlling it
+gProperty(dcTest, enabled, renderinfo($this.vars.enabled));
+gProperty(dcTest, selectOnFocus, renderinfo($this.vars.selectOnFocus));
+gProperty(dcTest, minSelectableDate, renderinfo($this.vars.minSelectableDate));
+gProperty(dcTest, maxSelectableDate, renderinfo($this.vars.maxSelectableDate));
+gProperty(dcTest, nullText, renderinfo($this.vars.nullText));
+gProperty(dcTest, dateVerifier, renderinfo($this.vars.dateVerifier));
+
+any $this.win = win;
+
+// To set the date to Inq null use Ctrl-n in the component
+// To set it to today's date use Ctrl-t
+// When null the component displays the nullText property
+//d.properties.nullText = "NO DATE";
+
+win.vars.aDate = getdate();
+writeln($catalog.system.out, win.vars.aDate);
+//win.vars.aDate = null;
+
+show(win);
+

@@ -1,0 +1,141 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+
+/**
+ * Inq - General purpose progress dialog PROVISIONAL
+ */
+
+package inq.gui.util;
+
+function createProgressDialog(string dialogName = "progressDialog", object parent)
+{
+  if ($this.{dialogName})
+    return();
+
+
+	gDialog(parent) {dialogName};
+	// alias for convenience
+  any topLevel = {dialogName};
+
+  topLevel.properties.hideOnOk     = true;
+  topLevel.properties.hideOnCancel = true;
+  topLevel.properties.contextNode  = true;
+  topLevel.properties.resizable    = true;
+
+  func topLevel.vars.stopExpr;
+
+  // Declare dialog contents
+	gProgressBar pbProgress;
+  gButton      bStop;
+  // Set up the button's default (action) event to be
+  // the dialogOK  event
+  gEvent (bStop, gDialog=gDialogok);
+  bStop.properties.text="Stop";   // i18n
+  topLevel.properties.defaultButton = bStop;
+
+  gEvent(topLevel, call dialogOK(),     event=(gDialogok));
+
+	layout(., topLevel, "Margin d:5 Geometry xy:vf pbProgress
+	                     Margin d:5 Row
+	                     {
+	                     	 <>
+						             Geometry d:f bStop
+						             <>
+						           }");
+  add(topLevel, path($this.{dialogName}));
+  topLevel;
+}
+
+/**
+ * Show a progress dialog and initialise with the given parameters.
+ * @param dialog the dialog instance to use. If not passed then the
+ * dialog at $root.progressDialog is assumed to exist.
+ * @param stopText The text for the stop button. Defaults to "Stop".  If null
+ * the stop button is not visible.
+ * @param lowerBound the lower bound of the progress range. Defaults to zero.
+ * The lowerBound is also set as the current value progress.
+ * @param upperBound the upper bound of the progress range. Defaults to 100
+ * @paintProgress whether to paint a progress string. Defaults to true. The
+ * progress string can be supplied to the setProgressDialog function.
+ * @param stopExpr Application callback on the stop button.
+ */
+function progressDialog(object  dialog,
+                        string  progressTitle = "Message",
+                        string  stopText      = "Stop",
+                        int     lowerBound    = 0,
+                        int     upperBound    = 100,
+                        boolean paintProgress = true,
+                        func    stopExpr)
+{
+	any dialog = dialog ? dialog : $root.progressDialog;
+
+	dialog.bStop.properties.text         = stopText;
+	dialog.bStop.properties.visible      = !isnull(stopText);
+	dialog.bStop.properties.enabled      = !isnull(stopExpr);
+	dialog.properties.title              = progressTitle;
+
+	// Initialikse the progress bar
+	dialog.pbProgress.properties.minimum       = lowerBound;
+	dialog.pbProgress.properties.maximum       = upperBound;
+	dialog.pbProgress.properties.value         = lowerBound;
+	dialog.pbProgress.properties.stringPainted = paintProgress;
+
+	dialog.vars.stopExpr = stopExpr;
+
+
+	show(dialog, true);
+}
+
+/**
+ * Hide the specified progress dialog.
+ * @param dialog The dialog to hide, or $root.progressDialog is not specified.
+ */
+function hideProgressDialog(object dialog)
+{
+	any dialog = dialog ? dialog : $root.progressDialog;
+	hide(dialog);
+}
+
+/**
+ * Set the current level of progress.
+ * This function assumes that the specified progress
+ * dialog (or $root.progressDialog if none) has been raised by progressDialog().
+ * The progress value is set, together with an optional string.
+ * @param dialog The dialog to set, or $root.progressDialog is not specified.
+ * @param progress The progress value which should be between the lower and
+ * upper bounds established when progressDialog() was called.
+ * @param progressText An optional progress string to paint.
+ * @enableStop Whether to enable the stop button. Defaults to false.
+ */
+function setProgressDialog(object  dialog,
+                           int     progress,
+                           string  progressText,
+                           boolean enableStop)
+{
+	any dialog = dialog ? dialog : $root.progressDialog;
+
+	dialog.pbProgress.properties.value  = progress;
+
+	if (progressText)
+	  dialog.pbProgress.properties.string = progressText;
+
+	dialog.bStop.properties.enabled = enableStop;
+}
+
+local function dialogOK()
+{
+	writeln($catalog.system.out, "STOPPED");
+	xfunc($this.vars.stopExpr);
+	setnull($this.vars.stopExpr);
+}
+
+// Create a dialog with the default name. Assumes $root is the context!
+//call createMessageDialog();
+
+
+// show(call createMessageDialog());

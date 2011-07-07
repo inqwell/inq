@@ -1,0 +1,25 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+function somefunc(int p1 = 3, any p2)
+{
+  // p1 is a value parameter
+  // p2 is a reference parameter
+  $stack.p1 = -999;
+  $stack.p2 = -123;
+}
+
+int p.q = 18;
+int p.r = 27;
+
+writeln($catalog.system.out, "before : p.q = " + p.q + " p.r = " + p.r);
+
+call somefunc(p1=p.q, p2=p.r); // p1 will be unaffected, p2 will change
+
+writeln($catalog.system.out, "after  : p.q = " + p.q + " p.r = " + p.r);

@@ -1,0 +1,22 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * Inqwell Server Validate Environment
+ *
+ * Check the server has an appropriate environment and terminate if not.
+ *
+ */
+
+package system.server;
+
+// Check the inq_home system property is defined.
+if (!$properties.inq_home)
+{
+  writeln($catalog.system.err, "inq.home system property undefined");
+  exit();
+}

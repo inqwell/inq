@@ -1,0 +1,17 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+
+// Server-side boot script for the example chat system
+
+package examples.chat;
+
+#include <OnLine.inq>
+#include <ChatChannel.inq>
+#include <ChannelParticipant.inq>
+#include <BackChat.inq>
+#include <chatserv.inq>

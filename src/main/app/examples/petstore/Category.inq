@@ -1,0 +1,82 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * PetStore Example
+ *
+ * Category type
+ */
+
+package examples.petstore;
+
+#include <i18n.inq>
+
+typedef Category
+{
+  fields
+  (
+    string    Category  width=16 label={i18n}.ps.title.CATEGORY;
+    ShortName Name               label={i18n}.ps.title.CATEGORY;
+    string    Icon;
+    Description;
+  )
+
+  construct
+  ({
+     call validate(Category = $this);
+  })
+
+  mutate
+  ({
+     // When mutator is called we have $this.old (the original) and $this.new (changed)
+     call validate(Category = $this.new);
+  })
+
+  destroy
+  ({
+     // Can't delete a Category while there are still products in that Category
+     // When read() uses a key value that was not created as: any k = new(Product.ByCategory)
+     // then we must name the key to use explicitly:
+     read(Product, $this, keyname="ByCategory", setname="list");
+     if (count(list))
+       throw("Cannot delete non-empty category");
+  })
+
+  pkey
+  (
+    fields (Category)
+
+    #include <{db}/Category.pkey.sql>
+  )
+  
+  // Reads all Category instances
+  key All
+  (
+    fields()
+
+    auxcfg( map(
+    "prepared", true,
+    "read-sql",
+      "
+        {select-stmt}
+      "
+    ))
+  )
+  
+  // I/O resource binding
+  iobind (SimpleSqlIO, ps)
+}
+
+// Just check that anything that we really should have is not null.
+// The GUI enforces this, so this check is just for last-ditch
+local function validate(any Category)
+{
+  if (!(Category.CatId && 
+        Category.Name))
+    throw("One or more compulsory fields are null");
+}
+

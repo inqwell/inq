@@ -1,0 +1,265 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * Inqwell GUI Verifiers and Validators
+ *
+ * Functions and ready-made func variables that may be used
+ * as validateInsert and inputVerifier properties on
+ *
+ */
+
+package inq.gui.util;
+
+// ----------------------------------------
+
+// Utility functions of general use, typically in textfield/spinner
+// verification.
+
+// This function can be used as the validateInsert property
+// of a text-based component like a gTextField or a gSpinner.
+// The argument is the text being inserted into the component's
+// document (either the character typed by the user or an
+// attempt to paste text).
+//
+// The "component", "text", "value" and "formatter" args are
+// passed to such methods by the Inq language.  Additional arguments
+// can be passed in the call statement that is set as the
+// validateInsert property.  This example defines the argument
+// "isDecimal", which defaults to false. It is used to determine
+// whether it is legal to enter the decimal point character.
+// Otherwise the text must be parsable by the given formatter.
+// The return value of this type of function should be the text that
+// will be accepted or null if the text should be rejected.
+// Note that the text is that being inserted, not the current text
+// of the component and not the rendered value. These can be accessed
+// via properties or the value argument
+local function isNumeric(string text,
+                         any    value,
+                         any    formatter,
+                         any    component,
+                         boolean isDecimal,
+                         boolean isNeg = true)
+{
+	/*
+	writeln($catalog.system.out, "---------");
+	writeln($catalog.system.out, text);
+	writeln($catalog.system.out, value);
+	writeln($catalog.system.out, formatter);
+	writeln($catalog.system.out, isDecimal);
+	writeln($catalog.system.out, parse(text, formatter, value));
+	writeln($catalog.system.out, !isnull(parse(text, formatter, value)));
+  writeln($catalog.system.out, formatter.properties.decimalSeparator);
+  writeln($catalog.system.out, formatter.properties.negativePrefix);
+  writeln($catalog.system.out, formatter.properties.negativeSuffix);
+  any a = formatter.properties.negativeSuffix;
+  writeln($catalog.system.out, length(a));
+  writeln($catalog.system.out, component.renderedValue);
+	writeln($catalog.system.out, "---------");
+  */
+
+  // There are various things we could do here. Remember the text is just what
+  // is being pasted/typed. For this implementation we check if the text is
+  // the decimal separator or negative prefix. Otherwise it must be parsable
+  // by whatever the formatter is.
+
+  if (isDecimal && text == formatter.properties.decimalSeparator)
+    return(text);
+
+  if (isNeg && text == formatter.properties.negativePrefix)
+    return(text);
+
+  // Check if the text being entered/pasted is parsable
+  isnull(parse(text, formatter, value)) ? null : text;
+}
+
+
+
+
+/**
+ * Tests whether the supplied text represents a valid number. This can be
+ * positve/negative and Integer/Float/IEEE
+ *
+ * @return true when supplied text is a valid number. Otherwise false
+ * @author Michael Raasch
+ */
+local function isValidNumeric(string text, any value, any formatter, boolean isDecimal)
+{
+	// if there is nothing in the string, then treat is as a valid value.
+	// otherwise just try to match it with a regular expression
+	(length(text) == 0) || !isnull(parse(text, formatter, value));
+
+	//(text ~~ "^[\\+\\-]?\\d*\\.?(\\d+|([Ee][\\+\\-]?\\d+))$");
+}
+
+/**
+ * Tests whether the supplied text is a Float or Integer.
+ * (it's basically only a short form for isValidNumeric() )
+ *
+ * @return true when supplied text is a valid number. Otherwise false
+ * @author Michael Raasch
+ */
+local function isValidFloat(string text)
+{
+	call isValidNumeric(text);
+}
+
+/**
+ * Tests whether the supplied text is an Integer.
+ *
+ * @return true when supplied text is a valid Integer. Otherwise false
+ * @author Michael Raasch
+ */
+local function isValidInteger(string text)
+{
+	// if there is nothing in the string, then treat is as a valid value.
+	// otherwise just try to match it with a regular expression
+	(length(text) == 0) ||
+	(text ~~ "^[\\+\\-]?\\d+([Ee][\\+\\-]?\\d+)?$");
+}
+
+/**
+ * Tests whether the supplied text is a negative number.
+ *
+ * @return true when supplied text is a negative number. Otherwise false
+ * @author Michael Raasch
+ */
+local function isValidNegativeNumeric(string text, any value, any formatter)
+{
+	// if there is nothing in the string, then treat is as a valid value.
+	// otherwise just try to match it with a regular expression
+	(text ~~ "^\\-.*$") && call isValidNumeric(text, value, formatter);
+}
+
+/**
+ * Tests whether the supplied text is a positive Integer.
+ *
+ * @return true when supplied text is a valid positive Integer. Otherwise false
+ * @author Michael Raasch
+ */
+local function isValidPositiveNumeric(string text, any value, any formatter)
+{
+	// just test if it's a negative and invert the result
+	!call isValidNegativeNumeric(text, value, formatter);
+}
+
+/**
+ * Tests whether the supplied text is a negative Integer.
+ *
+ * @return true when supplied text is a negative Integer. Otherwise false
+ * @author Michael Raasch
+ */
+local function isValidNegativeInteger(string text)
+{
+	call isValidInteger(text) && call isNegativeNumeric(text);
+}
+
+/**
+ * Tests whether the supplied text is a positive Integer.
+ *
+ * @return true when supplied text is a positive Integer. Otherwise false
+ * @author Michael Raasch
+ */
+local function isValidPositiveInteger(string text, any value, any formatter)
+{
+	call isValidInteger(text) && call isValidPositiveNumeric(text, value, formatter);
+}
+
+/**
+ * Tests whether the supplied text is a negative Float.
+ *
+ * @return true when supplied text is a negative Float. Otherwise false
+ * @author Michael Raasch
+ */
+local function isValidNegativeFloat(string text)
+{
+	call isValidFloat(text) && call isValidNegativeNumeric(text);
+}
+
+/**
+ * Tests whether the supplied text is a positive Float.
+ *
+ * @return true when supplied text is a positive Float. Otherwise false
+ * @author Michael Raasch
+ */
+local function isValidPositiveFloat(string text)
+{
+	call isValidFloat(text) && call isPositiveNumeric(text);
+}
+
+local function isGreaterThanZero(string  text,
+                                 any     value,
+                                 any     formatter,
+                                 any     component)
+{
+  // Check if the text being entered/pasted is parsable
+  //parse(text, formatter, value)) ? null : text;
+writeln($catalog.system.out, value);
+writeln($catalog.system.out, component.properties.text);
+  text;
+}
+
+/**
+ * Trims leading and trailing spaces from the given text. Typically used as an
+ * inputVerifier function on text fields.
+ *
+ * This function may change the input text parameter, so it is reference declared
+ *
+ * @return true always
+ * @author Tom Sanders
+ */
+local function trimString(any text)
+{
+	text = trim(text);
+	true;
+}
+
+/**
+ * An insertValidator function that ensures that entered text is lowercase
+ *
+ * @return lowercase text
+ * @author Tom Sanders
+ */
+local function toLower(any text)
+{
+  tolower(text);
+}
+
+/**
+ * An insertValidator function that ensures that entered text is uppercase
+ *
+ * @return uppercase text
+ * @author Tom Sanders
+ */
+local function toUpper(any text)
+{
+  toupper(text);
+}
+
+service ackCallback(any callback, any args)
+{
+  xfunc(callback, args);
+}
+
+// Set up some global variables for the GUI client to use.
+cfunc $catalog.guiFuncs.numericInteger       = call isNumeric(isDecimal=false);
+cfunc $catalog.guiFuncs.positiveInteger      = call isNumeric(isDecimal=false, isNeg=false);
+cfunc $catalog.guiFuncs.numericFloat         = call isNumeric(isDecimal=true);
+cfunc $catalog.guiFuncs.validNumeric         = call isValidNumeric();
+cfunc $catalog.guiFuncs.validFloat           = call isValidFloat();
+cfunc $catalog.guiFuncs.validInteger         = call isValidInteger();
+cfunc $catalog.guiFuncs.validNegativeNumeric = call isValidNegativeNumeric();
+cfunc $catalog.guiFuncs.validPositiveNumeric = call isValidPositiveNumeric();
+cfunc $catalog.guiFuncs.validNegativeInteger = call isValidNegativeInteger();
+cfunc $catalog.guiFuncs.validPositiveInteger = call isValidPositiveInteger();
+cfunc $catalog.guiFuncs.validNegativeFloat   = call isValidNegativeFloat();
+cfunc $catalog.guiFuncs.validPositiveFloat   = call isValidPositiveFloat();
+cfunc $catalog.guiFuncs.greaterThanZero      = call isGreaterThanZero();
+cfunc $catalog.guiFuncs.trimString           = call trimString();
+cfunc $catalog.guiFuncs.toLower              = call toLower();
+cfunc $catalog.guiFuncs.toUpper              = call toUpper();
+

@@ -1,0 +1,137 @@
+
+/**
+ * FileXfer test client
+ */
+
+package inq.filexfer;
+
+local function createGui()
+{
+  gWindow w;
+  w.properties.contextNode = true;
+  w.properties.title       = "Test FileXfer";
+  
+  gTextField    tf;
+  gButton       b;
+  gProgressBar  status;
+
+  // Set up the button
+  b.properties.text = "Get";
+  gEvent(b, call getFile());
+
+  // Set up the status label
+  //string w.vars.status = " "; // forces preferred height for layout
+  int w.vars.counter;
+  status.properties.renderInfo = renderinfo($this.vars.counter);
+
+  // Set up the text field
+  string w.vars.filename;
+  tf.properties.renderInfo = renderinfo($this.vars.filename, editable=true);
+  gEvent(tf, firemodel=true, event=(gDocchange, gDocinsert, gDocremove));
+
+  // Do the layout
+  layout(., w,
+         "
+           Border Caption \"Get File Test\"; Margin d:3
+           Table foo Columns GRID_FILL, GRID_PREF
+             Rows GRID_PREF,
+                  GRID_PREF,
+                  progress=GRID_PREF;
+           {
+             Column
+             {
+               HSpan 1 tf
+               ~
+               HSpan 1 status
+             }
+             Column
+             {
+               ~
+               b
+               ~
+             }
+           }
+         ");
+
+  writeln($catalog.system.out, w);
+  any w.vars.status = w.foo.properties.rows.progress;
+  double w.vars.statusVisible = w.vars.status;
+  w.vars.status = 0;
+
+  gProperty(b, enabled, renderinfo($this.vars.filename));
+  any $this.w = w;
+  show(w);
+}
+
+local function getFile()
+{
+  writeln($catalog.system.out, "Get: " + $this.vars.filename);
+
+  // We're just being a bit pedantic to support interactive GUI
+  // testing here. Generally this approach runs into the buffers
+  // as the application gets more complex (say it requires typedefs
+  // which are always downloaded implicitly from the connected server)
+  writeln($catalog.system.out, $catalog.argsMap);
+  if (!$catalog.argsMap.interactive)
+  {
+    writeln($catalog.system.out, "Sending...");
+    send requestFile
+           ($this.vars.filename,
+            ackFunc = func f =
+            {
+              switch
+              {
+                when (ack)
+                {
+                  // $stack.queued tells us whether the request is waiting or
+                  // has been started
+                  writeln($catalog.system.out, "Ack: " + filename);
+                }
+
+                when (fileStart)
+                {
+                  $this.vars.status = $this.vars.statusVisible;
+                  $this.status.properties.maximum = numChunks;
+                  writeln($catalog.system.out, "Starting: " + filename);
+                  show($this, true);
+                }
+
+                when (chunk)
+                {
+                  writestream($catalog.system.out, filename + ": Chunk: " +
+                                                   counter + " of " + numChunks + " " +
+                                                   count(chunk) + " bytes received      \r");
+                  $this.vars.counter = counter;
+                }
+
+                when (fileEnd)
+                {
+                  $this.vars.status = 0;
+                  show($this, true);
+                  //$this.vars.status = filename + ": done";
+                  writeln($catalog.system.out, "\nDone: " + filename);
+                  //writeln($catalog.system.out, .);
+                }
+              } // switch
+            },
+            excFunc = func f =
+            { 
+              // In fact the exception has had its contents
+              // split out into separate stack arguments. Should
+              // we include @exception as well for consistency?
+              //writeln($catalog.system.out, "\l " + @exception);
+              writeln($catalog.system.out, "\l " + msg);
+              writeln($catalog.system.out, "\l " + exInfo);
+              //throw(@exception);
+            });
+  }
+}
+
+call createGui();
+$this.w.properties.defaultCloseOperation = EXIT_ON_CLOSE;
+
+// Check for interactive parser testing
+if (!$catalog.argsMap.interactive)
+  loadclient("clientSvc.inq");
+
+

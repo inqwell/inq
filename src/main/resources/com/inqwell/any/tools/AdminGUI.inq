@@ -1,0 +1,297 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * Inqwell Server - Admin GUI
+ *
+ * GUI to administer the Inq server (early stages)
+ *
+ */
+
+package system.server;
+
+import inq.meta as META;
+
+local function createGUI()
+{
+  gWindow win;
+  win.properties.title       = $catalog.argsMap.serverHost + " Server Administation";
+  win.properties.contextNode = true;
+  add(win, path($this.serverAdmin));
+
+  gTab tab;
+  layout(., win, "Margin d:3 tab");
+
+  call createPackageGUI(context=win, guiParent=tab);
+
+  gBox pwd;
+  layout(., tab, "pwd");
+  pwd.properties.tabTitle = "Admin Password";
+  cfunc okCb     = call applyAdminPwdChange();
+  cfunc cancelCb = call cancelAdminPwdChange();
+  call system.client:createPasswordGUI(context=win, guiParent=pwd, okCb, cancelCb);
+
+  call createMStatsGUI(context=win, guiParent=tab);
+  call createMetaGUI(context=win, guiParent=tab);
+
+  gEvent(win, call closing(), event=(gWclosing));
+
+  show(win);
+}
+
+// The list of packages loaded in this server
+local function createPackageGUI(any context, any guiParent)
+{
+	gBox  pkgs;
+  // The pkgs box must be a child of tab component to inherit tab properties.
+  // The behaviour of layout when dealing with tab children is to drop down
+  // a level in the Inq hierarchy, so all the children of the Fees tab will
+  // go into the Fees box.  This is OK but there's no real reason for this when
+  // all tabs are different (as opposed to being instances of the same thing).
+  // To leave all the fees children components at the prevailing context
+  // do the layout in two stages.
+  layout(., guiParent, "pkgs");
+
+  pkgs.properties.tabTitle = "Packages";
+
+  gTable  tPkgs;
+  tPkgs.properties.visibleRows  = 9;
+
+  gButton bRunClient;
+  bRunClient.properties.text = "Run Client";
+	gEvent(bRunClient, call contextEstablished(), event=(gContext));
+
+  boolean context.vars.runClient;
+  any     context.vars.selected.Package = new(META:Package);
+
+  layout(., context, pkgs,
+                    "Column
+                    {
+                      tPkgs
+                      Geometry xy:vf Row
+                      {
+                        <>
+                        Geometry d:f bRunClient
+                      }
+                    }"
+                    );
+
+  // Data model for the table
+	omap dataTableModel;
+	any dataTableModel.Package  = renderinfo(typedef=META:Package.Package);
+	any dataTableModel.LongName = renderinfo(typedef=META:Package.LongName);
+	any dataTableModel.Parsed   = renderinfo(typedef=META:Package.Parsed);
+	tPkgs.properties.columns    = dataTableModel;
+
+  // Set up the node where we can expect the data later
+  tPkgs.properties.modelRoot = path($this.vars.pkgList);
+
+  gProperty(bRunClient, enabled, renderinfo($this.vars.runClient), true);
+
+  gEvent(tPkgs,      call eventPkgSelected(), event=(gSelection));
+  gEvent(bRunClient, call eventRunClient());
+
+}
+
+local function createMStatsGUI(any context, any guiParent)
+{
+	gBox mstats;
+  layout(., guiParent, "mstats");
+
+  mstats.properties.tabTitle = "Memory";
+
+  gTable tStats;
+  gTable tStatsRH;   // row header
+
+  gButton      bStart;
+  gButton      bStop;
+  gButton      bGc;
+
+  bStart.properties.text = "Start";
+  bStop.properties.text  = "Stop";
+  bGc.properties.text    = "Run GC";
+
+  layout(., context, mstats,
+                    "Column
+                    {
+                      tStats
+                      Geometry xy:vf Row
+                      {
+                        Geometry d:f bStart
+                        Geometry d:f bStop
+                        <>
+                        Geometry d:f bGc
+                      }
+                    }"
+                    );
+/*
+freeMemory
+maxMemory
+totalMemory
+availableProcessors;
+systemTime
+*/
+
+  // Data model for the table
+	omap dataTableModel;
+	any dataTableModel.Value  = renderinfo($this.Stat.Value, label="Value");
+	tStats.properties.columns = dataTableModel;
+	tStats.properties.columns.Value.renderer.properties.style = func f = call statStyle();
+
+  // Must do this before setting the model into tStatsRH or it has
+  // no context node. Note - the rowHeader property is not very advanced as yet...
+	tStats.properties.rowHeader = tStatsRH;
+
+  // Data model for the rowHeader
+	omap rhTableModel;
+	any rhTableModel.Name  = renderinfo($this.Stat.Name, width=12);
+	tStatsRH.properties.columns = rhTableModel;
+
+	// NB Setting the data root of the data table passes on the
+	// same root to its row header
+	hmap context.vars.mstats;
+	tStats.properties.modelRoot = path($this.vars.mstats);
+
+  gEvent(bGc, call runGC());
+  gEvent(bStart, call startMemoryStats());
+  gEvent(bStop, call stopMemoryStats());
+}
+
+local function createMetaGUI(any context, any guiParent)
+{
+  // returns its entry funcs
+  any context.funcs.metaTree = call inq.meta:createMetaTree(guiParent, name="meta");
+
+  guiParent.meta.properties.tabTitle = "Meta";
+  xfunc(context.funcs.metaTree.setShowPackages, showPackages=true);
+}
+
+local function runGC()
+{
+  send runGC();
+}
+
+local function startMemoryStats()
+{
+  send startMemoryStats();
+}
+
+local function stopMemoryStats()
+{
+  send stopMemoryStats();
+}
+
+local function statStyle(any value)
+{
+  style s;
+  string s.@format = "#,###";
+  if (typeof(value) == date.class)
+    string s.@format = "dd MMM yyyy HH:mm:ss";  // Have to redeclare as style holds Java types
+
+  s;
+}
+
+local function applyAdminPwdChange()
+{
+  //writeln($catalog.system.out, "PWD CHANGE ", .);
+  string curPwd  = $this.pCurPwd.model.root;
+  string newPwd  = $this.pNewPwd.model.root;
+  send changeAdminPwd(oldPwd = crypt(curPwd),
+                      newPwd = crypt(newPwd),
+                      okCallback = func fn = call pwdChangeSuccess());
+}
+
+local function cancelAdminPwdChange()
+{
+  call clearFields();
+}
+
+local function eventPkgSelected()
+{
+  $this.vars.runClient = !@event.isAdjusting &&
+                         @event.component.model.selectCount == 1 &&
+                         @event.component.model.selection[0].Package.ClientURL;
+}
+
+local function eventRunClient()
+{
+  //writeln($catalog.system.out, "STACK ", .);
+
+  any a = $this.tPkgs.model.keySelection[0];
+  //writeln($catalog.system.out, "key selection ", a);
+
+  send loadClient(obj=$this.vars.pkgList.{a}.Package);
+}
+
+local function contextEstablished()
+{
+  // Fetch the client data
+  send loadPackages(setName = "vars.pkgList");
+}
+
+local function closing()
+{
+  exit();
+}
+
+local function generalError(string  msg,
+                      string  stackTrace,
+                      boolean isUser,
+                      any     exInfo,
+                      date    exTime)
+{
+	call inq.gui.util:messageDialog(messageTitle = msg,
+	                        icon         = $uidefaults.OptionPane.warningIcon,
+                          messageText  = exInfo);
+}
+
+local function pwdChangeSuccess()
+{
+	call inq.gui.util:messageDialog(icon         = $uidefaults.OptionPane.warningIcon,
+                          messageText  = "Password change successful");
+  call clearFields();
+  setfocus($this.pCurPwd);
+}
+
+local function clearFields()
+{
+  empty($this.pCurPwd.model.root);
+  empty($this.pNewPwd.model.root);
+  empty($this.pConfPwd.model.root);
+}
+
+service updateOk(func okCallback)
+{
+	xfunc(okCallback);
+}
+
+service memoryStats(any mstats)
+{
+  // mstats is a one-level map with children named according to the parameter.
+  // Pivot into a table structure
+  hmap tmp;
+  foreach(mstats)
+  {
+    hmap tmp.{@name};
+    smap tmp.{@name}.Stat;  // see renderinfo expressions above
+    any  tmp.{@name}.Stat.Name  = @name;
+    any  tmp.{@name}.Stat.Value = mstats.{@name};
+  }
+
+  // Put it into the node space. The add function raises the necessary event
+  // being observed by the table
+  add(tmp, path($this.vars.mstats));
+}
+
+// Load the message dialog code
+exec("classpath:///inq/gui/messagedialog.inq");
+
+// Load the meta-data gui code
+exec("classpath:///inq/gui/meta.inq");
+
+call inq.gui.util:createMessageDialog(parent = call createGUI());
+

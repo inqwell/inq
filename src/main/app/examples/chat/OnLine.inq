@@ -1,0 +1,70 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * OnLine typedef.  When a user initialises with the chat system
+ * an instance of this typedef is created.
+ *
+ * The OnLine field is the primary key. It is either the
+ * LoginName (which is also stored) or appended with _1 _2 etc
+ * if the same user initialises more than once.
+ *
+ * The context field is the context where this user process would
+ * like services to be invoked when requests are sent to its
+ * input channel. When running the chat GUI this is always $root.chat
+ * however we may integrate the chat system into other, larger
+ * applications defining their own contexts.
+ *
+ * The processId field allows other User Processes to obtain
+ * this user's process using Inq's getprocess() function, so
+ * they can send it service requests.
+ *
+ * Copyright Inqwell Ltd 2002-2008 All Rights Reserved
+ */
+
+package examples.chat;
+
+typedef OnLine
+{
+  fields
+  (
+    string OnLine width=8;
+    string LoginName;
+    string Context;
+    int    ProcessId;
+  )
+
+  construct(
+  {
+    $this = $stack;
+
+    // If Context was not initialised then assume the current one.
+    if (!$this.Context)
+      $this.Context = $path;
+
+    $this.ProcessId = $process.properties.id;
+  })
+
+  /*
+  Define this typedef's identity - which is just its name
+  */
+  pkey
+  (
+    fields(OnLine)
+  )
+
+  /*
+  This key allows us to obtain a collection of all available instances
+  of this typedef.
+  */
+  key All
+  (
+    fields()
+  )
+
+}
+

@@ -1,0 +1,63 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+// Radio Buttons (also for gMenuRadio)
+
+gWindow win;
+win.properties.contextNode = true;
+win.properties.defaultCloseOperation = EXIT_ON_CLOSE;
+
+// Make three radio buttons and a button group
+gRadio b1;
+gRadio b2;
+gRadio b3;
+gButtonGroup  bg;
+
+// The button group renders the single data item
+int win.vars.radioData;
+bg.properties.renderInfo = renderinfo($this.vars.radioData);
+
+// Each radio's renderinfo is usually a constant value
+b1.properties.renderInfo = renderinfo(1, label="1");
+b2.properties.renderInfo = renderinfo(2, label="2");
+b3.properties.renderInfo = renderinfo(3, label="3");
+
+// Assign the button group to each radio button to be so grouped
+b1.properties.buttonGroup = bg;
+b2.properties.buttonGroup = bg;
+b3.properties.buttonGroup = bg;
+
+// Set up a text field rendering the same data, editing the
+// data to be of the group's values (1, 2 or 3) selects
+// the corresponding button
+gTextField tf;
+tf.properties.renderInfo = renderinfo($this.vars.radioData, editable=true);
+tf.properties.selectOnFocus = true;
+
+// Perform the layout. The button group, though not graphical, needs
+// to be included somewhere as it needs a context.
+layout(., win, "Caption \"Click a button or...\"; Geometry xy:vf Row
+                {
+                  b1 b2 b3 bg
+                }
+                Caption \"... enter 1/2/3 <cr>\"; Geometry xy:vf tf
+                ");
+
+// Add to the permanent node space
+any $this.win = win;
+
+// Event handlers. Again, the event is on the button group, not
+// the radios themselves
+gEvent(bg, firemodel=true);
+gEvent(tf, firemodel=true);
+
+win.properties.title = "Radios";
+
+show(win);
+

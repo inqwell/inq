@@ -1,0 +1,802 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+// Server-Side Application for Chat Facility
+// Copyright Inqwell Ltd 2002-2008 All Rights Reserved
+
+package examples.chat;
+
+/**
+ * The Login service for the Chat package is run
+ * when the client logs in as this package.
+ * For demo purposes it doesn't do anything other
+ * than respond with the client source.
+ */
+service Login(string loginName, string passwd)
+{
+  call system:LoginOK(url="chat.inq");
+}
+
+/**
+ * Create the OnLine instance that declares us to the chat system.
+ * This service is invoked from, and runs in the context defined
+ * by, the GUI
+ */
+service initChat()
+{
+  any OnLine = call deriveChatName(name=$process.loginName);
+
+  // Register with the chat system. Creates and returns an instance of OnLine to
+  // represent us. By using the anonymous declaration we are replacing the
+  // alias above (which was just a string name) with a new one that is the
+  // OnLine instance.
+  any OnLine = call register(OnLine,
+                             LoginName = $process.loginName);
+
+  // Set up the icons we will use and pass them back in initResponse
+  smap icons;
+
+  any icons.win       = image("images/chatinq.jpg");
+  any icons.iwin      = image("images/ichatinq.jpg");
+  any icons.clear     = image("images/clear16.gif");
+  any icons.rxfocus   = image("images/rxfocus.gif");
+  any icons.rxnofocus = image("images/rxnofocus.gif");
+
+  // Send back the response
+  send initResponse(icons, OnLine);
+}
+
+/**
+ * Initialise with the chat system.
+ * Create the OnLine and corresponding ChatWith instances.
+ * Leave them at paths under $process so we can delete
+ * them when we logout of the Chat service.  Note that
+ * the stack has the initialisation values for the
+ * objects we will create, as referenced by the <construct>
+ * expressions in the object definitions
+ */
+local function register(OnLine, OnLine.LoginName)
+{
+  transaction
+  {
+    create(new(OnLine));
+  }
+
+  // Set up two lists in our node space. The publicList is the available
+  // public chat rooms, that is the instances of ChatChannel whose IsPublic
+  // field is true. The privateList is all the registered users, that is
+  // all the OnLine instances.
+  call readChatWithList(IsPublic=true, listAt=path($this.vars.publicList));
+  call readChatWithList(IsPublic=false, listAt=path($this.vars.privateList));
+
+  //listen ($catalog, service=chatWithCreated, event=(create), typedef=ChatWith);
+
+  // Listen for new instances of OnLine so we can maintain the private list.
+  // The listen() function returns a token that represents the listen itself.
+  // We save this at $this.listeners.newOnLine so we can unlisten() later
+  // if we want to. See below.
+  any $this.listeners.newOnLine = listen (unlisten($catalog, $this.listeners.newOnLine),
+                                            func f = call onLineCreated(OnLine = @eventData),
+                                            event   = (create),
+                                            typedef = OnLine);
+
+  // Listen for new instances of ChatChannel so we can maintain the public list.
+  // In this case we discriminate events of interest by specifying the "create"
+  // argument. This is any value that must compare equals with the value
+  // used in create() for the listener to be fired. We only have one value
+  // which is boolean true. We don't have to use a map but doing so just
+  // makes things a little clearer.
+  any createPublic.IsPublic = true;
+  any $this.listeners.newChatChannel = listen (unlisten($catalog, $this.listeners.newChatChannel),
+                                            func f  = call chatChannelCreated(ChatChannel = @eventData),
+                                            event   = (create),
+                                            create  = createPublic,
+                                            typedef = ChatChannel);
+
+  // Read the OnLine instance we've just created and save it in the permanent
+  // node space. We want to be able to delete it when we deregister from chat.
+  // Remember the stack already satisfies the primary key because it contains
+  // the OnLine field.
+  // svrvars is just a place to keep data that is not maintained in the
+  // client by propagated events.
+  any $this.svrvars.OnLine = read(OnLine, .);
+
+  // Create a function that will carry us to this context when we want to
+  // log out of the chat system and store it at a well-known path. See
+  // comments in the function "logout".
+  func $process.chatfuncs.deregister = call deregister();
+
+  // Similarly, we would like access to our OnLine instance from other contexts.
+  func $process.chatfuncs.getOnLine  = $this.svrvars.OnLine;
+
+  // Chat messages are sent in the chat context. In the message flows
+  // of service invocations between the client and server, playBackChat
+  // is called from setupChatContext(),  so we need a func for it.
+  func $process.chatFuncs.playBackChat = call playBackChat(ChatChannel);
+
+  // Return the OnLine instance we created
+  read(OnLine, .);
+}
+
+/**
+ * Determine a suitable name for our OnLine instance
+ */
+local function deriveChatName(string name)
+{
+  // Loop until we do not find an OnLine instance with the given name
+  string nickName = name;
+  int counter;
+  while(call readOnLine(OnLine=nickName))
+  {
+    counter = counter + 1;
+    nickName = name + "_" + counter;
+  }
+
+  nickName;
+}
+
+/**
+ * If we logged in as the chat package then this service is invoked
+ * when the client disconnects from the server. This ensures that we
+ * clean up properly. If we logged in as another package and used the
+ * chat server then that package's Logout service should call the
+ * expression "logout" in this package.
+ */
+service Logout()
+{
+  call logout();
+}
+
+/**
+ * Undo what was done by initChat - delete the OnLine and
+ * ChatWith instances.  Also, remove any ChannelParticipant
+ * instances that belong to us.
+ */
+function logout()
+{
+  writeln($catalog.system.out, "Logging out \l");
+  // May be we never logged in !
+  if ($process.chatfuncs)
+  {
+    try
+    {
+      xfunc($process.chatfuncs.deregister);
+    }
+    finally
+    {
+      // Remove the funcs - they contain a reference to the context they
+      // were defined in so we should't leave it lying around. In practice,
+      // when the process terminates there wouldn't be any problem, we are
+      // just being thorough
+      remove($process.chatfuncs);
+    }
+  }
+}
+
+local function deregister()
+{
+  try
+  {
+    writeln($catalog.system.out, "Logging out \l");
+    call closeAllChannels($this.svrvars.OnLine.OnLine);
+    writeln($catalog.system.out, "Logging out \l");
+    delete($this.svrvars.OnLine);
+    writeln($catalog.system.out, "Logging out \l");
+  }
+  catch
+  {
+    // debug
+    writeln($catalog.system.out, "Error at \l");
+    writeln($catalog.system.out, "$process is " + $process);
+
+    throw();
+  }
+}
+
+/**
+ * Obtain a ChatChannel instance. For public ChatChannels the instance must
+ * already exist. For a private 1-to-1 or conference channels
+ *
+ * @param IsPublic If true the instance is expected to already exist. If it
+ * does not, an exception is thrown.
+ * @param IsConference
+ * @invitee Optional. If provided then is the opposite OnLine.Name in a 1-to-1
+ * conversation.
+ */
+local function getChatChannel(ChatChannel,
+                              ChatChannel.IsPublic,
+                              ChatChannel.IsConference)
+{
+  if (!IsPublic)
+  {
+    // It's a private channel so we need to create it.
+    transaction
+    {
+      // Set a backchat count (for the ctor) for conferences. Probably should
+      // do all backchat logic in the ctor...
+      if (IsConference)
+        int BackChatCount = 10;
+
+      // specify create data (cf. the "TestInq" Channel at the
+      // bottom of this file). If a listener for create events is
+      // established then no create data means wild-card.
+      any createPublic.IsPublic = false;
+      create(any c = new(ChatChannel), createPublic);
+      // The ChatChannel field was allocated by the construct expression. Save it
+      // so we can read the managed instance back out.
+      ChatChannel = c.ChatChannel;
+    }
+
+  }
+  call readUniqueChatChannel(ChatChannel);
+}
+
+/**
+ *
+ */
+local function newChannelParticipant(ChannelParticipant.ChatChannel,
+                                     ChannelParticipant.OnLine,
+                                     ChannelParticipant.OtherUser,
+                                     ChannelParticipant.DisplayName)
+{
+  // Specify "create" data so listeners to this ChatChannel are fired for
+  // the new participant
+  any createParticipant.ChatChannel = ChatChannel;
+  create(new(ChannelParticipant), createParticipant);
+}
+
+/**
+ * Join a chat channel.  To do this we create a new ChannelParticipant
+ * instance for ourselves in the given channel and invoke the joinChannelConfirm
+ * service in our client.
+ */
+local function joinChannel(any ChatChannel,
+                           ChannelParticipant.DisplayName,
+                           ChannelParticipant.OtherUser)
+{
+  writeln($catalog.system.out, "\e \l " + .);
+
+  transaction
+  {
+
+    any cp = call newChannelParticipant(ChatChannel.ChatChannel,
+                                        $this.svrvars.OnLine.OnLine,
+                                        DisplayName,
+                                        OtherUser);
+
+    ChatChannel.PartyCount = ChatChannel.PartyCount + 1;
+
+    // Commit the transaction now.  Then if there
+    // is a problem an exception will be thrown and we
+    // won't go on to confirm the join to the client.
+  }
+
+
+  any ChannelParticipant = read(ChannelParticipant, cp);
+
+  send joinChannelConfirm(ChatChannel, ChannelParticipant);
+}
+
+/**
+ * Leave a ChatChannel.  This expression removes us
+ * as a participant from the channel the identified
+ * participant object is in.  It is at this point also
+ * that the life-cycle of the corresponding ChatChannel
+ * object can be ended.  If there are no longer
+ * any participants in the channel, and the channel is
+ * a private one, it is deleted.
+ * This expression should run at the context
+ * established by setupChatContext.  Thus paths like
+ * $this.chatInsts.ChatChannel are viable.
+ */
+local function leaveChannel()
+{
+  try
+  {
+    // Remove the listener from $catalog established in setupChatContext().
+    // We are still overall so $this.listeners.newOnLine setup in register()
+    // is still viable.
+    unlisten($catalog, $this.listeners.newChannelParticipant);
+
+    // We don't need to remove $this.listeners.kickChannel. That was
+    // established on $this and is automatically discarded when $this
+    // is removed from the node space, below.
+
+    // Delete our channel participant
+    delete($this.chatInsts.ChannelParticipant);
+
+    call checkDeleteChannel($this.chatInsts.ChatChannel);
+  }
+  finally
+  {
+    // TODO: Comment the effect this has on the client
+    remove($this);
+  }
+}
+
+local function kickedFromChannel()
+{
+  try
+  {
+    // See comments in leaveChannel()
+    unlisten($catalog, $this.listeners.newChannelParticipant);
+
+    call checkDeleteChannel($this.chatInsts.ChatChannel);
+  }
+  finally
+  {
+    // TODO: Comment the effect this has on the client
+    remove($this);
+  }
+}
+
+/**
+ * Called as we leave a ChatChannel.  The PartyCount
+ * is decremented and if zero and private
+ * the ChatChannel instance is deleted
+ */
+local function checkDeleteChannel(any ChatChannel)
+{
+  ChatChannel.PartyCount -= 1;
+  if(!ChatChannel.IsPublic && !ChatChannel.PartyCount)
+    delete(ChatChannel);
+}
+
+service leaveChannel()
+{
+  call leaveChannel();
+}
+
+/**
+ * Runs at node {OnLine.Context}.
+ */
+service receivedChatMsg(any ChatChannel, any BackChat)
+{
+  // Nothing particularly to do server-side - send the message to our client.
+  // writeln($catalog.system.out, BackChat);
+  send chatReceived(ChatChannel, BackChat);
+}
+
+/**
+ * Read any available BackChat instances and send them to the client.
+ */
+local function playBackChat(any ChatChannel)
+{
+  // Create the key to use and initialise it from the given ChatChannel instance
+  any k = new(BackChat.ByChatChannel, ChatChannel);
+
+  // Target ordered map
+  omap om;
+
+  // Read the BackChat messages
+  read(BackChat, k, setname="backChat", target=om);
+
+  // Sort into order and send them to the client
+  sort(om.backChat, $loop.BackChat.MsgTime);
+
+  foreach(om.backChat)
+    send chatReceived(ChatChannel, $loop.BackChat);
+}
+
+/**
+ * Send a chat message.
+ * Runs in the context of the chat session
+ */
+service sendChat(BackChat.MsgText)
+{
+  // In case we formally create it, put the ChatChannel on the stack for
+  // the BackChat construct expression
+  any ChatChannel = $this.chatInsts.ChatChannel;
+
+  any BackChat = new(BackChat);
+  any OnLine = xfunc($process.chatfuncs.getOnLine);
+  BackChat.MsgFrom = OnLine.OnLine;
+  BackChat.MsgText = MsgText;
+  BackChat.MsgTime = getdate();
+
+  if ($this.chatInsts.ChatChannel.BackChatCount > 0)
+  {
+    // Create a BackChat instance. Do this before any opposite correspondent
+    // is joined so the message is waiting when he is. Note that
+    // while BackChat in any given channel is optional by setting BackChatCount,
+    // a value of at least 1 is required to make private 1-1 channels work.
+    // This ensures the initial message from user A which causes the channel
+    // to be joined by user B is then sent to B.
+    transaction
+    {
+      create(BackChat);
+    }
+  }
+
+  // Send the message to existing channel participants
+  foreach($this.chatInsts.participantsList)
+  {
+    // Protect against exceptions in case any of the users coincidentally
+    // go off line.
+    try
+    {
+      any p = getprocess($loop.OnLine.ProcessId);
+      send receivedChatMsg(ChatChannel,
+                           BackChat,
+                           @channel = p.ichannel,
+                           @context = $loop.OnLine.Context);
+    }
+    catch {}
+  }
+
+  // Check if this is a 1-1 channel and whether we need to join the
+  // correspondent
+  call joinOther(OnLine=$this.chatInsts.ChannelParticipant.OtherUser);
+
+  // TODO:
+  // Send the chat message to all current participants
+
+    //$this.chatInsts.ChatChannel.msgFrom = "system";
+    //$this.chatInsts.ChatChannel.msgText = "User is not logged in";
+    //$this.chatInsts.ChatChannel.msgTime = getdate();
+}
+
+/**
+ * Start a new private chat session
+ *  1) 1-1 with either another on-line user whose
+ *     name is given by the Name parameter;
+ *  2) as a conference whose name is given
+ *     by the Name parameter
+ */
+local function newPrivate(OnLine.OnLine, ChatChannel.IsConference)
+{
+  writeln($catalog.system.out, "\e \l " + .);
+  // Create the channel.  Its a private channel so the name
+  // will be assigned by the constructor as the VM ID of the
+  // instance.
+  any ChatChannel = call getChatChannel(IsConference);
+
+  //writeln($catalog.system.out, "new chat channel");
+  //writeln($catalog.system.out, $stack);
+
+  // Join us as the first participant.
+  call joinChannel(ChatChannel,
+                   DisplayName = OnLine,
+                   OtherUser   = IsConference ? null : OnLine);
+}
+
+/**
+ * Set up a new conversation with another registered user.
+ */
+service newPrivate(any OnLine)
+{
+  writeln($catalog.system.out, "\e \l " + .);
+  call newPrivate(OnLine.OnLine);
+}
+
+/**
+ * Set up a new private conference. Users may then be invited to join by any
+ * current member.
+ */
+service newConference(string name)
+{
+  writeln($catalog.system.out, "\e \l " + name);
+  call newPrivate(OnLine=name, IsConference=true);
+}
+
+/**
+ * Create a new public chat channel.
+ */
+service newPublic(ChatChannel)
+{
+  call newPublic(ChatChannel);
+}
+
+local function newPublic(ChatChannel)
+{
+  // TODO: If the channel already exists we'll get a rude exception. Add better
+  // handling as per the documentation.
+
+  any IsPublic      = true;
+  any BackChatCount = 10;
+
+  transaction
+  {
+    create(new(ChatChannel));
+  }
+
+  // Read back the managed instance
+  read(ChatChannel, .);
+}
+
+/**
+ * Set up the instance structures to support an existing channel and
+ * its participants.  This expression runs in a context which is
+ * under the control of the client.
+ * TODO. Revise comment
+ */
+service setupChatContext(any ChatChannel, any ChannelParticipant)
+{
+  // Listen for new participants *in this channel*
+  any createParticipant.ChatChannel = ChannelParticipant.ChatChannel;
+  any $this.listeners.newChannelParticipant = listen (unlisten($catalog, $this.listeners.newChannelParticipant),
+                                            func f  = call channelParticipantCreated(ChannelParticipant = @eventData),
+                                            event   = (create),
+                                            create  = createParticipant,
+                                            typedef = ChannelParticipant);
+
+  // Listen for *my* ChannelParticipant being deleted. If this happens it
+  // means I have been removed from this channel.
+  // We specify the path that the event must have come from and at which
+  // we have placed our ChannelParticipant to discriminate in this case.
+  // When explicitly listening for events from within our own node space
+  // it is common to listen to the context node. This is because it is permanent,
+  // whereas any child node might get replaced silently discarding the listener
+  // placed upon it, or worse leaving a listener on a node no longer in the
+  // node space at all.
+  any $this.listeners.kickChannel = listen (unlisten($this, $this.listeners.kickChannel),
+                                            func f  = call kickedFromChannel(),
+                                            event   = (delete),
+                                            path = $this.chatInsts.ChannelParticipant);
+
+  // Use a hmap so structure will be event-live
+  hmap chatInsts;
+
+  // Read the ChatChannel typedef instance
+  any chatInsts.ChatChannel = call readUniqueChatChannel(ChatChannel.ChatChannel);
+
+  // Aggregate the ChannelParticipant node set
+  aggregate(ChannelParticipant,
+            chatInsts.ChatChannel,
+            setname = "participantsList",
+            keyname = "ByChatChannel");
+
+  // Put my ChannelParticipant (also in the above set) in also
+  read(ChannelParticipant, ChannelParticipant, target=chatInsts);
+
+  // Aggregate from the ChannelParticipant instances in the node set
+  // to their corresponding OnLine
+  aggregate(OnLine,
+            chatInsts.participantsList[first].ChannelParticipant);
+
+  // Finally add the structure we have built on the stack to
+  // context. This has the effect of raising an event which
+  // propagates the structure to our client.
+  //writeln($catalog.system.out, $stack);
+
+  writeln($catalog.system.out, "\e \l " + $path);
+  writeln($catalog.system.out, "Adding chatInsts " + chatInsts);
+  add(chatInsts, path($this.chatInsts));
+
+  xfunc($process.chatFuncs.playBackChat, ChatChannel);
+}
+
+/**
+ * For 1-1 channels, determine whether the correspondent is in the
+ * conversation and if not join him. This is a join, not an
+ * invitation to join.  Returns false if user not logged in.
+ */
+local function joinOther(OnLine)
+{
+  any meOnLine = xfunc($process.chatfuncs.getOnLine);
+
+  if (call isPrivate121($this.chatInsts.ChatChannel) &&
+      meOnLine.OnLine != OnLine && // Just in case we are talking to ourselves
+      $this.chatInsts.ChatChannel.PartyCount != 2)
+  {
+    // Check if the opposite correspondent is still online
+    // The correspondent's OnLine field is held
+    // in our ChannelParticpant.OtherUser and passed in
+    // as the OnLine argument, to conveniently make a key value.
+
+    if (read(OnLine, .))
+    {
+      // Join other user
+
+      any process = getprocess(OnLine.ProcessId);
+
+      send joinChannel($this.chatInsts.ChatChannel,
+                       DisplayName=meOnLine.OnLine,
+                       OtherUser=meOnLine.OnLine,
+                       @channel=process.ichannel,
+                       @context=OnLine.Context);
+      true;
+    }
+    else
+      false;
+  }
+  else
+    true;
+}
+
+local function channelParticipantCreated(any ChannelParticipant)
+{
+  // Node-set child map
+  hmap m;
+
+  // Put in the new ChannelParticipant
+  any m.ChannelParticipant = ChannelParticipant;
+
+  // aggregate OnLine
+  aggregate(OnLine, m.ChannelParticipant);
+
+  // Put the structure into the participants list
+  writeln($catalog.system.out, "*** \e \l " + .);
+  any k = getuniquekey(ChannelParticipant);
+  add(m, path($this.chatInsts.participantsList.{k}));
+}
+
+/**
+ * Invite another user to join the conference.
+ * The user we are inviting is given by its OnLine
+ * instance.
+ * This service runs in the context of the
+ * channel, which has already been established
+ * for the invitor.  Thus, apart from the
+ * invitee's OnLine, we already have everything
+ * else we require below the context node.
+ */
+service requestInviteOther(any OnLine)
+{
+  // Read invitee's OnLine instance
+  if (!read (OnLine, OnLine))
+    throw("User Not Logged In", OnLine);
+
+  // Get our own OnLine instance
+  any meOnLine = xfunc($process.chatfuncs.getOnLine);
+
+  // Find the invitee's process
+  any process = getprocess(OnLine.ProcessId);
+
+  send inviteChannel($this.chatInsts.ChatChannel,
+                     $this.chatInsts.ChannelParticipant,
+                     @channel = process.ichannel,
+                     @context = OnLine.Context);
+}
+
+
+/**
+ * This service runs in the invitee's process, at the
+ * context held in the invitee's OnLine typedef instance.
+ * We have received an invitation from user OnLine to join
+ * channel ChatChannel. Pass the invite request to the
+ * invitee's client
+ * @param ChatChannel the channel to join
+ * @param ChannelParticipant the invitor participant
+ *
+ */
+service inviteChannel(any ChatChannel,
+                      any ChannelParticipant)
+{
+  send inviteChannel(ChatChannel, ChannelParticipant);
+}
+
+/*
+This service joins the given ChatChannel
+  1) invoked by one server process on another when
+     joining the latter into a chat session created by
+     the former when doing 1-to-1 chat;
+  2) invoked by a client when accepting an invitation
+     or creating a new private conference/1-1.
+*/
+service joinChannel(any ChatChannel,
+                    ChannelParticipant.DisplayName,
+                    ChannelParticipant.OtherUser)
+{
+  // Read the server-side instance in case we were invoked from
+  // the client.
+  read(ChatChannel, ChatChannel);
+
+  call joinChannel(ChatChannel, DisplayName, OtherUser);
+}
+
+service declineInvite(ChatChannel)
+{
+  call readUniqueChatChannel(ChatChannel);
+
+  // TODO.
+  // Send a message to the channel showing invite was declined...
+
+  // ChatChannel.msgFrom = "system";
+  // ChatChannel.msgText = $process.chatNick + " declined";
+  // ChatChannel.msgTime = getdate();
+
+}
+
+/**
+ * Read a single OnLine instance given by the supplied name parameter.
+ * Return the object read.
+ */
+local function readOnLine(OnLine.OnLine)
+{
+  read(OnLine, .);
+}
+
+/**
+ * Create an event-live list of private correspondents by reading
+ * all the OnLine instances or public chat rooms by reading all
+ * the public ChatChannel instances.
+ */
+local function readChatWithList(ChatChannel.IsPublic,
+                                any listAt)
+{
+  hmap nodeSet;
+
+  if (IsPublic)
+    read(ChatChannel, ., keyname="ByIsPublic", target=nodeSet, setname="list");
+  else
+    read(OnLine, ., keyname="All", target=nodeSet, setname="list");
+
+  add(remove(nodeSet.list), listAt);
+}
+
+/**
+ * Reads a ChatChannel by its primary key. Throws if the ChatChannel
+ * does not exist.
+ */
+local function readUniqueChatChannel(ChatChannel)
+{
+  any ret = read(ChatChannel, .);
+
+  if (!ret)
+    throw("Read of non-existent channel " + ChatChannel);
+
+  ret;
+}
+
+/**
+ * Called when we logout of the chat system.
+ * It closes all the channels we are in and deletes the ChatChannel
+ * instances if appropriate.
+ */
+local function closeAllChannels(OnLine)
+{
+  read (ChannelParticipant, ., keyname="ByOnLine", setname="myChannels");
+  foreach (myChannels)
+  {
+    delete ($loop.ChannelParticipant);
+    any ChatChannel = call readUniqueChatChannel($loop.ChannelParticipant.ChatChannel);
+
+    call checkDeleteChannel(ChatChannel);
+  }
+}
+
+/**
+ * Called when a new OnLine instance is created, that is when a new user
+ * registers with Chat.
+ */
+local function onLineCreated(any OnLine)
+{
+  // Put the instance in the private list
+  any k = getuniquekey(OnLine);
+  add(OnLine, path($this.vars.privateList.{k}.OnLine));
+}
+
+/**
+ * Called when a new ChatChannel instance is created whose IsPublic field
+ * has the value "true", that is when a new public chatroom is created.
+ */
+local function chatChannelCreated(any ChatChannel)
+{
+  // Put the instance in the public list
+  any k = getuniquekey(ChatChannel);
+  add(ChatChannel, path($this.vars.publicList.{k}.ChatChannel));
+}
+
+local function isPrivate121(any ChatChannel)
+{
+  !(ChatChannel.IsPublic || ChatChannel.IsConference);
+}
+
+// Create a test chat room
+any cc = new(ChatChannel);
+cc.ChatChannel = "TestInq";
+cc.IsPublic = true;
+cc.IsConference = false; // only relevant when IsPublic = false
+cc.PartyCount = 0;
+cc.BackChatCount = 10;
+
+// Make the create data so that this (public) channel fires the listsner
+// established in register()
+any createPublic.IsPublic = true;
+create(cc, createPublic);
+

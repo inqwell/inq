@@ -1,0 +1,592 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * PetStore Example
+ *
+ * Place Order GUI
+ */
+
+package examples.petstore;
+
+local function createGUI(any    parent,
+                         any    Account,
+                         string name = "placeOrder")
+{
+  // Set this up as a shorthand for later use
+  any i18n = path($catalog.{$root.i18n});
+
+  // The place order window is a dialog
+  gDialog(parent) placeOrder;
+  placeOrder.properties.defaultCloseOperation = DO_NOTHING_ON_CLOSE;
+  placeOrder.properties.contextNode  = true;
+  placeOrder.properties.title        = {i18n}.ps.title.PLACE_ORDER;
+  placeOrder.properties.hideOnOk     = true;
+  placeOrder.properties.hideOnCancel = true;
+  
+  // By default Inq dialogs are modal across all application windows.
+  // For a long-lived dialog like this one, this causes problems if, say,
+  // the exception window pops up. If a application-modal dialog is
+  // showing we can't scroll the exception window, or clear it etc.
+  // Make placeOrder modal only with respect to its parent
+  placeOrder.properties.modality = MODAL_PARENT;
+  
+  // Set up a checkbox for using the shipping address as the billing address.
+  //   1. The default checked/unchecked values for a gCheck are
+  //      true/false (see alternatives in newOrder.inq:setupLookupComponent() )
+  //      so set up a variable for it to maintain and bind it. See also
+  //      billingAddr usage below.
+  //   2. Tell the check box to fire its model
+  gCheck cSameAddr;
+  boolean placeOrder.vars.sameAddr = true;
+  cSameAddr.properties.renderInfo = renderinfo($this.vars.sameAddr, label={i18n}.ps.button.USE_SHIPPING);
+  gEvent(cSameAddr, firemodel=true);
+  
+  // Components for the place-order form
+  gTextField tfShipToFirstName;
+  gTextField tfShipToLastName;
+  gTextField tfShipAddr1;
+  gTextField tfShipAddr2;
+  gTextField tfShipCity;
+  gTextField tfShipState;
+  gTextField tfShipZIP;
+  gTextField tfShipCountry;
+  
+  gTextField tfBillToFirstName;
+  gTextField tfBillToLastName;
+  gTextField tfBillAddr1;
+  gTextField tfBillAddr2;
+  gTextField tfBillCity;
+  gTextField tfBillState;
+  gTextField tfBillZIP;
+  gTextField tfBillCountry;
+  
+  // Credit Card type etc
+  gComboBox  cbCCType;
+  gTextField tfExpMonth;
+  gTextField tfExpYear;
+  gTextField tfCCNumber;
+  gTextField tfTotal;
+  
+  gButton    bConfirm;
+  gButton    bCancel;
+  
+  bConfirm.properties.text = {i18n}.ps.button.CONFIRM;
+  bCancel.properties.text  = {i18n}.ps.button.CANCEL;
+  bConfirm.properties.icon = $catalog.icons.tick;
+  bCancel.properties.icon  = $catalog.icons.delete;
+  
+  // The cancel button hides the dialog. This happens because
+  //   1. we have set the dialog's hideOnCancel property above and
+  //   2. the button's (default) event is designated as
+  //      a gDialog=gDialogcancel event. 
+  // Further, we establish the cancel event on the dialog itself.
+  // In this example we remove the dialog from the node space,
+  // which discards it. Because we are taking specific action
+  // we need to capture the window-closing event too.
+  gEvent(bCancel,    gDialog=gDialogcancel);
+  gEvent(placeOrder, gDialog=gDialogcancel, event=(gWclosing));
+  gEvent(placeOrder, call dialogCancel(), event=(gDialogcancel));
+  
+  // Create an Order instance, which is the main item of data this dialog
+  // handles...
+  any placeOrder.vars.Order = new(Order);
+  
+  // ...and put our given Account instance into the placeOrder node space
+  any  placeOrder.vars.Account = Account;
+  
+  // Alias in the i18n bad credit card question (See confirmOrder)
+  any placeOrder.vars.proceedBadCC = {i18n}.ps.question.PROCEED_BAD_CC;
+  
+  // Initialise the Order
+  call initOrder(placeOrder.vars.Order, Account, items = xfunc(parent.funcs.getItems));
+
+  // Connect views to models  
+  tfShipToFirstName.properties.renderInfo = renderinfo($this.vars.Order.ShipToFirstName, typedef = Order.ShipToFirstName, editable=true);
+  tfShipToLastName.properties.renderInfo  = renderinfo($this.vars.Order.ShipToLastName, typedef = Order.ShipToLastName, editable=true);
+  tfShipAddr1.properties.renderInfo       = renderinfo($this.vars.Order.ShipAddr1, typedef = Order.ShipAddr1, editable=true);
+  tfShipAddr2.properties.renderInfo       = renderinfo($this.vars.Order.ShipAddr2, typedef = Order.ShipAddr2, editable=true);
+  tfShipCity.properties.renderInfo        = renderinfo($this.vars.Order.ShipCity, typedef = Order.ShipCity, editable=true);
+  tfShipState.properties.renderInfo       = renderinfo($this.vars.Order.ShipState, typedef = Order.ShipState, editable=true);
+  tfShipZIP.properties.renderInfo         = renderinfo($this.vars.Order.ShipZIP, typedef = Order.ShipZIP, editable=true);
+  tfShipCountry.properties.renderInfo     = renderinfo($this.vars.Order.ShipCountry, typedef = Order.ShipCountry, editable=true);
+  
+  tfBillToFirstName.properties.renderInfo = renderinfo($this.vars.Order.BillToFirstName, typedef = Order.BillToFirstName, editable=true);
+  tfBillToLastName.properties.renderInfo  = renderinfo($this.vars.Order.BillToLastName, typedef = Order.BillToLastName, editable=true);
+  tfBillAddr1.properties.renderInfo       = renderinfo($this.vars.Order.BillAddr1, typedef = Order.BillAddr1, editable=true);
+  tfBillAddr2.properties.renderInfo       = renderinfo($this.vars.Order.BillAddr2, typedef = Order.BillAddr2, editable=true);
+  tfBillCity.properties.renderInfo        = renderinfo($this.vars.Order.BillCity, typedef = Order.BillCity, editable=true);
+  tfBillState.properties.renderInfo       = renderinfo($this.vars.Order.BillState, typedef = Order.BillState, editable=true);
+  tfBillZIP.properties.renderInfo         = renderinfo($this.vars.Order.BillZIP, typedef = Order.BillZIP, editable=true);
+  tfBillCountry.properties.renderInfo     = renderinfo($this.vars.Order.BillCountry, typedef = Order.BillCountry, editable=true);
+  
+  any ccTypeModel.internal  = renderinfo(typedef = Order.CardType);
+  cbCCType.properties.model = ccTypeModel;
+  cbCCType.properties.renderInfo = renderinfo($this.vars.Order.CardType, typedef = Order.CardType);
+
+  // Some dedicated variables for the credit card expiry. We convert these
+  // to Order.CardExp (which is a string) when confirming the order. Using
+  // integers here means we can format a leading zero into the month.
+  int placeOrder.vars.expMonth = null;
+  int placeOrder.vars.expYear = datepart(YEAR, getdate());
+  
+  tfExpMonth.properties.renderInfo = renderinfo($this.vars.expMonth,
+                                                label={i18n}.ps.general.EXPIRES,
+                                                width=2,
+                                                editable=true,
+                                                format="00");
+  tfExpYear.properties.renderInfo  = renderinfo($this.vars.expYear, width=4, editable=true);
+  tfCCNumber.properties.renderInfo = renderinfo($this.vars.Order.CreditCard, typedef = Order.CreditCard, editable=true);
+  tfTotal.properties.renderInfo    = renderinfo($this.vars.Order.TotalPrice, typedef = Order.TotalPrice);
+  
+  // Set up a custom validateInsert function for the credit card and expiry fields
+  tfExpMonth.properties.validateInsert = cfunc f = call validateCCField(len = 2);
+  tfExpYear.properties.validateInsert  = cfunc f = call validateCCField(len = 4);
+  tfCCNumber.properties.validateInsert = cfunc f = call validateCCField(len = 16);
+  
+  layout(., placeOrder,
+         "Table  Columns shipping=GRID_FILL, 5, billing=GRID_FILL
+                    Rows sameaddr=GRID_PREF,
+                         addresses=GRID_PREF,
+                         5,
+                         card=GRID_PREF,
+                         5,
+                         GRID_FILL,
+                         buttons=GRID_PREF,
+                         5;
+          {
+            Cell billing sameaddr cSameAddr
+            Column shipping
+            {
+              ~ // step over sameaddr row
+              Caption {i18n}.ps.title.SHIPPING;
+              Table  Columns labels=GRID_PREF, 5, comps=GRID_FILL
+                Gap 3
+                Rows GRID_PREF,
+                     GRID_PREF,
+                     GRID_PREF,
+                     GRID_PREF,
+                     GRID_PREF,
+                     GRID_PREF,
+                     GRID_PREF,
+                     GRID_PREF;
+              {
+                Column labels
+                {
+                  Label tfShipToFirstName
+                  Label tfShipToLastName
+                  Label tfShipAddr1
+                  Label tfShipAddr2
+                  Label tfShipCity
+                  Label tfShipState
+                  Label tfShipZIP
+                  Label tfShipCountry
+                }
+                Column comps
+                {
+                  tfShipToFirstName
+                  tfShipToLastName
+                  tfShipAddr1
+                  tfShipAddr2
+                  tfShipCity
+                  tfShipState
+                  tfShipZIP
+                  tfShipCountry
+                }
+              }
+            }
+            
+            Column billing
+            {
+              ~ // step over sameaddr row
+              Caption {i18n}.ps.title.BILLING;
+              Table billingAddr Columns labels=GRID_PREF, 5, comps=GRID_FILL
+                Gap 3
+                Rows GRID_PREF,
+                     GRID_PREF,
+                     GRID_PREF,
+                     GRID_PREF,
+                     GRID_PREF,
+                     GRID_PREF,
+                     GRID_PREF,
+                     GRID_PREF;
+              {
+                Column labels
+                {
+                  Label tfBillToFirstName
+                  Label tfBillToLastName
+                  Label tfBillAddr1
+                  Label tfBillAddr2
+                  Label tfBillCity
+                  Label tfBillState
+                  Label tfBillZIP
+                  Label tfBillCountry
+                }
+                Column comps
+                {
+                  tfBillToFirstName
+                  tfBillToLastName
+                  tfBillAddr1
+                  tfBillAddr2
+                  tfBillCity
+                  tfBillState
+                  tfBillZIP
+                  tfBillCountry
+                }
+              }
+            }
+            
+            // The CC details are a cell in the outer table
+            Cell 0 card 2 card
+              Caption {i18n}.ps.title.CARD_DETAILS;
+              Table Gap 5 Columns cctype=GRID_PREF, expmonth=GRID_PREF, expyear=GRID_PREF, cardno=GRID_FILL, total=GRID_PREF
+                Rows labels=GRID_PREF,
+                     comps=GRID_PREF;
+            {
+              Row labels
+              {
+                Label cbCCType
+                HSpan expyear Label tfExpMonth
+                Label tfCCNumber
+                Label tfTotal
+              }
+              Row comps
+              {
+                cbCCType
+                tfExpMonth
+                tfExpYear
+                tfCCNumber
+                tfTotal
+              }
+            }
+            
+            // A Table for the buttons. We'll centre them for a change
+            Cell 0 buttons 2 buttons
+              Table Gap 5 Columns GRID_FILL, confirm=0.25, cancel=0.25, GRID_FILL
+                Rows GRID_PREF;
+            {
+              Row
+              {
+                ~ // Step over column zero
+                bConfirm bCancel
+              }
+            }
+          }
+          ");
+  
+  // In the layout we named the billing address panel as billingAddr
+  // so we can manipulate it like other components. Bind its enabled
+  // property to the cSameAddr check box model of $this.vars.sameAddr,
+  // which is being fired
+  gProperty(placeOrder.billingAddr, enabled, renderinfo(!$this.vars.sameAddr));
+
+  // Here we pass the current stack frame (which contains all the
+  // components) to the function
+  call setupFireModels(components=.);
+  
+  // Bind the data elements that comprise a properly completed order
+  // to bConfirm's enabled property.
+  // Note that even though the renderinfo expression does not
+  // directly reference $this.vars... the reference function checkOk
+  // does.
+  gProperty(bConfirm, enabled, renderinfo(call checkOk()));
+  gEvent(bConfirm, call confirmOrder());
+  
+  // Remember our parent here so we can use any function entry points
+  // it defines (see funcs.getQuestionDialog in newOrder.inq for another
+  // example). It must be saved under a simple map so as not to violate
+  // Inq hierarchy constraints.
+  smap placeOrder.svars;
+  any placeOrder.svars.parent = parent;
+
+  // Place in the node space (and return)
+  any parent.{name} = placeOrder;
+}
+
+local function setupFireModels(any components)
+{
+  // Set up various components whose rendered value is part of a
+  // properly completed order.
+  gEvent(components.tfShipToFirstName, event=(gDocchange, gDocinsert, gDocremove), firemodel=true);
+  gEvent(components.tfShipToLastName, event=(gDocchange, gDocinsert, gDocremove), firemodel=true);
+  gEvent(components.tfShipAddr1, event=(gDocchange, gDocinsert, gDocremove), firemodel=true);
+  gEvent(components.tfShipAddr2, event=(gDocchange, gDocinsert, gDocremove), firemodel=true);
+  gEvent(components.tfShipCity, event=(gDocchange, gDocinsert, gDocremove), firemodel=true);
+  gEvent(components.tfShipState, event=(gDocchange, gDocinsert, gDocremove), firemodel=true);
+  gEvent(components.tfShipZIP, event=(gDocchange, gDocinsert, gDocremove), firemodel=true);
+  gEvent(components.tfShipCountry, event=(gDocchange, gDocinsert, gDocremove), firemodel=true);
+  
+  gEvent(components.tfBillToFirstName, event=(gDocchange, gDocinsert, gDocremove), firemodel=true);
+  gEvent(components.tfBillToLastName, event=(gDocchange, gDocinsert, gDocremove), firemodel=true);
+  gEvent(components.tfBillAddr1, event=(gDocchange, gDocinsert, gDocremove), firemodel=true);
+  gEvent(components.tfBillAddr2, event=(gDocchange, gDocinsert, gDocremove), firemodel=true);
+  gEvent(components.tfBillCity, event=(gDocchange, gDocinsert, gDocremove), firemodel=true);
+  gEvent(components.tfBillState, event=(gDocchange, gDocinsert, gDocremove), firemodel=true);
+  gEvent(components.tfBillZIP, event=(gDocchange, gDocinsert, gDocremove), firemodel=true);
+  gEvent(components.tfBillCountry, event=(gDocchange, gDocinsert, gDocremove), firemodel=true);
+  
+  gEvent(components.cbCCType, firemodel=true);
+  gEvent(components.tfExpMonth, event=(gDocchange, gDocinsert, gDocremove), firemodel=true);
+  gEvent(components.tfExpYear, event=(gDocchange, gDocinsert, gDocremove), firemodel=true);
+  gEvent(components.tfCCNumber, event=(gDocchange, gDocinsert, gDocremove), firemodel=true);
+}
+
+local function checkOk()
+{
+  // All these things must be true for the order to be confirmed
+  $this.vars.Order.ShipToFirstName &&
+  $this.vars.Order.ShipToLastName &&
+  $this.vars.Order.ShipAddr1 &&
+  $this.vars.Order.ShipAddr2 &&
+  $this.vars.Order.ShipCity &&
+  $this.vars.Order.ShipState &&
+  $this.vars.Order.ShipZIP &&
+  $this.vars.Order.ShipCountry &&
+    ($this.vars.sameAddr ||
+      (
+        $this.vars.Order.BillToFirstName &&
+        $this.vars.Order.BillToLastName &&
+        $this.vars.Order.BillAddr1 &&
+        $this.vars.Order.BillAddr2 &&
+        $this.vars.Order.BillCity &&
+        $this.vars.Order.BillState &&
+        $this.vars.Order.BillZIP &&
+        $this.vars.Order.BillCountry
+      )
+    ) &&
+  ($this.vars.expMonth < 13) &&
+  ($this.vars.expMonth > 0)  &&
+  ($this.vars.expYear >= datepart(YEAR, getdate())) &&
+  $this.vars.Order.CardType &&
+  $this.vars.Order.CreditCard  // full validation on confirmation
+  ;
+}
+
+local function confirmOrder()
+{
+  // We allow an order to proceed with bad CC data. This is because
+  //   1. If developers run the demo connecting to the Inqwell server
+  //      this is not a credit card number harvesting exercise!
+  //   2. It demonstrates how Inq is never has synchronous control flow
+  //      with things like question dialogs, even if they are graphically
+  //      modal, hence the else clause here
+  if (call ccBadCheckSum($this.vars.Order.CreditCard) ||
+      call ccBadPattern($this.vars.Order.CreditCard, $this.vars.Order.CardType))
+    call inq.gui.util:questionDialog(dialog       = xfunc($this.svars.parent.funcs.getQuestionDialog),
+                                     questionText = $this.vars.proceedBadCC,
+                                     okExpr       = func f =
+                                                       {
+                                                         call doPlaceOrder($this.vars.Order);
+                                                       });
+  else
+    call doPlaceOrder($this.vars.Order);
+}
+
+local function dialogCancel()
+{
+  // The dialog cancel event handler. Remove ourselves from the
+  // node space, thus discarding the window.
+  remove($this);
+}
+
+local function doPlaceOrder(any Order)
+{
+  // If we are using the shipping address as the billing address
+  // copy it over
+  if ($this.vars.sameAddr)
+  {
+    Order.BillToFirstName = Order.ShipToFirstName;
+    Order.BillToLastName  = Order.ShipToLastName;
+    Order.BillAddr1       = Order.ShipAddr1;
+    Order.BillAddr2       = Order.ShipAddr2;
+    Order.BillCity        = Order.ShipCity;
+    Order.BillState       = Order.ShipState;
+    Order.BillZIP         = Order.ShipZIP;
+    Order.BillCountry     = Order.ShipCountry;
+  }
+  
+  Order.Locale = "en"; // TODO
+  
+  // expMonth and expYear are integers. We need to force string conversion
+  // hence the ""
+  Order.CardExp = "" + $this.vars.expMonth + "/" + $this.vars.expYear;
+
+  // The remaining fields are set up in the server. Send off the Order
+  //   1. Glass the GUI so the user can't send the same order twice
+  $this.properties.disabledText = "Processing order, please wait...";
+
+  //   2. Send the order to the server.
+  send placeOrder(Order,
+                  items = xfunc($this.svars.parent.funcs.getItems),
+                  ack = func f =
+                  {
+                    // Unglass the GUI
+                    $this.properties.disabledText = null;
+                    
+                    // Dispose the dialog
+                    call dialogCancel();
+                    
+                    // Confirm to the user
+                    call inq.gui.util:messageDialog(dialog       = $root.dialogs.ps.message,
+                                                    messageText  = renderf($catalog.{$root.i18n}.ps.message.ORDER_CONFIRMED,
+                                                                           item.Order)
+                                                   );
+                  },
+                  @exception = func f =
+                  {
+                    // Unglass the GUI
+                    $this.properties.disabledText = null;
+
+                    // Leave the dialog showing                    
+
+                    // Alert the user something has gone wrong.
+                    call inq.gui.util:messageDialog(dialog       = $root.dialogs.ps.message,
+                                                    messageText  = msg + "\n" + stackTrace
+                                                   );
+                  }
+                  );
+}
+
+local function initOrder(any Order, any Account, any items)
+{
+  // Copy over the relevant fields from Account to Order to pre-fil
+  // the shipping panel
+  Order.ShipToFirstName = Account.FirstName;
+  Order.ShipToLastName  = Account.LastName;
+  Order.ShipAddr1       = Account.Addr1;
+  Order.ShipAddr2       = Account.Addr2;
+  Order.ShipCity        = Account.City;
+  Order.ShipState       = Account.State;
+  Order.ShipZIP         = Account.ZIP;
+  Order.ShipCountry     = Account.Country;
+  
+  // Put our Account.Account into Order.Account
+  Order.Account         = Account.Account;
+
+  // Set the Order.TotalPrice field as the sum of the LineItem instances.
+  // Demonstrates the Inq sum() function.
+  Order.TotalPrice = sum(items, $loop.LineItem.UnitPrice * $loop.LineItem.Qty);
+}
+
+/**
+ * A custom validateInsert function that validates the credit card
+ * expiry month or year. This examples shows the full set of arguments
+ * Inq will pass when calling validateInsert functions, which it does when
+ * text is inserted into the component. This example also shows how
+ * any additional arguments can be defined and passed from the
+ * point of use - see the usage of this function when setting the
+ * component's validateInsert property.
+ *
+ * A validateInsert function returns the text to be inserted or null
+ * if no text should be inserted.
+ *
+ * @param text the text being inserted. This is not the current overall
+ * text in the component, just what is being typed or pasted.
+ * @param value the rendered value before the text is inserted
+ * @param formatter the formatter from the component's renderinfo. This
+ * can be used to check if the text would parse, for example.
+ * @param component the component.
+ * @param len an additional argument defined for this function and
+ * passed in the invocation.
+ */
+local function validateCCField(any text,
+                               any value,
+                               any formatter,
+                               any component,
+                               any len)
+{
+  // Do we already have enough characters?
+  any t = component.properties.text;
+  int l = length(t);
+  if (l < len)
+  {
+    // Otherwise would adding the length of the would-be text
+    // take us over the desired length (remember we could paste several
+    // characters)
+    if (l + length(text) <= len)
+    {
+      // Now we just need to check if the text is numeric. See
+      // if it will assign to an integer. Note we can't validate the
+      // actual value because we don't know where in the string
+      // text is being inserted.
+      l = text;
+      isnull(l) ? null : text;
+    }
+    else
+      null;
+  }
+  else
+    null;
+}
+
+local function ccBadCheckSum(any CreditCard)
+{
+  // from http://www.merriampark.com/anatomycc.htm
+
+  //---------------------------------------------------------
+  // Checks for valid credit card number using Luhn algorithm
+  // Returns true if the CC number is NOT valid
+  //---------------------------------------------------------
+  
+  int     tot      = 0;
+  int     digit    = 0;
+  int     addend   = 0;
+  boolean timesTwo = false;
+
+  for (int i = length(CreditCard) - 1; i >= 0; i--)
+  {
+    digit = midstring(CreditCard, i, i);
+    if (timesTwo)
+    {
+      addend = digit * 2;
+      if (addend > 9)
+        addend -= 9;
+    }
+    else
+      addend = digit;
+
+    tot += addend;
+    timesTwo = !timesTwo;
+  }
+  tot % 10 != 0;
+}
+
+local function ccBadPattern(any CardType, any CreditCard)
+{
+  // from http://niravpatel.wordpress.com/tag/credit-card/
+  
+  // Returns true if the CC number is NOT a valid pattern of numbers
+
+  switch
+  {
+    when(CardType == enum(CardType, VISA))
+      !(CreditCard ~~ "^4\\d{3}-?\\d{4}-?\\d{4}-?\\d{4}$");
+    
+    when(CardType == enum(CardType, MASTER))
+      !(CreditCard ~~ "^5[1-5]\\d{2}-?\\d{4}-?\\d{4}-?\\d{4}$");
+
+    when(CardType == enum(CardType, AMEX))
+      !(CreditCard ~~ "^3[4,7]\\d{13}$");
+
+    when(CardType == enum(CardType, DINERS))
+      !(CreditCard ~~ "^3[0,6,8]\\d{12}$");
+    
+    otherwise
+      true;
+  }
+}
+
+/**
+ * Place an assembled order. Creates a dialog to confirm shipping, billing
+ * and payment details.
+ * @param parent the parent for the dialog
+ * @param Account the user's Account to place the order against
+ */
+function placeOrder(any parent, any Account)
+{
+  show(call createGUI(parent, Account));
+}

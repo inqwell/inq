@@ -1,0 +1,131 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * PetStore Example
+ *
+ * Client startup for standard user
+ */
+
+package examples.petstore;
+
+
+// Immediate script for i18n setup
+set supportedLanguages = ("en");
+
+// check if we have specified the i18n parameter. if not, set the language to English.
+string i18n;
+
+if (isnull($catalog.argsMap.i18n))
+{
+  writeln($catalog.system.err, "WARNING: i18n parameter not found. Will use 'en' by default.");
+  i18n = "en";
+}
+else
+{
+  i18n = $catalog.argsMap.i18n;
+}
+
+// do we have the requested language in our repository????
+if (!contains(supportedLanguages, i18n))
+{
+  writeln($catalog.system.err, "ERROR: Requested i18n language '" + i18n + "' not found. Aborting.");
+  exit(1);
+}
+
+// store it for later use
+string $root.i18n = i18n;
+
+// The loadclient() function is a request to the server to return the
+// specified script. The server replies to multiple loadclient() requests
+// in the order they are issued.
+
+// load the constant string values from the server
+loadclient("../" + i18n + "/i18n.inq");
+
+// End of i18n setup
+
+// Send the client's initialisation request. It must happen before
+// we request userMain.inq because that script needs the initResponse
+// before it runs (to receive the icons). 
+send initialise();
+
+// Load the gui elements of petstore
+loadclient("userMain.inq");
+loadclient("myAccount.inq");
+loadclient("newOrder.inq");
+loadclient("placeOrder.inq");
+loadclient("myOrders.inq");
+loadclient("browseItems.inq");
+loadclient("utils.inq");
+
+// Load the client utility services of the filexfer package
+loadclient("../../../filexfer/clientSvc.inq");
+
+// Load the utility dialogs, these are available on
+// the class path 
+exec("cp:///inq/gui/messagedialog.inq");
+exec("cp:///inq/gui/questiondialog.inq");
+exec("cp:///inq/gui/itemChooser.inq");
+exec("cp:///inq/gui/attrEditor.inq");
+
+// Miscellaneous GUI related
+exec("cp:///inq/gui/guiutil.inq");
+
+// Set up some styles (that are used for table cell rendering of OrderStatus)
+smap m;
+any m.@fg = $catalog.colours.rgb.Orange;
+style $catalog.ps.styles.allocated = m;
+
+any m.@fg = $catalog.colours.rgb.Red;
+style $catalog.ps.styles.cancelled = m;
+style $catalog.ps.styles.down      = m;
+
+any m.@fg = $catalog.colours.rgb.Blue;
+style $catalog.ps.styles.open = m;
+
+any m.@fg = $catalog.colours.rgb.Green;
+style $catalog.ps.styles.shipped = m;
+style $catalog.ps.styles.up      = m;
+
+any m.@fg = $catalog.colours.rgb.Black;
+style $catalog.ps.styles.none = m;
+
+/**
+ * The initialisation response service.
+ *   Place the icons somewhere global
+ */
+service initResponse(any icons, any ccy)
+{
+  any $catalog.icons = icons;
+  any $catalog.ccy   = ccy;
+}
+
+service updateOk(any item, any ack)
+{
+  xfunc(ack, item);
+}
+
+/**
+ * A general purpose function that can be used as the handler in a
+ * <code>throw</code> statement. Simply puts up a message box
+ * using <code>msg</code> as the title and assuming <code>exInfo</code>
+ * to be a string as the message.
+ */
+function unexpectedError(string  msg,
+                         string  stackTrace,
+                         func    handler,
+                         boolean isUser,
+                         object  exInfo)
+{
+  // TODO: document this
+  string s = exInfo;
+  call inq.gui.util:messageDialog(dialog       = $root.dialogs.ps.message,
+                                  messageTitle = msg,
+                                  messageText  = s);
+}
+

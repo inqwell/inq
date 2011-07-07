@@ -1,0 +1,188 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * Inqwell GUI Utilitity Functions
+ *
+ * Functions and ready-made func variables for geneal GUI
+ * functionality
+ *
+ */
+
+package inq.gui.util;
+
+// Colour names supported by all major browsers - so it should be
+// good for us too!
+// See: http://www.w3schools.com/HTML/html_colornames.asp
+// to show the colours in your browser window.
+//
+colour $catalog.colours.rgb.AliceBlue 	= "#F0F8FF";
+colour $catalog.colours.rgb.AntiqueWhite 	= "#FAEBD7";
+colour $catalog.colours.rgb.Aqua 	= "#00FFFF";
+colour $catalog.colours.rgb.Aquamarine 	= "#7FFFD4";
+colour $catalog.colours.rgb.Azure 	= "#F0FFFF";
+colour $catalog.colours.rgb.Beige 	= "#F5F5DC";
+colour $catalog.colours.rgb.Bisque 	= "#FFE4C4";
+colour $catalog.colours.rgb.Black 	= "#000000";
+colour $catalog.colours.rgb.BlanchedAlmond 	= "#FFEBCD";
+colour $catalog.colours.rgb.Blue 	= "#0000FF";
+colour $catalog.colours.rgb.BlueViolet 	= "#8A2BE2";
+colour $catalog.colours.rgb.Brown 	= "#A52A2A";
+colour $catalog.colours.rgb.BurlyWood 	= "#DEB887";
+colour $catalog.colours.rgb.CadetBlue 	= "#5F9EA0";
+colour $catalog.colours.rgb.Chartreuse 	= "#7FFF00";
+colour $catalog.colours.rgb.Chocolate 	= "#D2691E";
+colour $catalog.colours.rgb.Coral 	= "#FF7F50";
+colour $catalog.colours.rgb.CornflowerBlue 	= "#6495ED";
+colour $catalog.colours.rgb.Cornsilk 	= "#FFF8DC";
+colour $catalog.colours.rgb.Crimson 	= "#DC143C";
+colour $catalog.colours.rgb.Cyan 	= "#00FFFF";
+colour $catalog.colours.rgb.DarkBlue 	= "#00008B";
+colour $catalog.colours.rgb.DarkCyan 	= "#008B8B";
+colour $catalog.colours.rgb.DarkGoldenRod 	= "#B8860B";
+colour $catalog.colours.rgb.DarkGray 	= "#A9A9A9";
+colour $catalog.colours.rgb.DarkGreen 	= "#006400";
+colour $catalog.colours.rgb.DarkKhaki 	= "#BDB76B";
+colour $catalog.colours.rgb.DarkMagenta 	= "#8B008B";
+colour $catalog.colours.rgb.DarkOliveGreen 	= "#556B2F";
+colour $catalog.colours.rgb.Darkorange 	= "#FF8C00";
+colour $catalog.colours.rgb.DarkOrchid 	= "#9932CC";
+colour $catalog.colours.rgb.DarkRed 	= "#8B0000";
+colour $catalog.colours.rgb.DarkSalmon 	= "#E9967A";
+colour $catalog.colours.rgb.DarkSeaGreen 	= "#8FBC8F";
+colour $catalog.colours.rgb.DarkSlateBlue 	= "#483D8B";
+colour $catalog.colours.rgb.DarkSlateGray 	= "#2F4F4F";
+colour $catalog.colours.rgb.DarkTurquoise 	= "#00CED1";
+colour $catalog.colours.rgb.DarkViolet 	= "#9400D3";
+colour $catalog.colours.rgb.DeepPink 	= "#FF1493";
+colour $catalog.colours.rgb.DeepSkyBlue 	= "#00BFFF";
+colour $catalog.colours.rgb.DimGray 	= "#696969";
+colour $catalog.colours.rgb.DodgerBlue 	= "#1E90FF";
+colour $catalog.colours.rgb.FireBrick 	= "#B22222";
+colour $catalog.colours.rgb.FloralWhite 	= "#FFFAF0";
+colour $catalog.colours.rgb.ForestGreen 	= "#228B22";
+colour $catalog.colours.rgb.Fuchsia 	= "#FF00FF";
+colour $catalog.colours.rgb.Gainsboro 	= "#DCDCDC";
+colour $catalog.colours.rgb.GhostWhite 	= "#F8F8FF";
+colour $catalog.colours.rgb.Gold 	= "#FFD700";
+colour $catalog.colours.rgb.GoldenRod 	= "#DAA520";
+colour $catalog.colours.rgb.Gray 	= "#808080";
+colour $catalog.colours.rgb.Green 	= "#008000";
+colour $catalog.colours.rgb.GreenYellow 	= "#ADFF2F";
+colour $catalog.colours.rgb.HoneyDew 	= "#F0FFF0";
+colour $catalog.colours.rgb.HotPink 	= "#FF69B4";
+colour $catalog.colours.rgb.IndianRed  	= "#CD5C5C";
+colour $catalog.colours.rgb.Indigo  	= "#4B0082";
+colour $catalog.colours.rgb.Ivory 	= "#FFFFF0";
+colour $catalog.colours.rgb.Khaki 	= "#F0E68C";
+colour $catalog.colours.rgb.Lavender 	= "#E6E6FA";
+colour $catalog.colours.rgb.LavenderBlush 	= "#FFF0F5";
+colour $catalog.colours.rgb.LawnGreen 	= "#7CFC00";
+colour $catalog.colours.rgb.LemonChiffon 	= "#FFFACD";
+colour $catalog.colours.rgb.LightBlue 	= "#ADD8E6";
+colour $catalog.colours.rgb.LightCoral 	= "#F08080";
+colour $catalog.colours.rgb.LightCyan 	= "#E0FFFF";
+colour $catalog.colours.rgb.LightGoldenRodYellow 	= "#FAFAD2";
+colour $catalog.colours.rgb.LightGray 	= "#D3D3D3";
+colour $catalog.colours.rgb.LightGreen 	= "#90EE90";
+colour $catalog.colours.rgb.LightPink 	= "#FFB6C1";
+colour $catalog.colours.rgb.LightSalmon 	= "#FFA07A";
+colour $catalog.colours.rgb.LightSeaGreen 	= "#20B2AA";
+colour $catalog.colours.rgb.LightSkyBlue 	= "#87CEFA";
+colour $catalog.colours.rgb.LightSlateGray 	= "#778899";
+colour $catalog.colours.rgb.LightSteelBlue 	= "#B0C4DE";
+colour $catalog.colours.rgb.LightYellow 	= "#FFFFE0";
+colour $catalog.colours.rgb.Lime 	= "#00FF00";
+colour $catalog.colours.rgb.LimeGreen 	= "#32CD32";
+colour $catalog.colours.rgb.Linen 	= "#FAF0E6";
+colour $catalog.colours.rgb.Magenta 	= "#FF00FF";
+colour $catalog.colours.rgb.Maroon 	= "#800000";
+colour $catalog.colours.rgb.MediumAquaMarine 	= "#66CDAA";
+colour $catalog.colours.rgb.MediumBlue 	= "#0000CD";
+colour $catalog.colours.rgb.MediumOrchid 	= "#BA55D3";
+colour $catalog.colours.rgb.MediumPurple 	= "#9370D8";
+colour $catalog.colours.rgb.MediumSeaGreen 	= "#3CB371";
+colour $catalog.colours.rgb.MediumSlateBlue 	= "#7B68EE";
+colour $catalog.colours.rgb.MediumSpringGreen 	= "#00FA9A";
+colour $catalog.colours.rgb.MediumTurquoise 	= "#48D1CC";
+colour $catalog.colours.rgb.MediumVioletRed 	= "#C71585";
+colour $catalog.colours.rgb.MidnightBlue 	= "#191970";
+colour $catalog.colours.rgb.MintCream 	= "#F5FFFA";
+colour $catalog.colours.rgb.MistyRose 	= "#FFE4E1";
+colour $catalog.colours.rgb.Moccasin 	= "#FFE4B5";
+colour $catalog.colours.rgb.NavajoWhite 	= "#FFDEAD";
+colour $catalog.colours.rgb.Navy 	= "#000080";
+colour $catalog.colours.rgb.OldLace 	= "#FDF5E6";
+colour $catalog.colours.rgb.Olive 	= "#808000";
+colour $catalog.colours.rgb.OliveDrab 	= "#6B8E23";
+colour $catalog.colours.rgb.Orange 	= "#FFA500";
+colour $catalog.colours.rgb.OrangeRed 	= "#FF4500";
+colour $catalog.colours.rgb.Orchid 	= "#DA70D6";
+colour $catalog.colours.rgb.PaleGoldenRod 	= "#EEE8AA";
+colour $catalog.colours.rgb.PaleGreen 	= "#98FB98";
+colour $catalog.colours.rgb.PaleTurquoise 	= "#AFEEEE";
+colour $catalog.colours.rgb.PaleVioletRed 	= "#D87093";
+colour $catalog.colours.rgb.PapayaWhip 	= "#FFEFD5";
+colour $catalog.colours.rgb.PeachPuff 	= "#FFDAB9";
+colour $catalog.colours.rgb.Peru 	= "#CD853F";
+colour $catalog.colours.rgb.Pink 	= "#FFC0CB";
+colour $catalog.colours.rgb.Plum 	= "#DDA0DD";
+colour $catalog.colours.rgb.PowderBlue 	= "#B0E0E6";
+colour $catalog.colours.rgb.Purple 	= "#800080";
+colour $catalog.colours.rgb.Red 	= "#FF0000";
+colour $catalog.colours.rgb.RosyBrown 	= "#BC8F8F";
+colour $catalog.colours.rgb.RoyalBlue 	= "#4169E1";
+colour $catalog.colours.rgb.SaddleBrown 	= "#8B4513";
+colour $catalog.colours.rgb.Salmon 	= "#FA8072";
+colour $catalog.colours.rgb.SandyBrown 	= "#F4A460";
+colour $catalog.colours.rgb.SeaGreen 	= "#2E8B57";
+colour $catalog.colours.rgb.SeaShell 	= "#FFF5EE";
+colour $catalog.colours.rgb.Sienna 	= "#A0522D";
+colour $catalog.colours.rgb.Silver 	= "#C0C0C0";
+colour $catalog.colours.rgb.SkyBlue 	= "#87CEEB";
+colour $catalog.colours.rgb.SlateBlue 	= "#6A5ACD";
+colour $catalog.colours.rgb.SlateGray 	= "#708090";
+colour $catalog.colours.rgb.Snow 	= "#FFFAFA";
+colour $catalog.colours.rgb.SpringGreen 	= "#00FF7F";
+colour $catalog.colours.rgb.SteelBlue 	= "#4682B4";
+colour $catalog.colours.rgb.Tan 	= "#D2B48C";
+colour $catalog.colours.rgb.Teal 	= "#008080";
+colour $catalog.colours.rgb.Thistle 	= "#D8BFD8";
+colour $catalog.colours.rgb.Tomato 	= "#FF6347";
+colour $catalog.colours.rgb.Turquoise 	= "#40E0D0";
+colour $catalog.colours.rgb.Violet 	= "#EE82EE";
+colour $catalog.colours.rgb.VeryLightGray  = "#EFEFEF";
+colour $catalog.colours.rgb.Wheat 	= "#F5DEB3";
+colour $catalog.colours.rgb.White 	= "#FFFFFF";
+colour $catalog.colours.rgb.WhiteSmoke 	= "#F5F5F5";
+colour $catalog.colours.rgb.Yellow 	= "#FFFF00";
+colour $catalog.colours.rgb.YellowGreen 	= "#9ACD32";
+
+
+// Set up some styles.
+
+// Table Stripes. Of course, the programmer is free to
+// alter $catalog.styles.stripeOdd (and stripeEven is not used)
+any m.@bg = $catalog.colours.rgb.AliceBlue;
+style $catalog.styles.stripeOdd = m;
+
+any m.@bg = $catalog.colours.rgb.White;
+style $catalog.styles.stripeEven = m;
+
+//--------------------------------------------------------
+// Style Functions
+//--------------------------------------------------------
+
+// tableStripe may be used as a table's rowStyle property to effect striping.
+cfunc $catalog.guiFuncs.tableStripe = call tableStripe(row);
+local function tableStripe(any row)
+{
+  if (row && row % 2 != 0)
+    $catalog.styles.stripeOdd;
+  else
+    null;
+}

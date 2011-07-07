@@ -1,0 +1,504 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * Inqwell Server Metadata
+ * Typedefs, public entry points and support functions
+ *
+ */
+
+package inq.meta;
+
+typedef string FQName   width=16;
+typedef string LongName width=32;
+
+typedef Typedef
+{
+  fields
+  (
+    string  Typedef width=16;  // Just the typedef name
+    string  Package width=16;  // The package
+    FQName;                    // The fully qualified name <package>.types.<typedef>
+    boolean IsNative;
+    date    Parsed;            // When this typedef was parsed and completely resolved
+  )
+
+  construct(
+  {
+    $this = .;
+    /*
+    if (!read(Package, .))
+    {
+      // First we've seen of this package
+      any newPackage = new(Package);
+      create(newPackage);
+    }
+    */
+  })
+
+	pkey
+	(
+		fields (FQName)
+  )
+
+  key ByPackage
+  (
+    fields(Package)
+  )
+
+  key ByPackageTypedef unique
+  (
+    fields(Package, Typedef)
+  )
+
+  key All
+  (
+    fields()
+  )
+}
+
+typedef Package
+{
+  fields
+  (
+    string Package;
+    string ClientURL;
+    string InitStmt;
+    LongName;
+    date   Parsed format="dd MMM yyyy HH:mm:ss";
+  )
+
+  construct(
+  {
+    $this = .;
+    writeln($catalog.system.out, "*********************** " + $this);
+  } )
+
+	pkey
+	(
+		fields (Package)
+  )
+
+  key All
+  (
+    fields()
+  )
+}
+
+typedef Field
+{
+  fields
+  (
+    string Field width=16;
+    Typedef.FQName;
+    any     Data;              // The actual data for this Field instance
+    int     Width;
+    string  Label;
+    string  Format;
+    boolean IsEnum;
+  )
+
+  construct(
+  {
+    // Put the Data item in.  Do this first or the bulk field assignment will fail
+    any $this.Data = Field.Data;
+
+    // Initialise other fields
+    $this = Field;
+
+    // Put the FQName in, just in case its not in the given Field
+    $this.FQName = FQName;
+  })
+
+  pkey
+  (
+    fields (FQName, Field)
+  )
+
+  key ByFQName
+  (
+    fields(FQName)
+  )
+}
+
+typedef Key
+{
+  fields
+  (
+    string  Key;
+    Typedef.FQName;
+    boolean Unique;
+    boolean Cached;
+    int     Loaded;           // The number of objects loaded, if cached
+    float   HitRate;          // Valid if cached, in the range 0 - 100.
+  )
+
+  construct(
+  {
+    $this = Key;
+    $this.FQName  = FQName;
+    $this.Loaded  = 0;
+    $this.HitRate = 0;
+  })
+
+  pkey
+  (
+    fields (FQName, Key)
+  )
+
+  key ByFQName
+  (
+    fields(FQName)
+  )
+}
+
+typedef KeyField
+{
+  fields
+  (
+    Field.Field;
+    Key.Key;
+    Key.FQName;
+  )
+
+  construct(
+  {
+    $this = Key;
+    $this = KeyField;
+    $this.FQName = FQName;
+  })
+
+  pkey
+  (
+    fields (Field, Key, FQName)
+  )
+
+  key ByKey
+  (
+    fields (FQName, Key)
+  )
+}
+
+typedef Enum
+{
+  fields
+  (
+    string Field width=16;
+    Typedef.FQName;
+    string Symbol;
+    any    IntValue;      // Parser ensures this is same type as field
+    any    ExtValue;      // No restrictions as such. Both these get replaced
+  )
+
+  construct(
+  {
+    // Put the Int/Ext items in.  Overall, we can't do a bulk assignment as
+    // the enum items are literals and therefore const.
+    any $this.IntValue = IntValue;
+    any $this.ExtValue = ExtValue;
+
+    // Initialise other fields
+    $this.Field  = Field.Field;
+    $this.FQName = FQName;
+    $this.Symbol = Symbol;
+  })
+
+  pkey
+  (
+    fields (FQName, Field, Symbol)
+  )
+
+  key ByTypeField
+  (
+    fields (FQName, Field)
+  )
+
+  key ByFQName
+  (
+    fields (FQName)
+  )
+
+}
+
+// Start Section: Support for general-purpose Attribute Editor
+
+typedef string EditBy = "N" width=12 label="Edit Action"
+(
+  NONE : "N" : "None";
+  INCR : "I" : "Increase";
+  DECR : "D" : "Decrease";
+  SET  : "S" : "Set";
+)
+
+typedef string EditByEnum = "N" width=12 label="Edit Action"
+(
+  NONE : "N" : "None";
+  SET  : "S" : "Set";
+)
+
+// Note - never created, only used in the client.
+typedef string EditUnits width=12 label="Units"
+(
+  N : "N" : "Number";
+  P : "P" : "Percentage";
+)
+
+// Note - never created, only used in the client.
+typedef EditableAttribute
+{
+  fields
+  (
+    int       EditableAttribute width=16;   // Not used - never enters managed state
+    string    Field;
+    EditBy    Action;
+    EditUnits Units;
+    any       Value;
+  )
+
+	construct(
+	           {
+						   throw("Can't create \p:\e");
+						 }
+					 )
+
+  pkey
+  (
+    fields(EditableAttribute)
+  )
+}
+
+// End Section: Support for Attribute Editor
+
+// Tell the server the function to call to create the meta objects.
+$catalog.inq.system.Server.properties.createMeta =
+  func f = call createMetaObjects(Typedef     = "",
+                                  Package     = "",
+                                  FQName      = "",
+                                  Parsed      = getdate(),
+                                  Fields      = null,
+                                  Keys        = null,
+                                  KeyFields   = null,
+                                  Enums       = null,
+                                  EnumSymbols = null);
+
+// Called by Inq to create the instances of the above types that represent
+// a loaded user type.
+local function createMetaObjects(Typedef.Typedef,
+                                 Typedef.Package,
+                                 Typedef.FQName,
+                                 boolean IsNative,
+                                 Typedef.Parsed,
+                                 any Fields,
+                                 any Keys,
+                                 any KeyFields,
+                                 any Enums,
+                                 any EnumSymbols)
+{
+  call deleteOld(FQName);
+
+  transaction
+  {
+    any newTypedef = new(Typedef);
+    create(newTypedef);
+    // The Fields parameter is a collection of suitable initialisers for Field instances
+    foreach(Fields)
+    {
+      // Put the current object on the stack for the constructor
+      any Field = $loop;
+      Field.IsEnum = contains(Enums, @name);
+
+      any newField = new(Field);
+      create(newField);
+
+      if (newField.IsEnum)
+      {
+        // The field name maps to a map of internal values to external ones
+        any intToExt = Enums.{Field.Field};
+
+        // and for the symbols the map is symbolic name to internal value
+        any symToInt = EnumSymbols.{Field.Field};
+
+        foreach(symToInt)
+        {
+          any Symbol   = @name;
+          any IntValue = $loop;
+          any ExtValue = intToExt.{IntValue};
+
+          any Enum = new(Enum);
+          create(Enum);
+        }
+      }
+    }
+
+    if (!IsNative)
+    {
+      // The Keys parameter is a collection of suitable initialisers for Key instances
+      foreach(Keys)
+      {
+        // Put the current object on the stack for the Key and KeyField constructors.
+        any Key = $loop;
+
+        // The KeyFields parameter is a Map of Maps of initialisers for KeyField instances
+        foreach(KeyFields.{$loop.Key})
+        {
+          any KeyField = $loop;
+          any newKeyField = new(KeyField);
+          create(newKeyField);
+        }
+
+        any newKey = new(Key);
+        create(newKey);
+      }
+    }
+  }
+
+  // Once all the objects are created we want to return a collection of the Key objects
+  // to the Inq runtime, so that it can pass the Loaded and HitRate variables to the
+  // caches.
+  read(Key, ., keyname="ByFQName", setname="newKeys");
+
+  newKeys;
+}
+
+// Remove any existing meta-data objects for the given typedef
+local function deleteOld(Typedef.FQName)
+{
+  if (read(Typedef, .))
+  {
+    transaction
+    {
+      // Found one.  Read all the related objects and delete them first
+      // The Fields
+      read(Field, ., keyname="ByFQName", setname="Fields");
+
+      // The Keys
+      read(Key, ., keyname="ByFQName", setname="Keys");
+
+      // Go through each key and delete the KeyField objects it has as well as
+      // the Key itself.
+      foreach(Keys)
+      {
+        read(KeyField, $loop.Key, keyname="ByKey", setname="KeyFields");
+        foreach(KeyFields)
+          delete($loop.KeyField);
+
+        delete($loop.Key);
+      }
+
+      // Delete the Fields
+      foreach(Fields)
+      {
+        if ($loop.Field.IsEnum)
+        {
+          read(Enum, $loop.Field, keyname="ByTypeField", setname="Enums");
+          foreach(Enums)
+            delete($loop.Enum);
+        }
+        delete($loop.Field);
+      }
+
+      // Delete the Typedef
+      delete(Typedef);
+    }
+  }
+}
+
+/**
+ * Creates or updates a Package instance with the given arguments, setting
+ * the Parsed field to the current system time.
+ */
+function createPackage(Package.Package,
+                       Package.ClientURL,
+                       Package.InitStmt,
+                       Package.LongName)
+{
+  // The stack already contains the primary key (Package.Package)
+  if (read(inq.meta:Package, .))
+  {
+    // The package already exists, just update non-primary fields
+    Package.ClientURL = ClientURL;
+    Package.InitStmt  = InitStmt;
+    Package.LongName  = LongName;
+    Package.Parsed    = getdate();
+  }
+  else
+  {
+    // Create a new Package instance. Add the Parsed field to the stack to
+    // complete the fields initialised in Package.<ctor>
+    date   Parsed    = getdate();
+
+    any newPackage = new(inq.meta:Package);
+    create(newPackage);  // ctor initialises from current stack
+  }
+}
+
+service metaTree(boolean byPackage, any dataPath, func dataCallback)
+{
+  hmap m;
+  if (byPackage)
+  {
+    // Start from the package list and build the typedefs/fields below
+    read(Package, ., keyname="All", target = m, setname="data");
+    sort(m.data, $loop.Package.Package);
+    writeln($catalog.system.out, "M.DATA " + m.data);
+
+    // Aggregate the typedefs in the packages
+    aggregate(Typedef,
+              m.data[first].Package,
+              foreach = cfunc f = {writeln($catalog.system.out, $loop); sort($loop.typedefs, $loop.Typedef.Typedef); },
+              keyname="ByPackage",
+              setname="typedefs");
+
+    // Aggregate the fields in the typedefs
+    // TODO: Constructs like the one commented out below do not detect
+    // all node sets along the path and apply iteration recursively, which
+    // arguably they should. For now, iterate over the first level so the
+    // aggregation is applied to *each* child thereunder. Otherwise only
+    // the first package is considered.
+    //aggregate(Field, m.data[first].typedefs[first].Typedef, keyname="ByFQName", setname="fields");
+    foreach(m.data)
+    {
+      //writeln($catalog.system.out, "TYPEDEF " + $loop.typedefs[first].Typedef.FQName);
+      aggregate(Field, $loop.typedefs[first].Typedef, keyname="ByFQName", setname="fields");
+    }
+
+    send system.client:receiveData(dataItem = m.data, dataPath, dataCallback);
+    //writeln($catalog.system.out, "metaTree byPackage", m);
+  }
+  else
+  {
+    // Read all the typedefs, not bothering with the package groupings
+    read(Typedef, ., keyname="All", target = m, setname="data");
+
+    // Aggregate the fields in the typedefs
+    aggregate(Field, m.data[0].Typedef, keyname="ByFQName", setname="fields");
+    send system.client:receiveData(dataItem = m.data, dataPath, dataCallback);
+    //writeln($catalog.system.out, "metaTree typedef", m);
+  }
+
+}
+
+service fetchFieldList(any meta, any callback)
+{
+  array args.meta;
+
+  any pk = new(Field.pkey);
+
+	foreach(meta)
+	{
+	  pk.FQName = $loop.typedef;
+		pk.Field  = $loop.field;
+		if (!read(Field, pk))
+		  throw("No typedef/field for " + pk);
+
+		any k = getuniquekey(Field);
+		args.meta + Field;
+	}
+
+	send metaCallback(args, callback);
+}
+

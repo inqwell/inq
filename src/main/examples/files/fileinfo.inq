@@ -1,0 +1,91 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+// Things you can do with Inq's "file" data type
+
+//writeln($catalog.system.out, args);
+
+if ((argsMap.p && count(args) < 4) || count(args) < 2)
+{
+  writeln($catalog.system.err, "Usage: " + args[0] + " [-p <property> ] file [, file ...]");
+  exit(1);
+}
+
+// Pass by value parameter
+local function dumpProperties(file f, any property)
+{
+  if (property)
+  {
+    any p = f.properties.{property};
+    if (p)
+      writeln($catalog.system.out, f.properties.{property});
+    else
+      writeln($catalog.system.err, "No such property " + property);
+  }
+  else
+  {
+    writeln($catalog.system.out, "Properties of " + f);
+
+    // Actually this is always true because Inq uses URL syntax with
+    // respect to the current directory
+    writeln($catalog.system.out, "absolute: " + f.properties.absolute);
+
+    writeln($catalog.system.out, "absoluteFile: " + f.properties.absoluteFile);
+    writeln($catalog.system.out, "absolutePath: " + f.properties.absolutePath);
+    writeln($catalog.system.out, "canonicalFile: " + f.properties.canonicalFile);
+    writeln($catalog.system.out, "canonicalPath: " + f.properties.canonicalPath);
+    writeln($catalog.system.out, "directory: " + f.properties.directory);
+    writeln($catalog.system.out, "exists: " + f.properties.exists);
+    writeln($catalog.system.out, "extension: " + isnull(f.properties.extension, "<none>"));
+    writeln($catalog.system.out, "hidden: " + f.properties.hidden);
+    writeln($catalog.system.out, "listRoots: " + f.properties.listRoots);
+    writeln($catalog.system.out, "name: " + f.properties.name);
+    writeln($catalog.system.out, "nameNoExtension: " + f.properties.nameNoExtension);
+    writeln($catalog.system.out, "parentFile: " + f.properties.parentFile);
+    writeln($catalog.system.out, "parentPath: " + f.properties.parentPath);
+    writeln($catalog.system.out, "path: " + f.properties.path);
+    writeln($catalog.system.out, "readable: " + f.properties.readable);
+    writeln($catalog.system.out, "readOnly: " + f.properties.readOnly);
+    writeln($catalog.system.out, "regularFile: " + f.properties.regularFile);
+    writeln($catalog.system.out, "writable: " + f.properties.writable);
+
+    if(f.properties.exists)
+    {
+      writeln($catalog.system.out, "lastModified: " + f.properties.lastModified);
+      writeln($catalog.system.out, "length: " + f.properties.length);
+      writeln($catalog.system.out, "MD5: " + f.properties.MD5);
+      writeln($catalog.system.out, "SHA1: " + f.properties.SHA1);
+      writeln($catalog.system.out, "SHA256: " + f.properties.SHA256);
+      writeln($catalog.system.out, "SHA384: " + f.properties.SHA384);
+      writeln($catalog.system.out, "SHA512: " + f.properties.SHA512);
+    }
+
+    if(f.properties.directory)
+    {
+      writeln($catalog.system.out, "list: " + f.properties.list);
+      writeln($catalog.system.out, "listFiles: " + f.properties.listFiles);
+    }
+  }
+}
+
+int j = 1;
+
+// If the -p flag was used get its value and step over it
+if (argsMap.p)
+{
+  any property = argsMap.p;
+  j = 3;
+}
+
+// Process the files
+for (int i = j; i < count(args); i++)
+{
+  call dumpProperties(f = args[i], property);
+}
+

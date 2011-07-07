@@ -1,0 +1,87 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/*
+ * $Archive:  $
+ * $Author: sanderst $
+ * $Revision: 1.6 $
+ * $Date: 2011-05-04 22:14:27 $
+ */
+
+/**
+ * AsynchQueueExample.inq
+ *
+ * This is a more typical usage of Inq's JMS facilities.
+ * A process uses a listener function to dispatch JMS
+ * messages, leaving it free to act as an Inq event dispatcher
+ * also.
+ *
+ * This example waits for messages at a named queue. It can
+ * be run in conjunction with SenderToQueue.inq.
+ */
+
+#include<SampleUtilities.inq>
+
+local function usage()
+{
+  writeln($catalog.system.err, "usage: \i: -name <queue-name>");
+  writeln($catalog.system.err, "  -name <queue-name>");
+  exit(1);
+}
+
+local function consumerStart(any process, // always provided by Inq
+                             any queue)
+{
+  writeln($catalog.system.out, "\e \l Starting: " + process.processName);
+
+  // Just send a service request to the process
+  // to run the demo
+  send doConsumer(@channel = process.ichannel, queue);
+}
+
+local function jmsEnd()
+{
+  writeln($catalog.system.out, "\e \l Ended: " + $process.processName);
+  mqclose($this.jms.connection);
+}
+
+local function jmsListen(any message)
+{
+  if (message.properties.text)
+    writeln($catalog.system.out, "Reading message: " + message.properties.text);
+  else
+    exit(0);
+}
+
+service doConsumer(any queue)
+{
+  // Declare a func variable that is the callback for asynchronously
+  // received messages
+  cfunc f = call jmsListen();
+
+  // Initialise the JMS env, passing the callback function
+  any $this.jms = call initJMS(queue, queueListener = f);
+
+  // Any messages received on the consumer (created inside initJMS)
+  // will be delivered to the local function jmsListen. In the
+  // mean time, the process can continue to process other Inq
+  // events, such as further service requests.
+}
+
+if (!$catalog.argsMap.name)
+  call usage();
+
+// Start the process
+
+any asynchConsumer  = spawn("AsynchConsumer",
+                            type  = PROCESS_DETACHED,
+                            start = call consumerStart(queue = $catalog.argsMap.name),
+                            end   = call jmsEnd(),
+                            syncext = true);
+

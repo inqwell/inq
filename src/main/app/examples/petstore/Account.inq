@@ -1,0 +1,100 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * PetStore Example
+ *
+ * Account type
+ */
+
+package examples.petstore;
+
+#include <i18n.inq>
+
+typedef Account
+{
+  fields
+  (
+    string        Account   width=16;  // Convention says we call this field Account, it is mapped from userid in the DB.
+    string        Email     width=20;
+    Name          FirstName label={i18n}.ps.title.FIRST_NAME;
+    Name          LastName  label={i18n}.ps.title.LAST_NAME;
+    AccountStatus Status;
+    AddressLine   Addr1     label={i18n}.ps.title.ADDR1;
+    AddressLine   Addr2     label={i18n}.ps.title.ADDR2;
+    City;
+    State;
+    ZIP;
+    Country;
+    Phone;
+  )
+
+  construct
+  ({
+     call validate(Account = $this);
+  })
+
+  mutate
+  ({
+     call validate(Account = $this.new);
+  })
+
+  destroy
+  ({
+     // We never destroy Accounts
+     throw("Account - cannot destroy");
+  })
+
+  pkey
+  (
+    fields (Account)
+
+    #include <{db}/Account.pkey.sql>
+  )
+
+  key ByZIP
+  (
+    fields (ZIP)
+
+    auxcfg( map(
+    "prepared", true,
+    "read-sql", // column names must be in the same order as key fields spec
+      "
+        {select-stmt}
+        where A.ZIP = ?
+      "
+    ))
+  )
+
+  key ByLikeLastName
+  (
+    fields (LastName)
+
+    #include<{db}/Account.ByLikeLastName.sql>
+  )
+  
+  // I/O resource binding
+  iobind (SimpleSqlIO, ps)
+}
+
+// Just check that anything that we really should have is not null.
+// The GUI enforces this, so this check is just for last-ditch
+local function validate(any Account)
+{
+  // If any field is not initialised throw an exception
+  // passing the instance as the userInfo payload
+  if (!(Account.Account && 
+        Account.Email &&
+        Account.FirstName &&
+        Account.LastName  &&
+        Account.Status &&
+        Account.Addr1 &&
+        Account.City &&
+        Account.State &&
+        Account.ZIP))
+    throw("One or more compulsory fields are null", Account);
+}

@@ -1,0 +1,54 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+// An example of using regexs to split out urls from a larger string. The chat
+// demo application uses this.
+
+// Note - not sure this works for some of the whackier urls you get these days.
+// Probably needs some further work in that regard...
+
+regex re;
+
+string s = (count(args) > 1)
+  ? args[1]
+  : "Click inqwell.com or inqwell.co.uk for further info or email mailto:info@inqwell.com and we'll get back to you (like Jim Rockford)";
+
+re.properties.pattern  = "(((ht|f)tp(s?)\\:\\/\\/|~/|/)|mailto:)?([\\w]+:\\w+@)?([a-zA-Z]{1}([\\w\\-]+\\.)+([\\w]{2,5}))(:[\\d]{1,5})?((/?\\w+/)+|/?)(\\w+\\.[\\w]{3,4})?((\\?\\w+=\\w+)?(&\\w+=\\w+)*)?";
+re.properties.sequence = s;
+
+int indx = 0;
+int last = 0;
+int len = length(s);
+
+// Should print the input string twice
+writeln($catalog.system.out, s);
+
+while (boolean b = re.properties.find)
+{
+  // Fetch the match
+  string u = re.properties.group;
+
+  // Output any characters preceeding the match
+  if (indx < re.properties.start)
+    writestream($catalog.system.out, midstring(s, indx, re.properties.start - 1));
+
+  // Remember where the last match ended
+  indx = re.properties.end;
+
+  // Output the match itself
+  writestream($catalog.system.out, midstring(s, re.properties.start, indx - 1));
+
+}
+
+// Output any characters after the last match
+if (indx < len)
+  writestream($catalog.system.out, rightstring(s, len - indx));
+
+writeln($catalog.system.out, "");
+

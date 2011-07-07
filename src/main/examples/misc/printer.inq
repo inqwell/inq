@@ -1,0 +1,22 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+// Basic printer test.  Sends one line of plain text to the default printer.
+// May work, may not, depending on the platform. Not sure how useful it
+// really is, just sending plain text like this but anyway.
+
+ioPrint myPrinter;
+
+string printer = "printer://localhost";
+
+if (open(myPrinter, printer, OPEN_WRITE))
+{
+  writeln(myPrinter, "This has been printed by an Inq script");
+  close(myPrinter);
+}

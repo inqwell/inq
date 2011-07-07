@@ -1,0 +1,130 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * PetStore Example
+ *
+ * OrderStatus type. Like the Inventory type, this type holds data
+ * additional to (in this case) LineItem that could have been held
+ * there.
+ */
+
+package examples.petstore;
+
+#include <i18n.inq>
+
+typedef OrderStatus
+{
+  fields
+  (
+    Order.Order;
+    SeqVal    LineItem;
+    DateTime  Timestamp label={i18n}.ps.general.LAST_UPDATED;
+    OStatus   Status    label={i18n}.ps.general.ITEM_STATUS;
+  )
+
+  construct
+  ({
+     // We expect there to be an LineItem instance on the stack
+     // when the constructor runs. Initialise the key fields
+     // from it.
+     $this.Order = LineItem.Order;
+     $this.LineItem = LineItem.LineItem;
+
+     // Set the Timestamp to now and the status to Open
+     $this.Timestamp = getdate();
+     $this.Status = enum(OStatus, O);
+  })
+
+  mutate
+  ({
+     // When the Status field is changed update the Timestamp and
+     // possibly manage inventory.
+     // Notes:
+     //   1. The primary key is Order+LineItem - these cannot
+     //      therefore be changed. That just leaves the Status
+     //      field.
+     //   2. When the Status field changes to Allocated check if there
+     //      is sufficient inventory and adjust downwards if so.
+     //   3. If insufficient inventory then veto the change.
+     //   4. When the Status field changes from Allocated to anything
+     //      other than Shipped return the inventory.
+     //   5. If an instance is joined in a transaction but no fields
+     //      have actually changed then Inq does not run the mutate block.
+     
+     if ($this.new.Status == enum(OStatus, A))
+     {
+       if (!call takeFromInventory(OrderStatus = $this.new))
+         $this.new.Status = $this.old.Status;
+     }
+     else if ($this.old.Status == enum(OStatus, A) && $this.new.Status != enum(OStatus, S))
+       call returnToInventory(OrderStatus = $this.new);
+
+     $this.new.Timestamp = getdate();
+  })
+
+  destroy
+  ({
+     // We never delete LineItems, so we never delete OrderStatuses
+     // either.
+     throw("OrderStatus - cannot destroy");
+  })
+
+  // In the schema definition we have inherited from the ibatis/spring example
+  // the primary key is defined as Order + LineItem. In fact, LineItem.LineItem is
+  // allocated for each instance created, so this could have been the pk. Instead
+  // we just define this as another unique key.
+  pkey
+  (
+    fields (Order, LineItem)
+
+    #include <{db}/OrderStatus.pkey.sql>
+  )
+
+  key ByLineItem unique
+  (
+    fields(LineItem)
+    auxcfg( map(
+    "prepared", true,
+    "read-sql", // column names must be in the same order as key fields spec
+      "
+        {select-stmt}
+        where OS.linenum = ?
+      "
+    ))
+  )
+
+  key ByOrder
+  (
+    fields(Order)
+    auxcfg( map(
+    "prepared", true,
+    "read-sql", // column names must be in the same order as key fields spec
+      "
+        {select-stmt}
+        where OS.orderid = ?
+      "
+    ))
+  )
+
+  key ByStatus
+  (
+    fields(Status)
+    auxcfg( map(
+    "prepared", true,
+    "read-sql", // column names must be in the same order as key fields spec
+      "
+        {select-stmt}
+        where OS.status = ?
+      "
+    ))
+  )
+  
+  // I/O resource binding
+  iobind (SimpleSqlIO, ps)
+}
+

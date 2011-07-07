@@ -1,0 +1,92 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/*
+ * $Archive:  $
+ * $Author: sanderst $
+ * $Revision: 1.5 $
+ * $Date: 2011-04-10 22:19:25 $
+ */
+
+/**
+ * SynchQueueExample.inq
+ *
+ * The receiver for messages sent with SenderToQueue.inq
+ *
+ * Note that normally an Inq process will set up
+ * JMS for asynchronous processing. It will then
+ * process received JMS messages and Inq events (like
+ * timers, service requests or events it is explicitly
+ * listening for) in the same thread as part of its
+ * "event loop". To process blocking event sources
+ * (like a JMS synchronous receive) is not a normal
+ * way for an Inq process to work, Nonetheless, Inq
+ * does support synchronous processing (for "quick-
+ * and-dirty" scripts) so here it is.
+ *
+ * A more correct model for handling JMS events in
+ * the Inq environment is to use the asynchronous
+ * model, as shown in AsynchQueueExample.inq
+ */
+
+
+local function usage()
+{
+  writeln($catalog.system.err, "usage: \i: -name <qname>");
+  writeln($catalog.system.err, "  -name <qname>");
+  exit(1);
+}
+
+if (!$catalog.argsMap.name)
+  call usage();
+
+// Get the connection factory. Inq has no JNDI support yet so
+// instead we call the configurator (which could do JNDI if it
+// wanted to). The default configurator assumes the Sun Glassfish
+// JMS implementation is available (and the broker is started)
+any connFactory = callmethod("getJMSConnectionFactory", class="com.inqwell.any.jms.JMSHelper", $catalog.argsMap);
+writeln($catalog.system.out, connFactory);
+
+// Create a connection
+any connection = mqcreateconnection(connFactory);
+
+// Create a session from the connection:
+//   auto-acknowledge mode
+//   not transacted
+any session = mqcreatesession(connection, false, AUTO_ACKNOWLEDGE);
+
+// We are creating the queue (as opposed to looking it up in an
+// object store of some sort)
+any queue = mqcreatequeue(session, $catalog.argsMap.name);
+writeln($catalog.system.out, queue);
+
+// Create a message consumer against the queue.
+any consumer = mqcreateconsumer(session, queue);
+
+// Start receiving messages - you need to do this
+// or you will not receive anything
+mqstart(connection);
+
+while(true)
+{
+  // Receive a message
+  any msg = mqreceive(consumer);
+
+  // Check if we received a text message and if so print out the contents.
+  // Otherwise terminate
+  if (msg.properties.text)
+    writeln($catalog.system.out, "Received: " + msg.properties.text);
+  else
+  {
+    // Terminate. Must exit explicitly as (most likely) the
+    // JMS runtime has started other threads
+    exit(0);
+  }
+}
+

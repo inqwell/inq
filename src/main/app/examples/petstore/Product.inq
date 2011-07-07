@@ -1,0 +1,81 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * PetStore Example
+ *
+ * Product type. A general product line within which there are
+ * specific items (modelled with the Item type).
+ */
+
+package examples.petstore;
+
+#include <i18n.inq>
+
+typedef Product
+{
+  fields
+  (
+    string    Product width=10 label={i18n}.ps.title.PRODUCT;
+    Category.Category;
+    ShortName Name             label={i18n}.ps.title.NAME;
+    string    Icon;
+    Description;
+  )
+
+  construct
+  ({
+     call validate(Product = $this);
+  })
+
+  mutate
+  ({
+     call validate(Product = $this.new);
+  })
+
+  destroy
+  ({
+     // Can't delete a Product while there are still Items within it
+     read(Item, $this, keyname="ByProductCheck", setname="list");
+     if (count(list))
+       throw("Cannot delete non-empty product");
+  })
+
+  pkey
+  (
+    fields (Product)
+
+    #include <{db}/Product.pkey.sql>
+  )
+
+  key ByCategory
+  (
+    fields(Category)
+    auxcfg( map(
+    "prepared", true,
+    "read-sql", // column names must be in the same order as key fields spec
+      "
+        {select-stmt}
+        where P.category = ?
+      "
+    ))
+  )
+  
+  // I/O resource binding
+  iobind (SimpleSqlIO, ps)
+}
+
+// Check Product instance is valid
+local function validate(any Product)
+{
+  if (!(Product.Product && 
+        Product.Category
+       )
+     )
+    throw("Illegal Product instance " + Item);
+}
+

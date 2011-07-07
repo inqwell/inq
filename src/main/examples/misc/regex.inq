@@ -1,0 +1,57 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+// Regex testing
+
+regex re;
+
+// Simple literal and loop
+re.properties.pattern  = "foo";
+re.properties.sequence = "foofoofoo";
+while (boolean b = re.properties.find)
+{
+  string s = re.properties.group;
+  writeln($catalog.system.out, s);
+  writeln($catalog.system.out, "Start " + re.properties.start);
+}
+
+// Groups
+re.properties.pattern   = "([A-Z][A-Z][0-9A-Z]+)\\s*,\\s*([0-9]+)";
+re.properties.sequence  = "US88579Y1010 , 12345";
+b = re.properties.find;
+if (b)
+{
+  int i = re.properties.groupCount;
+  writeln($catalog.system.out, "Group count: " + i);
+  writeln($catalog.system.out, "" + re.properties.groups);
+  array grps;
+  grps = re.properties.groups;
+  foreach(grps)
+    writeln($catalog.system.out, "|" + $this + "|");
+}
+else
+  writeln($catalog.system.out, "No match");
+
+// The match operator
+writestream($catalog.system.out, "Does \"^A.*dark$\" match \"A shot in the dark\" ? ");
+writeln($catalog.system.out, ("A shot in the dark" ~~ "^A.*dark$") ? "yes" : "no");
+
+// Substitution
+writeln($catalog.system.out,
+        sub("fox", "cat", "The quick brown cat jumped over the lazy dog"));
+
+// Global substitution
+writeln($catalog.system.out,
+        gsub("cat", "dog", "You dont't have to walk a dog because dogs walk themselves"));
+
+// as above but using a pre-prepared regex
+re.properties.pattern  = "dog";
+re.properties.sequence = "You dont't have to walk a dog because dogs walk themselves";
+writeln($catalog.system.out,
+        gsub("cat", re));

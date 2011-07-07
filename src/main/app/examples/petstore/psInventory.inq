@@ -1,0 +1,81 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * PetStore Example
+ *
+ * Inventory functionality.
+ */
+
+package examples.petstore;
+
+/**
+ * Reduce the available inventory for the LineItem corresponding to
+ * the given OrderStatus. Return true if there is sufficient
+ * inventory; false otherwise
+ */
+function takeFromInventory(any OrderStatus)
+{
+  // Get the corresponding LineItem
+  read(LineItem, OrderStatus);
+  
+  // Get the relevant Inventory instance
+  read(Inventory, LineItem);
+  
+  // Check and adjust - requires an explicit lock
+  lock(Inventory);
+  if (Inventory.Qty >= LineItem.Qty)
+  {
+    Inventory.Qty -= LineItem.Qty;
+    
+    loginfo($catalog.ps.logger,
+            "Qty {0} for LineItem {1} taken from Inventory {2} leaving {3}",
+            LineItem.Qty,
+            LineItem.LineItem,
+            Inventory.Item,
+            Inventory.Qty);
+    
+    // Returns
+    true;
+  }
+  else
+  {
+    logwarning($catalog.ps.logger,
+            "Insufficient amount of {0} in Inventory {1} for LineItem {2} whose Qty is {3}",
+            Inventory.Qty,
+            Inventory.Item,
+            LineItem.LineItem,
+            LineItem.Qty);
+    
+    // Returns
+    false;
+  }
+
+}
+
+/**
+ * Increase the available inventory for the LineItem corresponding to
+ * the given OrderStatus.
+ */
+function returnToInventory(any OrderStatus)
+{
+  // Get the corresponding LineItem
+  read(LineItem, OrderStatus);
+  
+  // Get the relevant Inventory instance
+  read(Inventory, LineItem);
+  
+  // Just return
+  Inventory.Qty += LineItem.Qty;
+  
+  loginfo($catalog.ps.logger,
+          "Qty {0} from LineItem {1} returned to Inventory {2} giving {3}",
+          LineItem.Qty,
+          LineItem.LineItem,
+          Inventory.Item,
+          Inventory.Qty);
+}

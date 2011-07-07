@@ -1,0 +1,105 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/*
+ * $Archive:  $
+ * $Author: sanderst $
+ * $Revision: 1.5 $
+ * $Date: 2011-04-10 22:19:25 $
+ */
+
+/**
+ * QueueBrowser.inq
+ *
+ * Look at any number of queues and browse them. Optionally drain
+ * their messages.
+ */
+
+#include<SampleUtilities.inq>
+
+local function usage()
+{
+  writeln($catalog.system.err, "usage: \i: -queues <queue-name ...>");
+  writeln($catalog.system.err, "           [-drain]");
+  exit(1);
+}
+
+local function dumpMsg(any message)
+{
+  any msgType = getproperty(message.properties.messageType);
+  switch
+  {
+    when (msgType == "TEXT")
+    {
+      writeln($catalog.system.out, "TEXT: " + message.properties.text);
+    }
+
+    when (msgType == "MAP")
+    {
+      writeln($catalog.system.out, "MAP:");
+      any names = message.properties.names;
+      foreach(names)
+        writeln($catalog.system.out, $loop + ": " + message.{$loop});
+    }
+
+    when (msgType == "OBJECT")
+      writeln($catalog.system.out, "OBJECT: " + message.properties.any); // properties.object dos the same thing but objects are no fun!
+
+    otherwise
+      writeln($catalog.system.out, message); // eg text message
+
+  }
+}
+
+if (!$catalog.argsMap.queues)
+  call usage();
+
+boolean drain;
+if ($catalog.argsMap.drain)
+  drain = true;
+
+// Create a connection
+any connection = call getConnection();
+
+// Create a session from the connection:
+//   auto-acknowledge mode
+//   not transacted
+any session = mqcreatesession(connection, false, AUTO_ACKNOWLEDGE);
+
+// Start receiving messages - you need to do this
+// or you will not receive anything
+mqstart(connection);
+
+// To fetch arguments from the command line that can have multiple
+// values refer to the argument name under the "arrays" child:
+any queues = argsMap.arrays.queues;
+
+foreach(queues)
+{
+  writeln($catalog.system.out, "Processing queue " + $loop);
+  any queue = mqcreatequeue(session, $loop);
+  any browser = mqcreatequeuebrowser(session, queue);
+
+  any consumer = drain ? mqcreateconsumer(session, queue)
+                       : null;
+
+  foreach(browser.properties.messages)
+  {
+    call dumpMsg(message = $loop);
+    if (consumer)
+      mqreceive(consumer, 1000l);
+  }
+
+  mqclose(browser);
+  if (consumer)
+    mqclose(consumer);
+}
+
+mqclose(connection);
+

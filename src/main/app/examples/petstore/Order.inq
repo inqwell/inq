@@ -1,0 +1,154 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * PetStore Example
+ *
+ * Order type. Individual orders.
+ *
+ * Demonstrates a key using an eligibility expression.
+ */
+
+package examples.petstore;
+
+#include <i18n.inq>
+
+typedef Order
+{
+  fields
+  (
+    SeqVal      Order       label={i18n}.ps.title.ORDER_NUMBER;
+    Account.Account;
+    Date        OrderDate   label={i18n}.ps.title.DATE;
+    OStatus     Status      label={i18n}.ps.general.ORDER_STATUS;
+    AddressLine ShipAddr1   label={i18n}.ps.title.ADDR1;
+    AddressLine ShipAddr2   label={i18n}.ps.title.ADDR2;
+    City        ShipCity    label={i18n}.ps.title.CITY;
+    State       ShipState   label={i18n}.ps.title.STATE;
+    ZIP         ShipZIP     label={i18n}.ps.title.ZIP;
+    Country     ShipCountry label={i18n}.ps.title.COUNTRY;
+    AddressLine BillAddr1   label={i18n}.ps.title.ADDR1;
+    AddressLine BillAddr2   label={i18n}.ps.title.ADDR2;
+    City        BillCity    label={i18n}.ps.title.CITY;
+    State       BillState   label={i18n}.ps.title.STATE;
+    ZIP         BillZIP     label={i18n}.ps.title.ZIP;
+    Country     BillCountry label={i18n}.ps.title.COUNTRY;
+    Name        Courier;
+    Price       TotalPrice      label={i18n}.ps.title.TOTAL_PRICE;
+    Name        BillToFirstName label={i18n}.ps.title.FIRST_NAME;
+    Name        BillToLastName  label={i18n}.ps.title.LAST_NAME;
+    Name        ShipToFirstName label={i18n}.ps.title.FIRST_NAME;
+    Name        ShipToLastName  label={i18n}.ps.title.LAST_NAME;
+    CreditCard;
+    ExpiryDate  CardExp label={i18n}.ps.title.EXPIRY_DATE;
+    CardType;
+    Locale;
+  )
+
+  construct
+  ({
+     // Allocate the Order field
+     $this.Order = call getUniqueId(Sequence = "ordernum");
+
+     // We don't bother with validation in this case as we have
+     // for other typedefs. We can use this as an example of
+     // what happens when we leave it to the database engine, as
+     // all columns are defined as non-nullable in this case.
+  })
+
+  mutate
+  ({
+     // We can't change certain fields. If we try to, throw
+     if ($this.new.Account != $this.old.Account ||
+         $this.new.OrderDate != $this.old.OrderDate)
+       throw("Illegal Order mutation\nOld: " + $this.old + "\nNew: " + $this.new);
+       
+     // If the Status of the order is changed to Shipped then
+     // we need to report it to the Pets International Exchange
+     if ($this.old.Status != $this.new.Status &&
+         $this.new.Status == enum(OStatus, S))
+       call reportOrder(Order = $this.new); 
+  })
+
+  destroy
+  ({
+     // We never delete Orders, we keep order history.
+     throw("Order - cannot destroy");
+  })
+
+  pkey
+  (
+    fields (Order)
+
+    #include <{db}/Order.pkey.sql>
+  )
+
+
+  // We can define a key to look up a given Account's orders with an optional
+  // date range.
+  // Because this key "imports" fields from elsewhere (it uses the typedef
+  // alias Date) Inq turns caching off by default. When defining a key field
+  // by referencing another typedef (usually a structure typedef) the
+  // implication is that a join is taking place at the database level.
+  // In those circumstances caching is disabled by default, since activity on
+  // the joined entity(ies) may change what the key yields.
+  // In this example all we are doing is creating additional fields
+  // so we can specify a range for OrderDate and we use an eligibility
+  // expression so Inq can maintain the cache. Explicitly turn caching
+  // back on.
+  key Filter cached=true
+  (
+    // This example defines fields in the key that are not part of the
+    // typedef. FromDate and ToDate exist in the key only.
+    fields(Account,
+           Status,
+           Date.Date FromDate,
+           Date.Date ToDate)
+
+    eligible
+    (
+      // This key is cached while at the same time containing an inequality.
+      // Once an order is placed the OrderDate field never changes but we
+      // could just as well create new Orders whose OrderDate would satisfy
+      // a cached key's date range. To maintain a correct cache we define an
+      // eligibility expression. It must match the sql where clause.
+      $this.instance.Account   == $this.key.Account &&
+      ($this.instance.Status   == $this.key.Status || isnull($this.key.Status)) &&
+      ($this.instance.OrderDate >= $this.key.FromDate || isnull($this.key.FromDate)) &&
+      ($this.instance.OrderDate <= $this.key.ToDate || isnull($this.key.ToDate))
+    )
+
+    // When defining the database binding information for this key
+    // we include a "read-order" element. This is because the key
+    // fields are used more than once in the where clause, that is
+    // we cannot rely on the key field declaration order to initialise
+    // the prepared statement parameters.
+    auxcfg( map(
+    "prepared", true,
+    "read-sql",
+      "
+        {select-stmt}
+        where O.userid = ?
+        and (O.Status = ? OR ? IS NULL)
+        and (O.orderdate >= ? OR ? IS NULL)
+        and (O.orderdate <= ? OR ? IS NULL)
+      ",
+    "read-order",
+      array a = (
+                  "Account",
+                  "Status",       "Status",
+                  "FromDate",     "FromDate",
+                  "ToDate",       "ToDate"
+                )
+
+    ))
+  )
+  
+  // I/O resource binding
+  iobind (SimpleSqlIO, ps)
+}
+

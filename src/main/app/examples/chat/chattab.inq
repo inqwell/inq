@@ -1,0 +1,445 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+package examples.chat;
+
+/**
+ * This function is called each time a new chat channel
+ * is confirmed in the client.
+ * @param ChatChannel - the ChatChannel we are joining.
+ * @param ChannelParticipant - our representation in the channel.
+ * @param parent - the GUI parent in which the layout should be performed
+ * @param tabFuncs - a map into which funcs are put when the new context
+ *                   is established for later use by the caller.
+ */
+function chatTab(any ChatChannel,
+                 any ChannelParticipant,
+                 any parent,
+                 any tabFuncs,
+                 any chatFuncs,
+                 any icons)
+{
+  // Generate a name for the top-level GUI component for this
+  // chat session.
+  string rootName = identity(ChatChannel);
+
+  // Create the top level gui component for the chat channel.
+  // If the channel is a public or conference channel then
+  // there will be a list of users displayed and we use a
+  // split pane.  Otherwise just put the components in a box.
+  if(ChatChannel.IsPublic || ChatChannel.IsConference)
+  {
+    // Includes a list of users in the GUI
+
+    gSplit {rootName};
+
+    // alias the root component for convenience
+    any    topLevel = {rootName};
+
+    topLevel.properties.dividerSize  = 10;
+    topLevel.properties.axis = X_AXIS;  // do left to right split pane.
+    topLevel.properties.resizeWeight = 1;
+
+    // When Row{} and Column{} constructs are used in a layout
+    // string Inq creates those boxes automatically. They can also
+    // be created explicitly with gBox.
+    // We need a box to contain the channel's common components...
+    gBox box;
+
+    // ...create the user list also...
+    gList  userList;
+    // and layout these components now
+    layout(., topLevel, "box userList");
+
+    // Finally alias the place where we layout the common components
+    any layoutIn = box;
+
+    // Set up the list's model to render the channel's participants.
+    // Tell the list what to render...
+    any listmodel.internal    = renderinfo(typedef=ChannelParticipant.OnLine);
+    userList.properties.model = listmodel;
+    // ...and where the the list items will be found
+    userList.properties.modelRoot = path($this.chatInsts.participantsList);
+
+    // Maintain the sort order of the participants. In the initResponse service
+    // we saw how the list could remain sorted by applying a sort to the data.
+    // In this case we use the modelSort property of the GUI control. The
+    // effect is the same but this way allows us to leave a sort in the
+    // gList for when the data arrives sometime in the future and is handled
+    // by internal MVC.
+    userList.properties.modelSort =
+      func f = sort($this, $loop.ChannelParticipant.OnLine, ignorecase=true);
+    // And set up the double click listener
+    gEvent(userList, call spawnPrivate(), event=(gMclicked),
+                                          gModify=(count=2));
+  }
+  else
+  {
+    // If there's no user list then just provide a box for the top level
+    gBox {rootName}; // default axis is Y so no need to set it.
+    any  topLevel = {rootName};
+
+    // The top level box is where we will layout the
+    // common components
+    any layoutIn = topLevel;
+  }
+
+  // Whatever the top level node is, it will be a context node
+  topLevel.properties.contextNode=true;
+
+  // Remember the given instances - see contextEstablished()
+  any topLevel.vars.ChatChannel        = ChatChannel;
+  any topLevel.vars.ChannelParticipant = ChannelParticipant;
+
+  // Remember also the map given to us. This is populated
+  // when contextExtablished() is called also.
+  any topLevel.vars.tabFuncs = tabFuncs;
+
+  // Remember the funcs to the chat context we have been given
+  any topLevel.vars.chatFuncs = chatFuncs;
+
+  // Create the remaining components.
+  gSplit chatSplit;
+  gTextPane chat;
+  gTextArea taSend;
+  gPopupMenu channelPopup;
+  gMenuButton pClear;
+  gMenuButton pClose;
+  pClear.properties.text="Clear Channel";
+  pClose.properties.text="Close Channel";
+  gEvent(pClear, call clearChannel());
+  gEvent(pClose, call leaveChannel());
+  layout(., topLevel, channelPopup, "pClear pClose");
+
+  // After establishing the context node, we can bind the properties
+
+  taSend.properties.lineWrap        = true;
+  taSend.properties.wrapStyleWord   = true;
+  taSend.properties.rows            = 2;
+
+  gEvent(taSend, call contextEstablished(), event=(gContext));
+
+
+  // Useful comment: experimentation shows that gSplit respects the
+  // sizes of the two children when these properties are set after
+  // they are laid out inside the gSplit. Otherwise the second
+  // child gets squashed to zero size. Hmmm.
+  chatSplit.properties.resizeWeight = 1;
+  chatSplit.properties.dividerSize  = 5;
+
+  // Create a variable to hold an icon showing chat status in this channel.
+  image topLevel.vars.tabIcon = icons.clear;
+
+  // Save the icons
+  any topLevel.vars.icons = icons;
+
+  // Layout the common components in whatever container
+  // was given above but keep the Inq hierarchy flat.
+  layout(., topLevel, layoutIn, "chatSplit { chat taSend } ");
+
+  // Place the component tree in the given (tab) parent. Do this last so that
+  // the tabChanged event handler will see the components taSend etc.
+  layout(., parent, parent, rootName, "topLevel");
+
+  // Once laid out in the tab, the tabXXX properties become active.
+  gProperty(topLevel, tabTitle, renderinfo($this.chatInsts.ChannelParticipant.DisplayName));
+  gProperty(topLevel, tabIcon, renderinfo($this.vars.tabIcon));
+
+  // Give the new sub-tree a func to call if it needs to sort
+  // the tabs.
+  // Remember this function is running in the context of the chat
+  // top-level component. The func type encapsulates the current
+  // context so that when $this.vars.sortTabs is called sortTabs()
+  // executes in that context.
+  // TODO.
+  func topLevel.vars.sortTabs = call sortTabs();
+
+  //
+  //gProperty(topLevel, tabVisible, renderinfo(call maintainTabOrder()));
+
+  gEvent(chat, call mouseOverUrl(), event=(gMmoved));
+  gEvent(chat, call clickOverUrl(), event=(gMclicked));
+
+  gPopup(chat, channelPopup);
+  float pAttrs.@firstIndent = -145;
+  float pAttrs.@leftIndent  = 145;
+  chat.properties.replaceParagraphAttributes = pAttrs;
+  chat.properties.editable = false;
+
+  // Save the cursor from the text pane - we change it when checking
+  // if the mouse is over a clickable item
+  any topLevel.vars.plainCursor = chat.properties.cursor;
+
+  taSend.properties.editable = true;
+  // TextAreas don't generate action events on CR so we
+  // use a key press event.  We consume the event so that
+  // the newline is not inserted into the text area's
+  // underlying document. Actions would be better but they
+  // have not yet been implemented in Inq.
+  gEvent(taSend, call sendChat(), event=(gKpressed),
+                                  gModify=(keycode=VK_ENTER),
+                                  consume=true);
+
+  // Put the focus on the text entry area
+  setfocus(taSend);
+
+  // return the top level component to the caller
+  topLevel;
+}
+
+local function contextEstablished()
+{
+  func $this.vars.tabFuncs.leaveChannel  = call leaveChannel();
+  func $this.vars.tabFuncs.clearChannel  = call clearChannel();
+  func $this.vars.tabFuncs.inviteChannel = call inviteChannel(OnLine);
+  func $this.vars.tabFuncs.chatReceived  = call chatReceived(ChatChannel, BackChat, baseStyle, urlRE, active, flashIcon);
+
+  send setupChatContext($this.vars.ChatChannel,
+                        $this.vars.ChannelParticipant);
+}
+
+local function sortTabs()
+{
+  // Maintaining the tabs in alpha order is TODO.
+  sort ($this.channels, $loop.vars.ChannelParticipant.DisplayName);
+}
+
+/**
+ * Called by the bound property tabVisible set up in chattab.inq.
+ * Once the displayName is known resort the tabs and return true
+ * to make the tab visible.
+ *
+ */
+local function maintainTabOrder()
+{
+  // TODO (as above)
+  $this.vars.ChannelParticipant.DisplayName; // this is the node we are monitoring
+  xfunc($this.vars.sortTabs);
+}
+
+/**
+ * Send the chat if its not zero length and clear the input field
+ */
+local function sendChat()
+{
+  // Its OK to pass nodes which resolve to text documents as
+  // arguments to local expressions declared as strings as
+  // the copy semantics yields the string for pass-by-value.
+  // However, when making a service request to another JVM we
+  // don't have the target argument type available.  We can
+  // assign to a string variable, as in this case, or call
+  // a local function to do the send-request, thus extracting
+  // the document text.
+  string msg = $this.taSend.model.root;
+  empty($this.taSend.model.root);
+  if (msg)
+    send sendChat(MsgText = msg);
+}
+
+local function chatReceived(any ChatChannel,
+                            any BackChat,
+                            any baseStyle,
+                            any urlRE,
+                            any active,
+                            any flashIcon)
+{
+  // Create some maps that represent styled text in Inq. These are maps whose
+  // children are well-known keys, like @style for the style and @txt for the
+  // string.
+
+  // 1) When the message was sent
+  any styledDate.@style = baseStyle;
+  any styledDate.@txt   = render(BackChat.MsgTime, format="HH:mm");
+
+  // 2) Who the message was from
+  any styledFrom.@style = baseStyle.unameStyle;
+  any styledFrom.@txt   = BackChat.MsgFrom;
+
+  // Use Inq vector access to the text pane's underlying document to add the text
+  any doc = $this.chat.model.root;
+  any atEnd = path(doc[last]);
+
+  // Add the time of the message
+  add(styledDate, atEnd);
+
+  // A tab - these don't need any style info
+  add("\t", atEnd);
+
+  // Another way of achieving the same thing as add() but a little less clear
+  any {atEnd} = styledFrom;
+  //add(styledFrom, atEnd);
+  add("\t", atEnd);
+
+  // 3) Prepare two styles for plain and url text
+  any styledText.@style = baseStyle;
+
+  // 4) Use a regex pattern loop to split the string up may be
+  int indx = 0;
+  int last = 0;
+  int len = length(BackChat.MsgText);
+  string u;
+  urlRE.properties.sequence = BackChat.MsgText;
+  while (boolean b = urlRE.properties.find)
+  {
+    // Fetch the match
+    u = urlRE.properties.group;
+
+    // Process any characters preceeding the match
+    if (indx < urlRE.properties.start)
+    {
+      any styledText.@txt   = midstring(BackChat.MsgText, indx, urlRE.properties.start - 1);
+      add(styledText, atEnd);
+    }
+
+    // Remember where the last match ended
+    indx = urlRE.properties.end;
+
+    // Output the match itself. For URLs we create a child style that
+    // contains the URL text with a key of our choosing. It's not a
+    // well-known key for styles so it doesn't affect the rendering, but
+    // because it resides in the style we can get it out again in the
+    // event handlers. See mouseOverUrl() and clickOverUrl().
+    style baseStyle.urlStyle.theUrl;
+    any   baseStyle.urlStyle.theUrl.urlText = midstring(BackChat.MsgText, urlRE.properties.start, urlRE.properties.end - 1);
+    any styledURL.@style  = baseStyle.urlStyle.theUrl;
+    any styledURL.@txt = baseStyle.urlStyle.theUrl.urlText;
+    add(styledURL, atEnd);
+  }
+
+  // Add any characters after the last match
+  if (indx < len)
+  {
+    any styledText.@txt = rightstring(BackChat.MsgText, len - indx);
+    add(styledText, atEnd);
+  }
+
+  // End paragraph
+  add("\n", atEnd);
+
+  // Setting the caret position to -1 places it at the end of the
+  // document. Forces scrolling of chat pane.
+  $this.chat.properties.caretPosition = -1;
+
+  // Put the tooltip text on the tab
+  any toolTip = (length(BackChat.MsgText) > 32) ? leftstring(BackChat.MsgText, 32) + "..."
+                                                : BackChat.MsgText;
+
+  $this.properties.tabToolTip = BackChat.MsgFrom +
+                                "@" + styledDate.@txt + " " +
+                                toolTip;
+
+  // If the window doesn't have the focus or the received message is
+  // not for the selected channel then use some icons to alert the user
+  if (!(active && $this.tabChildSelected))
+  {
+    $this.vars.tabIcon =
+      if ($this.tabChildSelected)
+        $this.vars.icons.rxfocus;
+      else
+        $this.vars.icons.rxnofocus;;
+
+    if (!active)
+      xfunc(flashIcon);
+  }
+}
+
+local function leaveChannel()
+{
+  send leaveChannel();
+}
+
+local function clearChannel()
+{
+  empty ($this.chat.model.root);
+}
+
+local function spawnPrivate()
+{
+  // Function points to newPrivate in the top-level window context
+  xfunc($this.vars.chatFuncs.spawnPrivate,
+        $this.userList.model.selection[0].OnLine);
+}
+
+/**
+ * Send the invite request to the selected user
+ * via the server's requestInviteOther service.
+ * By the time we get here we are in the context
+ * of the conference channel, vectored through
+ * from the inviteSelection expression.
+ */
+local function inviteChannel(any OnLine)
+{
+  // TODO See if the invitee is already in the channel
+
+  if (call notInGroup(OnLine))
+    send requestInviteOther(OnLine);
+  else
+    call inq.gui.util:messageDialog(messageTitle = "Error",
+                                    icon         = $uidefaults.OptionPane.errorIcon,
+                                    messageText  = OnLine.OnLine + " is already in the conference");
+}
+
+local function notInGroup(any OnLine)
+{
+  boolean ret = true;
+  foreach($this.chatInsts.participantsList)
+  {
+    if ($loop.OnLine == OnLine)
+    {
+      ret = false;
+
+      // No point in continuing
+      break();
+    }
+  }
+  ret;
+}
+
+/**
+ * We have received a chat message. This service is invoked in the
+ * top-level chat context (originally established when initChat was
+ * invoked). In this context we've saved our character styles and other
+ * useful things, and the funcs for each active ChatChannel, of course.
+ */
+service chatReceived(any ChatChannel, any BackChat)
+{
+  any k = getuniquekey(ChatChannel);
+
+  xfunc($this.vars.{k}.tabFuncs.chatReceived,
+        ChatChannel,
+        BackChat,
+        $this.vars.baseStyle,
+        $this.vars.urlRE,
+        $this.simple.dialogParent.properties.active,
+        $this.vars.flashIcon);
+}
+
+local function clickOverUrl()
+{
+  if (any a = @event.style.urlText)
+  {
+    // If there was no protocol then assume http
+    if (strindex(a, ":") < 0)
+      a = "http://" + a;
+
+    // Give the url to the o/s. Yes, I know this is not good
+    // but we've not upgraded to Java 6 yet and at least you can
+    // change the script.
+    if (startswith($properties.os_name, "Win"))
+      syscmd("rundll32 url.dll,FileProtocolHandler " + a);
+    else
+      syscmd("firefox " + a);
+  }
+}
+
+local function mouseOverUrl()
+{
+  if(@event.style.urlText)
+    @event.component.properties.cursorByName = "HAND";
+  else
+    @event.component.properties.cursor = $this.vars.plainCursor;
+}

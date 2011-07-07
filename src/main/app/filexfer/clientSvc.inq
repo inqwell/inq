@@ -1,0 +1,31 @@
+/**
+ * Inqwell File Transfer Package
+ *
+ * Client-side support services/functions
+ *
+ * Copyright <A9> Inqwell Ltd 2010.
+ * All rights reserved.
+ *
+ */
+package inq.filexfer;
+
+service reqAck(any filename, any clientToken, any ackFunc, any queued)
+{
+  xfunc(ackFunc, filename, clientToken, ack = true, queued);
+}
+
+service startOfFile(any filename, any numChunks, any clientToken, any ackFunc)
+{
+  xfunc(ackFunc, filename, clientToken, fileStart = true, numChunks);
+}
+
+service chunkReceived(any filename, any chunk, any counter, any numChunks, any clientToken, any ackFunc)
+{
+  xfunc(ackFunc, filename, chunk, counter, numChunks, clientToken);
+}
+
+service endOfFile(any filename, any clientToken, any ackFunc)
+{
+  xfunc(ackFunc, filename, clientToken, fileEnd = true);
+}
+

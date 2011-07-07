@@ -1,0 +1,47 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+// Inq's native xml stream
+// Used to store Inq structures in a robust way.
+// Preserves object graph and should be able
+// to cope with most Inq node types, except funcs.
+
+ioXML x;
+open(x, "file:x1.xml", OPEN_WRITE);
+writestream(x, 1);
+writestream(x, 1);
+writestream(x, 2);
+writestream(x, 2);
+writestream(x, "The quick brown fox
+jumped over the lazy dog");
+close(x);
+
+
+any m.a = 1;
+any m.b = 1;
+any m.c = "Hello, world!";
+timezone m.t;
+open(x, "x2.xml", OPEN_WRITE);
+writestream(x, m);
+close(x);
+
+// Read back what we've just written and write it again.
+// Files x2 and x2a will be the same (apart from the vm ids
+// of the instances
+open(x, "x2.xml", OPEN_READ);
+ioXML xa;
+open(xa, "x2a.xml", OPEN_WRITE);
+while(any a = readstream(x))
+{
+  writeln($catalog.system.out, a);
+  writestream(xa, a);
+}
+close(x);
+close(xa);
+

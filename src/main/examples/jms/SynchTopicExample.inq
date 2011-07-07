@@ -1,0 +1,149 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/*
+ * $Archive:  $
+ * $Author: sanderst $
+ * $Revision: 1.5 $
+ * $Date: 2011-04-10 22:19:25 $
+ */
+
+/**
+ * SynchTopicExample.inq
+ *
+ * Like the GlassFish(tm) example, this file starts
+ * a couple of processes that exchange messages via
+ * the specified topic.
+ *
+ * Note that normally an Inq process will set up
+ * JMS for asynchronous processing. It will then
+ * process received JMS messages and Inq events (like
+ * timers, service requests or events it is explicitly
+ * listening for) in the same thread as part of its
+ * "event loop". To process blocking event sources
+ * (like a JMS synchronous receive) is not a normal
+ * way for an Inq process to work, Nonetheless, Inq
+ * does support synchronous processing (for "quick-
+ * and-dirty" scripts) so here it is.
+ *
+ * A more correct model for handling JMS events in
+ * the Inq environment is to use the asynchronous
+ * model, as shown in AsynchQueueExample.inq
+ */
+
+#include<SampleUtilities.inq>
+
+local function usage()
+{
+  writeln($catalog.system.err, "usage: \i: -name <topic-name>");
+  exit(1);
+}
+
+local function producerStart(any process, // always provided by Inq
+                             any topic)
+{
+  writeln($catalog.system.out, "\e \l Starting: " + process.processName);
+
+  // Just send a service request to the process
+  // to run the demo
+  send doProducer(@channel = process.ichannel, topic);
+}
+
+local function consumerStart(any process, // always provided by Inq
+                             any topic)
+{
+  writeln($catalog.system.out, "\e \l Starting: " + process.processName);
+
+  // Just send a service request to the process
+  // to run the demo
+  send doConsumer(@channel = process.ichannel, topic);
+}
+
+local function jmsEnd()
+{
+  mqclose($this.jms.connection);
+  writeln($catalog.system.out, "\e \l Ended: " + $process.processName);
+}
+
+service doProducer(any topic)
+{
+  // Initialise the JMS env
+  any jms = call initJMS(topic);
+
+  // The message body
+  any s = "Here is a message ";
+  int counter = 1;
+
+  // Create a message. We're not going to send "Hello, world"
+  // we just soing this so you can see there is an optional
+  // argument to mqcreatetextmessage that initialises the
+  // message body.
+  any txtmsg = mqcreatetextmessage(jms.session, "Hello, world");
+
+  // In line with the original GlassFish example, busy-wait with
+  // sleep for the ack message. A bit eek but there it is
+  do
+  {
+    txtmsg.properties.text = s + counter++;
+    writeln($catalog.system.out, "PRODUCER THREAD: Publishing message: " + txtmsg.properties.text);
+    mqsend(jms.producer, txtmsg);
+
+    // A quick note about wait()... Inq can wait on anything
+    // and returns true if that thing was notified and false
+    // if (after the timeout) it is not. So this always returns
+    // false and we put it in the loop expression just for
+    // convenience.
+  } while (wait("foo", 1000) || !mqreceive(jms.consumer, -1l));
+
+  // For jmsEnd
+  any $this.jms = jms;
+
+  // Terminate ourselves
+  exit(0);
+}
+
+service doConsumer(any topic)
+{
+  // Initialise the JMS env
+  any jms = call initJMS(topic);
+
+  // Wait for the message
+  any txtmsg = mqreceive(jms.consumer);
+  writeln($catalog.system.out, "CONSUMER THREAD: Reading message: " + txtmsg.properties.text);
+
+  // Create a message. There is an optional argument to
+  // mqcreatetextmessage that initialises the message body.
+  any txtmsg = mqcreatetextmessage(jms.session, "Done");
+  mqsend(jms.producer, txtmsg);
+
+  // For jmsEnd
+  any $this.jms = jms;
+
+  exit(0);
+}
+
+if (!$catalog.argsMap.name)
+  call usage();
+
+// Start the processes
+
+any simpleProducer = spawn("SimpleProducer",
+                           type  = PROCESS_DETACHED,
+                           start = call producerStart(topic = $catalog.argsMap.name),
+                           end   = call jmsEnd());
+
+wait("wait", 1000);
+any synchConsumer  = spawn("SynchConsumer",
+                           type  = PROCESS_DETACHED,
+                           start = call consumerStart(topic = $catalog.argsMap.name),
+                           end   = call jmsEnd());
+waitproc(simpleProducer);
+waitproc(synchConsumer);
+
+
