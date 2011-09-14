@@ -96,7 +96,6 @@ public class Call extends    AbstractFunc
 		
 		if (args != null)
 		{
-			//System.out.println ("pushing args " + args);
 			// 'push' the arguments
 	    Iter i = args.createKeysIterator();
 	    while (i.hasNext())
@@ -216,7 +215,6 @@ public class Call extends    AbstractFunc
 		
   	// We don't want to execute the function we will call, we
   	// just want to reach it.
-  	//System.out.println ("Call.exec func_ is " + func_);
 		AbstractInputFunc func = null;
     func = locateFunc(a, getTransaction());
       
@@ -234,8 +232,6 @@ public class Call extends    AbstractFunc
       // ... these methods are reentrant ...
       Map m = func.buildArgs();
       m = passParams(m, args, a);
-      //System.out.println ("Call.exec proto args are " + m);
-      //System.out.println ("Call.exec given args are " + args);
   
       if (!getTransaction().getCallStack().isEmpty())
       {
@@ -262,6 +258,11 @@ public class Call extends    AbstractFunc
   {
     args_ = args;
   }
+  
+  public Locate getFunc()
+  {
+    return func_;
+  }
 
   public Map getArgs()
   {
@@ -269,6 +270,11 @@ public class Call extends    AbstractFunc
       return (Map)args_;
     
     return null;
+  }
+  
+  public Any getLocalReference()
+  {
+    return callingURL_;
   }
 
   /**
@@ -424,8 +430,6 @@ public class Call extends    AbstractFunc
           localIdx = s.entries()-1;
           s.add(localIdx, callingURL_);
           func_.setNodePath(s);
-          //System.out.println(callingURL_);
-          //System.out.println("*** 1 " + s);
         }
         
         func = (AbstractInputFunc)EvalExpr.evalFunc
@@ -446,7 +450,6 @@ public class Call extends    AbstractFunc
                                             func_,
                                             AbstractInputFunc.class,
                                             Locate.class);
-          //System.out.println("*** 2 " + s);
         }
         
         cachedFunc_ = func;
@@ -467,7 +470,6 @@ public class Call extends    AbstractFunc
                          Map   args,
                          Any   context) throws AnyException
   {  
-  	//System.out.println ("Call.exec given args are " + args);
 		if (defaults != null)  // its always non-null, but may be empty.
 		{
 			// as the function describes some arguments we set up any
@@ -536,8 +538,6 @@ public class Call extends    AbstractFunc
     if (t.getResolving() == Transaction.R_MAP)
     {
       sourceArg = t.getLastTMap();
-      //System.out.println("1 Call " + " var is " + sourceArg);
-      //System.out.println("1 Call " + t.getExecURL() + " at line " + t.getLineNumber());
     }
 
     if (sourceArg == null)
@@ -551,13 +551,9 @@ public class Call extends    AbstractFunc
         // Check for field ripping pass by reference
         if (t.getResolving() == Transaction.R_FIELD)
         {
-          //System.out.println("2.0 Call " + " class is " + sourceArg.getClass());
           sourceArg = t.getLastTField();
           if (sourceArg != null)
             sourceArg = sourceArg.bestowConstness();
-          //System.out.println("2.1 Call " + " class is " + sourceArg.getClass());
-          //System.out.println("2.2 Call " + " var is " + sourceArg);
-          //System.out.println("2.3 Call " + t.getExecURL() + " at line " + t.getLineNumber());
         }
 
 				target.replaceItem(pName, sourceArg);

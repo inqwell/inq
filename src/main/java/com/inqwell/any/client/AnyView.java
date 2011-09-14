@@ -33,6 +33,7 @@ import com.inqwell.any.AnyException;
 import com.inqwell.any.AnyInt;
 import com.inqwell.any.AnyRuntimeException;
 import com.inqwell.any.Array;
+import com.inqwell.any.BooleanI;
 import com.inqwell.any.Composite;
 import com.inqwell.any.ContainedException;
 import com.inqwell.any.Descriptor;
@@ -94,6 +95,8 @@ public abstract class AnyView extends    InstanceHierarchyMap
   static public    Any  y__             = AbstractValue.flyweightString("y");
   static public    Any  width__         = AbstractValue.flyweightString("width");
   static public    Any  height__        = AbstractValue.flyweightString("height");
+  
+  static protected BooleanI b__         = new AnyBoolean();
   
   static protected AnyInt     iX__      = new AnyInt();
   static protected AnyInt     iY__      = new AnyInt();
@@ -253,7 +256,7 @@ public abstract class AnyView extends    InstanceHierarchyMap
 		  contextNode_ = this;
 
 		  // Evaluate the context path if possible
-		  context_     = getPath();
+		  context_     = getPath(null);
     }
 		else
 		{
@@ -297,7 +300,7 @@ public abstract class AnyView extends    InstanceHierarchyMap
     {
       context_ = null;
       
-      context_ = getPath();
+      context_ = getPath(null);
       
       if (context_ != null && notifyContext_ != null)
       {
@@ -307,7 +310,6 @@ public abstract class AnyView extends    InstanceHierarchyMap
 
       
     }
-    //System.out.println("AnyView.addEventListener() " + context_);
     // Re-evaluate the context[path] in our component children
     if (context_ != null && l == getParentAny())
       evaluateChildContext();
@@ -500,8 +502,6 @@ public abstract class AnyView extends    InstanceHierarchyMap
   
 	public void setProperty(Any property, Event e) throws AnyException
 	{
-		//System.out.println ("AnyComponent.setProperty " + property);
-
 		Object o = getPropertyOwner(property);
 		PropertySet propertySet = getPropertySet(o);
 
@@ -534,10 +534,6 @@ public abstract class AnyView extends    InstanceHierarchyMap
 
 		propertyWrite_ = propertySet.getWriteMethod(property);
 		propertyObj_ = o;
-
-		//System.out.println ("AnyComponent.setProperty object is " + propertyValueObj_);
-		//System.out.println ("AnyComponent.setProperty method is " + propertyWrite_);
-		//System.out.println ("AnyComponent.setProperty target is " + propertyObj_);
 
 		if (writeProperty_ == null)
 			writeProperty_ = new WriteProperty();
@@ -851,7 +847,6 @@ public abstract class AnyView extends    InstanceHierarchyMap
 			}
 			else
 			{
-//				System.out.println ("listenForUpdates " + l + " with type " + eventType);
 				em = new EventMultiplexer(eventType);
 				dispachVia.addEventListener(em);
 			}
@@ -990,7 +985,6 @@ public abstract class AnyView extends    InstanceHierarchyMap
 			// ListenerAdapter to the component.
 			if (!attached)
 			{
-				//System.out.println ("attaching...");
 				attach(sla.eventCategory(), sla);
 			}
 		}
@@ -1049,7 +1043,6 @@ public abstract class AnyView extends    InstanceHierarchyMap
 			if (attachTo == null)
         return;
 
-			//System.out.println ("Attaching to " + attachTo);
 
       // Find the right EventSet
 			EventSet eventSet = (EventSet)eventSetMap__.get(attachTo);
@@ -1130,7 +1123,6 @@ public abstract class AnyView extends    InstanceHierarchyMap
   {
     PropertySet.BeansPropertyBinding b;
     p.makePropertyBinding(o, property, b = new BoundProperty(o));
-    //System.out.println("AnyView.makePropertyBinding " + property);
     return b;
   }
 
@@ -1138,16 +1130,6 @@ public abstract class AnyView extends    InstanceHierarchyMap
 //  {
 //    return modelFiring_;
 //  }
-
-  public boolean isDisposed()
-  {
-    WindowF w = AnyWindow.getParentWindow(this);
-
-    if (w != null)
-      return w.isDisposed();
-
-    return false;
-  }
 
   private class RenderingListener extends DataListener
   {
@@ -1212,7 +1194,6 @@ public abstract class AnyView extends    InstanceHierarchyMap
 
 		public Array getDesiredEventTypes()
 		{
-			//System.out.println ("DataListener.getDesiredEventTypes " + eventTypes_);
 			return eventTypes_;
 		}
     
@@ -1360,7 +1341,6 @@ public abstract class AnyView extends    InstanceHierarchyMap
 			try
 			{
 				propertyWrite_.invoke(propertyObj_, propertyArgs_);
-				//System.out.println ("WriteProperty.doSwing method is " + propertyWrite_);
 				if (propertyObj_ instanceof JComponent)
 				{
 					JComponent c = (JComponent)propertyObj_;
@@ -1392,11 +1372,34 @@ public abstract class AnyView extends    InstanceHierarchyMap
       {
         protected void doSwing()
         {
-          //System.out.println ("Writing property " + getName() + " with " + args[0]);
           BoundProperty.super.doWriteProperty(o, args, m);
         }
       };
       sb.maybeSync();
+    }
+	}
+	
+	static private class GuiRedispatcher extends SwingInvoker
+	{
+	  private Event e_;
+	  private EventListener l_;
+	  
+	  public GuiRedispatcher(Event e, EventListener l)
+	  {
+	    e_ = e;
+	    l_ = l;
+	  }
+
+    protected void doSwing()
+    {
+      try
+      {
+        l_.processEvent(e_);
+      }
+      catch(AnyException e)
+      {
+        throw new RuntimeContainedException(e);
+      }
     }
 	}
 
@@ -1511,8 +1514,8 @@ public abstract class AnyView extends    InstanceHierarchyMap
 	  	// If the inq thread is active (and the event hasn't
 	  	// already been through here once) then this event has
 	  	// arisen because of a swing action undertaken by the
-	  	// current service request.  We will be on the swing
-	  	// thread but we can't enter the global objects (the
+	  	// current service request.  We may or may not be on the
+	    // swing thread but we can't enter the global objects (the
 	  	// process, transaction and node space) so we enqueue
 	  	// the event instead for processing when the current
 	  	// service request has completed.  This gives us the
@@ -1522,16 +1525,26 @@ public abstract class AnyView extends    InstanceHierarchyMap
 
 	  	if (Globals.inqActive__ && !id.equals(EventConstants.EVENT_INVOKER))
 	  	{
-	  		Event qe = new SimpleEvent(EventConstants.EVENT_INVOKER,
-	  		                           this,
-	  		                           e);
-	  		Globals.process__.send(qe);
+	  	  if (id.equals(EventConstants.CONTEXT_ESTABLISHED))
+	  	  {
+	  	    // Context established events are better dispatched to
+	  	    // the graphics thread in case they do more graphics-related
+	  	    // things. Do this always.
+	  	    SwingInvoker si = new GuiRedispatcher(e, this);
+	  	    si.maybeAsync(true);
+	  	  }
+	  	  else
+	  	  {
+  	  		Event qe = new SimpleEvent(EventConstants.EVENT_INVOKER,
+  	  		                           this,
+  	  		                           e);
+  	  		Globals.process__.send(qe);
+	  	  }
 	  		return true;
 	  	}
 
 	  	boolean isAwt     = false;
 	  	int awtEventCount = awtEventCount__;
-      //System.out.println("awtEventCount " + awtEventCount);
 
 	  	if (Globals.inqActive__)
       {

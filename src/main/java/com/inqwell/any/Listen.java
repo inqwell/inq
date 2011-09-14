@@ -79,6 +79,7 @@ public class Listen extends    AbstractFunc
 		// context then use that, otherwise use prevailing.
 		if (listenTo instanceof Facade)
 		{
+		  // TODO: This is old code, so interface is speculative in this respect.
 			Facade f = (Facade)listenTo;
       if (f.getContext() != null)
       {

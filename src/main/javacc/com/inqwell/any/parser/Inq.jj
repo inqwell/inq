@@ -47,6 +47,8 @@ import com.inqwell.any.client.LoadServer;
 import com.inqwell.any.client.Parse;
 import com.inqwell.any.client.Render;
 import com.inqwell.any.client.RenderF;
+import com.inqwell.any.client.GetDesktopState;
+import com.inqwell.any.client.SetDesktopState;
 import com.inqwell.any.client.SysOpen;
 import com.inqwell.any.client.SysPrint;
 import com.inqwell.any.client.RenderInfo;
@@ -82,6 +84,8 @@ import com.inqwell.any.client.swing.JSplitPane;
 import com.inqwell.any.client.AnyTable;
 import com.inqwell.any.client.swing.TableModel;
 import com.inqwell.any.client.swing.SwingInvoker;
+import com.inqwell.any.client.dock.DockInstantiator;
+import com.inqwell.any.client.dock.AnyCAction;
 import com.inqwell.any.jms.SessionI;
 import com.inqwell.any.jms.MqCreateConnection;
 import com.inqwell.any.jms.MqCreateSession;
@@ -132,6 +136,8 @@ import com.inqwell.any.io.PropertiesStream;
 import info.clearthought.layout.TableLayout;
 import info.clearthought.layout.TableLayoutConstraints;
 import info.clearthought.layout.TableLayoutConstants;
+import bibliothek.gui.dock.common.action.CAction;
+import bibliothek.gui.dock.common.action.CRadioGroup;
 import java.io.Reader;
 import java.io.InputStreamReader;
 import java.io.InputStream;
@@ -538,17 +544,35 @@ public class Inq extends AbstractAny
     argsMap.add(new ConstString("interactive"), AnyBoolean.TRUE);
     Catalog.instance().getCatalog().add(CommandArgs.commandLine__, argsMap);
 
+    boolean version = cArgs.arg("-version");
+    if (version)
+    {
+      Version v = new Version();
+      try
+      {
+        System.out.println(v.exec(null));
+      }
+      catch(AnyException e)
+      {
+        e.printStackTrace();
+      }
+      finally
+      {
+        System.exit(0);
+      }
+    }
+    
     if (!cArgs.arg("-q") && !argsMap.contains(CommandArgs.shebang__))
     {
       System.out.println("Inq Parser");
-      System.out.println("Copyright (c) InqWell Ltd 2002-2011");
-      System.out.println("Java Compiler Compiler Version 3.2 Copyright (c) 2003 Sun Microsystems, Inc. All  Rights Reserved.");
-      System.out.println("JDateChooser Copyright (c) Kai Toedter 1999 - 2009");
-      System.out.println("TableLayout Copyright (c) 2001 Daniel Barbalace. All rights reserved.");
-      System.out.println("JLine Copyright (c) 2002-2006, Marc Prud'hommeaux <mwp1@cornell.edu> All rights reserved.");
+      System.out.println("Copyright (c) Inqwell Ltd 2002-2011");
+      System.out.println("JavaCC Copyright (c) 2006, Sun Microsystems, Inc.");
+      System.out.println("Docking Frames Copyright (c) Benjamin Sigg and others 2011");
+      System.out.println("JDateChooser Copyright (c) Kai Toedter 1999 - 2009; Inqwell 2011");
+      System.out.println("JLine Copyright (c) 2002-2006, Marc Prud'hommeaux <mwp1@cornell.edu>.");
     }  
 
-    boolean show = cArgs.arg("-show");
+    boolean show    = cArgs.arg("-show");
 
     String cwd = System.getProperties().getProperty("user.dir");
     String fs  = System.getProperties().getProperty("file.separator");
@@ -627,7 +651,6 @@ public class Inq extends AbstractAny
           Any r = EvalExpr.evalFunc(t,
                                     root,
                                     a.cloneAny());
-          //System.out.println("Parsed 3");
           t.commit();
           if (show)
             System.out.println(r);
@@ -1189,7 +1212,7 @@ public class Inq extends AbstractAny
       throw new AnyRuntimeException(declType + " at " + token.beginLine + " must be declared at the outermost script level");
   }
 
-  static NodeSpecification setPrefices(NodeSpecification n)
+  public static NodeSpecification setPrefices(NodeSpecification n)
   {
     if (n.entries() == 0)
       return n;
@@ -2196,7 +2219,7 @@ SKIP :
 
 <DEFAULT, GUI, DOC> TOKEN : /* Reserved Words and Symbols */
 {
-  < SUM:              "sum" >
+  < SUM:              "sum" >  // The first keyword (do not add keywords before this)
 | < AVG:              "avg" >
 | < WAVG:             "wavg" >
 | < IF:               "if" >
@@ -2250,6 +2273,8 @@ SKIP :
 | < GETLOCALHOST:     "getlocalhost" >
 | < GETLOGGER:        "getlogger" >
 | < LOGGERNAMES:      "loggernames" >
+| < GETDESKTOPSTATE:  "getdesktop" >
+| < SETDESKTOPSTATE:  "setdesktop" >
 | < GETNAME:          "getname" >
 | < GETNODESET:       "getnodeset" >
 | < GETUNIQUEKEY:     "getuniquekey" >
@@ -2323,6 +2348,7 @@ SKIP :
 | < SETPRIVILEGE:     "setprivilege" >
 | < SETEXCEPTIONHANDLER: "setexceptionhandler" >
 | < SHOW:             "show" >
+| < RESIZE:           "resize" >
 | < TOFRONT:          "tofront" >
 | < SORT:             "sort" >
 | < SPAWN:            "spawn" >
@@ -2388,6 +2414,21 @@ SKIP :
 | < STDIN:            "stdin" >
 | < STDOUT:           "stdout" >
 | < STDERR:           "stderr" >
+| < SQRT:             "sqrt" >
+| < SIN:              "sin" >
+| < COS:              "cos" >
+| < TAN:              "tan" >
+| < ASIN:             "asin" >
+| < ACOS:             "acos" >
+| < ATAN:             "atan" >
+| < CEIL:             "ceil" >
+| < FLOOR:            "floor" >
+| < TODEGREES:        "todegrees" >
+| < TORADIANS:        "toradians" >
+| < EXP:              "exp" >
+| < LOG:              "logn" >
+| < SCALE:            "scale" >
+| < ROUND:            "round" >
 | < ANY:              "any" >
 | < BYTE:             "byte" >
 | < CHAR:             "char" >
@@ -2567,6 +2608,10 @@ SKIP :
 | < TREESELECTION:    "gTreeselection" >
 | < TREEEXPAND:       "gTreeexpand" >
 | < TREECOLLAPSE:     "gTreecollapse" >
+| < HIDDEN:           "gHidden" >
+| < MOVED:            "gMoved" >
+| < RESIZED:          "gResized" >
+| < SHOWN:            "gShown" >
 | < ECONTEXT:         "gContext" >
 | < WINDOW:           "gWindow" >
 | < IWINDOW:          "gIWindow" >
@@ -2606,7 +2651,12 @@ SKIP :
 | < GSPLIT:           "gSplit" >
 | < COMBOBOX:         "gComboBox" >
 | < BUTTONGROUP:      "gButtonGroup" >
-| < COMPONENT:        "gComponent" >
+| < DOCK:             "gDock" >
+| < DOCKBUTTON:       "gDockButton" >
+| < DOCKMENU:         "gDockMenu" >
+| < DOCKDROPDOWN:     "gDockDropDown" >
+| < DOCKPOPUP:        "gDockPopup" >
+| < DOCKACTIONS:      "gDockActions" >
 | < MBUTTON:          "mbutton" >
 | < KEYCODE:          "keycode" >
 | < KEYSTROKE:        "keystroke" >
@@ -2752,7 +2802,7 @@ SKIP :
 | < SEPTEMBER:               "SEPTEMBER" >
 | < OCTOBER:                 "OCTOBER" >
 | < NOVEMBER:                "NOVEMBER" >
-| < DECEMBER:                "DECEMBER" >
+| < DECEMBER:                "DECEMBER" >  // The last keyword (do not add keywords after this)
 }
 
 <GUI> TOKEN:
@@ -2814,8 +2864,9 @@ SKIP :
 
 <DOC, GUI> TOKEN:
 {
-  <GUI_TABLE:     "Table"   >
+  <GUI_TABLE:          "Table"   >
 | <GUI_ROW:            "Row" >
+| <GUI_FLOW:           "Flow" >
 | <GUI_ROWS:           "Rows"    >
 | <GUI_COLUMNS:        "Columns" >
 }
@@ -2892,21 +2943,6 @@ TOKEN : /* Resource types */
 | < XOR: "^" >
 | < POW: "^^" >
 | < REM: "%" >
-| < SQRT: "sqrt" >
-| < SIN: "sin" >
-| < COS: "cos" >
-| < TAN: "tan" >
-| < ASIN: "asin" >
-| < ACOS: "acos" >
-| < ATAN: "atan" >
-| < CEIL: "ceil" >
-| < FLOOR: "floor" >
-| < TODEGREES: "todegrees" >
-| < TORADIANS: "toradians" >
-| < EXP: "exp" >
-| < LOG: "logn" >
-| < SCALE: "scale" >
-| < ROUND: "round" >
 | < LSHIFT: "<<" >
 | < RSIGNEDSHIFT: ">>" >
 | < RUNSIGNEDSHIFT: ">>>" >
@@ -3756,6 +3792,8 @@ Any Operand() :
   | a = SetPrivilege()
   | a = SetUniqueKey()
   | a = SetNodeSet()
+  | a = GetDesktop()
+  | a = SetDesktop()
   | a = Show()
   | a = Sort()
   | a = Reverse()
@@ -7309,14 +7347,21 @@ Any SetBlob() :
 }
 
 Any Show() :
-{ Any win; Any withResize = null; int line; }
+{ Any win; Any withResize = null; Any relativeTo = null; int line; }
 {
   "show" { line = token.beginLine; }
   "(" win = Expression()
-   [ "," withResize = Expression() ]
+   //[ "," withResize = Expression() ]
+   ( ","
+     (
+       ( "resize" "=" withResize = Expression() )
+       |
+       ( "target" "=" relativeTo = Expression() )
+     )
+   )*
    ")"
   {
-    Show s = new Show(win, withResize);
+    Show s = new Show(win, withResize, relativeTo);
     s.setLineNumber(line);
     return s;
   }
@@ -8307,6 +8352,31 @@ Any GetNodeSet() :
   }
 }
 
+Any GetDesktop() :
+{ int line; }
+{
+  "getdesktop" { line = token.beginLine; }
+  "("
+  ")"
+  {
+    GetDesktopState g = new GetDesktopState();
+    g.setLineNumber(line);
+    return g;
+  }
+}
+
+Any SetDesktop() :
+{ Any state; int line; }
+{
+  "setdesktop" { line = token.beginLine; }
+  "(" state = Expression() ")"
+  {
+    SetDesktopState s = new SetDesktopState(state);
+    s.setLineNumber(line);
+    return s;
+  }
+}
+
 Any GetUniqueKey() :
 { Any node; int line; }
 {
@@ -8654,7 +8724,7 @@ Any Version() :
 {
   "version" "(" ")"
   {
-    return Version.getVersion();
+    return new Version();
   }
 }
 
@@ -10947,6 +11017,12 @@ Any GuiDeclaration() :
   | "gSlider"      { a = new GuiInstantiator ("javax.swing.JSlider", "com.inqwell.any.client.AnySlider"); }
   | "gDesktop"     { a = new GuiInstantiator ("com.inqwell.any.client.swing.JDesktopPane",  "com.inqwell.any.client.AnyDesktopPane"); }
   | "gMDI"         { a = new MDIInstantiator ("com.inqwell.any.client.swing.JFrame",  "com.inqwell.any.client.AnyFrame"); }
+  | a = DockInstantiation()
+  | "gDockActions" { a = new GuiInstantiator ("com.inqwell.any.client.dock.RootActionContainer", "com.inqwell.any.client.dock.AnyRootActionContainer"); }
+  | "gDockButton"  { a = new GuiInstantiator ("bibliothek.gui.dock.common.action.CButton", "com.inqwell.any.client.dock.AnyCAction"); }
+  | "gDockMenu"    { a = new GuiInstantiator ("com.inqwell.any.client.dock.CMenu", "com.inqwell.any.client.dock.AnyCAction"); }
+  | "gDockDropDown" { a = new GuiInstantiator ("com.inqwell.any.client.dock.CDropDownButton", "com.inqwell.any.client.dock.AnyCAction"); }
+  | "gDockPopup"   { a = new GuiInstantiator ("com.inqwell.any.client.dock.CPanelPopup", "com.inqwell.any.client.dock.AnyCPanelPopup"); }
   )
   l = NodeRef()
 
@@ -10968,6 +11044,18 @@ Any DialogInstantiation() :
   ")"
   {
     return new DialogInstantiator("com.inqwell.any.client.swing.JDialog", "com.inqwell.any.client.AnyDialog", parent);
+  }
+}
+
+Any DockInstantiation() :
+{
+  Call call = null;
+}
+{
+  "gDock"
+  ( "(" call = Call() ")" )?
+  {
+    return new DockInstantiator(call);
   }
 }
 
@@ -11018,7 +11106,7 @@ Any GuiLayout(Any context, Map components, Map mInqRoot, AnyView awtRoot, Any ro
 void Container(Any context, Map components, Map inqRoot, Object addTo, Any rootName, Transaction t, int axis) :
 {
   Container    cAddTo          = null;
-  ButtonGroup  bAddTo          = null;
+  AnyCAction.ActionContainer aAddTo = null;
   JSplitPane   jsp             = null;
   int          borderType      = -1; // no border
   AnyInt       borderStyle     = new AnyInt(GUI_LOWERED);
@@ -11044,8 +11132,8 @@ void Container(Any context, Map components, Map inqRoot, Object addTo, Any rootN
 }
 {
   {
-    if (addTo instanceof ButtonGroup)
-      bAddTo = (ButtonGroup)addTo;
+    if (addTo instanceof AnyCAction.ActionContainer)
+      aAddTo = (AnyCAction.ActionContainer)addTo;
     else
       cAddTo = (Container)addTo;
 
@@ -11119,7 +11207,7 @@ void Container(Any context, Map components, Map inqRoot, Object addTo, Any rootN
 
         }
 
-        if (!(o instanceof ButtonGroup)) // no awt hierarchy for button group
+        if (!(o instanceof ButtonGroup)) // no awt hierarchy for button groups
         {
           if (cAddTo != null)
           {
@@ -11146,11 +11234,10 @@ void Container(Any context, Map components, Map inqRoot, Object addTo, Any rootN
           }
           else
           {
-            // Its a button group.
-            if (o instanceof AbstractButton)
+            // Its a docking action. The addee must be a CAction
+            if (o instanceof CAction)
             {
-              AbstractButton b = (AbstractButton)o;
-              bAddTo.add(b);
+              aAddTo.add((CAction)o);
             }
           }
         }
@@ -11185,7 +11272,7 @@ void Container(Any context, Map components, Map inqRoot, Object addTo, Any rootN
                     (inqRoot instanceof AnyTabbedPane) ||
                     (v instanceof AnyCard) ||
                     (inqRoot instanceof AnyCard)) ? v : inqRoot,
-                   o,
+                   v.getAddIn(),
                    null,
                    t,
                    axis))+
@@ -12995,6 +13082,10 @@ boolean GuiEventType(Array eventTypes) :
   | "gTreeexpand"
   | "gTreecollapse"
   | "gContext"
+  | "gHidden"
+  | "gMoved"
+  | "gResized"
+  | "gShown"
   )
   {
     switch (token.kind)
@@ -13042,6 +13133,10 @@ boolean GuiEventType(Array eventTypes) :
       case TREEEXPAND:        eventType = EventConstants.E_TREEWILLEXPAND;    break;
       case TREECOLLAPSE:      eventType = EventConstants.E_TREEWILLCOLLAPSE;  break;
       case ECONTEXT:          eventType = EventConstants.CONTEXT_ESTABLISHED; break;
+      case HIDDEN:            eventType = EventConstants.E_HIDDEN;            break;
+      case MOVED:             eventType = EventConstants.E_MOVED;             break;
+      case RESIZED:           eventType = EventConstants.E_RESIZED;           break;
+      case SHOWN:             eventType = EventConstants.E_SHOWN;             break;
     }
     if (eventTypes.indexOf(eventType) < 0)
       eventTypes.add(eventType);

@@ -30,6 +30,7 @@ import com.inqwell.any.client.AnyIcon;
 import java.beans.PropertyVetoException;
 import java.net.URL;
 import java.awt.BorderLayout;
+import java.awt.event.ComponentEvent;
 
 /**
  * An extension of JFrame simply to make some things easier from BML,
@@ -154,6 +155,11 @@ public class JFrame extends    javax.swing.JFrame
       g.deactivate();
     else
       g.activate(text.toString());
+  }
+  
+  public void raiseComponentMovedEvent()
+  {
+    processComponentEvent(new ComponentEvent(this, ComponentEvent.COMPONENT_MOVED));
   }
   
   public void setClosed(boolean b) throws PropertyVetoException {}

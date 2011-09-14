@@ -15,6 +15,7 @@
 package com.inqwell.any.beans;
 
 import com.inqwell.any.*;
+import com.inqwell.any.client.AnyComponent;
 import com.inqwell.any.client.AnyIcon;
 import javax.swing.Icon;
 
@@ -23,7 +24,7 @@ import javax.swing.Icon;
  */
 public interface FrameF extends WindowF
 {
-	public void show(boolean withResize);
+	public void show(boolean withResize, AnyComponent relativeTo);
 	public void setIconImage(AnyIcon icon);
 	public Icon getIcon();
 	public void setIcon(Icon i);

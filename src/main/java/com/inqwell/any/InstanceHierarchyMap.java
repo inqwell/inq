@@ -729,7 +729,7 @@ public class InstanceHierarchyMap extends    AnyPMap
 		return nameInContainer_;
   }
   
-  public Any getPath()
+  public Any getPath(Any to)
   {
     Any ret = null;
     
@@ -738,10 +738,13 @@ public class InstanceHierarchyMap extends    AnyPMap
       Composite parent = getParentAny();
       Any       name   = getNameInParent();
       
+      if (to == this)
+        return AnyString.EMPTY;
+      
       if (parent == null)
         return ServerConstants.ROOT;
       
-      ret = new NodeSpecification(parent.getPath().toString() +
+      ret = new NodeSpecification(parent.getPath(to).toString() +
                                   NodeSpecification.strict__.toString() +
                                   name.toString());
     }

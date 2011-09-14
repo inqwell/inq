@@ -112,8 +112,6 @@ public class AnyComponent extends    AnyView
 
   public static Any modelKey__ = AbstractValue.flyweightString("model");
 
-  protected static BooleanI b__                 = new AnyBoolean();
-  
   private   static Array focusLostEventType__   = AbstractComposite.array();
   protected static Array changeEventType__      = AbstractComposite.array();
   protected static Array mouseMotionEventType__ = AbstractComposite.array();
@@ -428,11 +426,6 @@ public class AnyComponent extends    AnyView
     return null;
   }
   
-  public void setModelRoot(Any newRoot) throws AnyException
-  {
-    throw new UnsupportedOperationException("AnyComponent.setModelRoot()");
-  }
-
   /**
    * Initialise this wrapper with its delegate object.  Sub-classes may
    * override but should include a call
@@ -1606,7 +1599,7 @@ public class AnyComponent extends    AnyView
 		return getComponent();
 	}
 
-	public Container getAddIn()
+	public Object getAddIn()
   {
     return getComponent();
   }

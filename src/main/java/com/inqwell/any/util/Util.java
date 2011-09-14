@@ -10,6 +10,7 @@ package com.inqwell.any.util;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Constructor;
 import java.text.CharacterIterator;
 import java.text.StringCharacterIterator;
 import java.util.Enumeration;
@@ -17,9 +18,11 @@ import java.util.Enumeration;
 import com.inqwell.any.AbstractComposite;
 import com.inqwell.any.AbstractValue;
 import com.inqwell.any.Any;
+import com.inqwell.any.AnyNull;
 import com.inqwell.any.AnyString;
 import com.inqwell.any.ConstString;
 import com.inqwell.any.Map;
+import com.inqwell.any.RuntimeContainedException;
 import com.inqwell.any.SystemProperties;
 
 /**
@@ -46,10 +49,29 @@ public class Util
   public static Any user_home          = AbstractValue.flyweightString("user.home");
   public static Any user_dir           = AbstractValue.flyweightString("user.dir");
     
+  // Special ctor args
+  private static Class[] long__;
+  private static Class[] string__;
+  private static Class[] boolean__;
+  private static Class[] stringScale__;
+
   static
   {
     loadProperties();
-  }
+
+    long__    = new Class[1];
+    long__[0] = long.class;
+
+    string__    = new Class[1];
+    string__[0] = String.class;
+    
+    boolean__    = new Class[1];
+    boolean__[0] = boolean.class;
+
+    stringScale__ = new Class[2];
+    stringScale__[0] = String.class;
+    stringScale__[1] = int.class;
+}
   
   public static String readLine(InputStream is) throws IOException
   {
@@ -240,6 +262,75 @@ public class Util
   public static String lineSeparator ()
   {
     return getProperty (line_separator).toString();
+  }
+  
+  /**
+   * Create an Any based on the given className, value and optional scale
+   * @param className the fully-qualified class name
+   * @param value the value to assign to the Any
+   * @param scale a scale, when the class is a Decimal
+   * @return the Any
+   */
+  public static Any makeAny(String className, String value, String scale)
+  {
+    try
+    {
+      Any ret;
+      
+     // Special handling for dates - they are stored as long values
+      // and there is no support for these as strings
+      if (className.endsWith("Date"))
+      {
+        long l = Long.parseLong(value);
+        Constructor c = Class.forName(className).getConstructor(long__);
+        Object[] ctorArgs = new Object[1];
+        ctorArgs[0] = new Long(l);
+        ret = (Any)c.newInstance(ctorArgs);
+      }
+      // Special handling for booleans. String conversion in Inq
+      // does not regard "true" and "false" as such. Anything non-zero/null
+      // is true.
+      else if (className.endsWith("Boolean"))
+      {
+        boolean b = Boolean.parseBoolean(value);
+        Constructor c = Class.forName(className).getConstructor(boolean__);
+        Object[] ctorArgs = new Object[1];
+        ctorArgs[0] = new Boolean(b);
+        ret = (Any)c.newInstance(ctorArgs);
+      }
+      else if (className.endsWith("AnyNull"))
+      {
+        ret = AnyNull.instance();
+      }
+      else
+      {
+        // All other values provide a String constructor. Check for
+        // scale
+        Object[] ctorArgs;
+        Class[] ctorSig;
+        if (scale == null)
+        {
+          ctorArgs = new Object[1];
+          ctorSig = string__;
+        }
+        else
+        {
+          ctorArgs = new Object[2];
+          ctorSig = stringScale__;
+          ctorArgs[1] = new Integer(Integer.parseInt(scale));
+        }
+        
+        Constructor c = Class.forName(className).getConstructor(ctorSig);
+        ctorArgs[0] = value;
+        ret = (Any)c.newInstance(ctorArgs);
+        
+      }
+      return ret;
+    }
+    catch(Exception e)
+    {
+      throw new RuntimeContainedException(e);
+    }
   }
   
   static void loadProperties () throws SecurityException

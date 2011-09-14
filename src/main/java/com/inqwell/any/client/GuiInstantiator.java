@@ -31,24 +31,12 @@ public class GuiInstantiator extends    AbstractFunc
 	private String wrapperClass_;
 	private String awtClass_;
 	
-	private Any    extClass_;
-	
 	private Object o_;
 	
-	public GuiInstantiator (String awtClass)
-	{
-    this(awtClass, null);
-	}
-
 	public GuiInstantiator (String awtClass, String wrapperClass)
 	{
 		wrapperClass_ = wrapperClass;
 		awtClass_     = awtClass;
-	}
-
-	public GuiInstantiator (Any extClass)
-	{
-		extClass_ = extClass;
 	}
 
 	/**
@@ -63,33 +51,13 @@ public class GuiInstantiator extends    AbstractFunc
     
     String awtClass = awtClass_;
     
-    if (extClass_ != null)
-    {
-      Any extClass = EvalExpr.evalFunc(getTransaction(),
-                                       a,
-                                       extClass_);
-      if (extClass == null)
-        throw new AnyException("Did not resolve desired component class name");
-        
-      Locate l = new LocateNode("$catalog.system.componentMap");
-      l.setTransaction(getTransaction());
-      Any m = l.execFunc(a);
-      if (m != null && m instanceof Map)
-      {
-        Map cm = (Map)m;
-        if (cm.contains(extClass))
-        {
-          awtClass = cm.get(extClass).toString();
-        }
-      }
-    }
-    
     try
     {
     	Object o = guiObject(awtClass);
       any = (Facade)Class.forName(wrapperClass).newInstance();
 
-      any.setObject(o);
+      if (o != null)
+        any.setObject(o);
     }
     catch(Exception e)
     {
@@ -112,6 +80,11 @@ public class GuiInstantiator extends    AbstractFunc
   
   private Object guiObject(final String awtClass) throws Exception
   {
+    // When creating certain types of dockable, the external object
+    // cannot be created at the same time as its wrapper
+    if (awtClass == null)
+      return null;
+    
     SwingInvoker ss = new SwingInvoker()
     {
       protected void doSwing()

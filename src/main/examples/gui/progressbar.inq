@@ -10,7 +10,7 @@
 // Demonstrate the platform's progress bar, tool bar and use of timers.
 //  Ok - swing's tool bar is a bit naff. As mentioned elsewhere,
 //  incorporation of Docking Frames (see http://dock.javaforge.com/)
-//  is an ambition
+//  is underway
 
 local function startDemo()
 {

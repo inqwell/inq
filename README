@@ -4,12 +4,12 @@ Inq is a scripting language and execution environment for
 enterprise client/server applications. Its server manages
 database persistence, transactions events, locks and
 processes. Its client supports rapid GUI building and
-full MVC for easy state-driven clients.
+full MVC for easy state-driven applications.
 
 Inq makes heavy use of reification, so an application
 developer writes almost no boilerplate at all. Everything
-is a map, meaning relationships relationships are defined
-at runtime and applications are more easily maintained.
+is a map, meaning relationships are defined at runtime and
+applications are more easily maintained.
 
 Please see http://www.inqwell.com for more information
 
@@ -38,16 +38,18 @@ OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 ===============================================================================
-Inq distributes JCalendar, TableLayout and JLine in binary form.
+Inq distributes Docking Frames, JCalendar, TableLayout and JLine in binary
+form.
 ===============================================================================
+
+Docking Frames: http://dock.javaforge.com
+Licensed under the GNU LESSER GENERAL PUBLIC LICENSE Version 2.1, February 1999
 
 JCalendar is originally from http://www.toedter.com/en/jcalendar/index.html
 with bug fixes and extensions supplied by contributors and the Inq team. For
 further information see http://www.inqwell.com/jcalendar.html
 and https://github.com/inqwell/jcalendar
-
-
-Its license is as follows:
+Licensed under the GNU LESSER GENERAL PUBLIC LICENSE Version 2.1, February 1999
 
 GNU LESSER GENERAL PUBLIC LICENSE
 

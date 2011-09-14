@@ -15,7 +15,6 @@
 
 package com.inqwell.any.io;
 
-import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.InvalidObjectException;
 import java.lang.reflect.Constructor;
@@ -65,6 +64,7 @@ import com.inqwell.any.ShortI;
 import com.inqwell.any.StringI;
 import com.inqwell.any.Transaction;
 import com.inqwell.any.beans.ClassMap;
+import com.inqwell.any.util.Util;
 
 /**
  * Perform IO to the underlying stream in Inq "serialised form" XMLformat
@@ -1006,7 +1006,7 @@ public class XMLStream extends AbstractStream
       }
     }
     
-    private Any makeAny(HashMap attr, StringI content)
+    private Any meh(HashMap attr, StringI content)
     {
       Any ret = null;
       
@@ -1087,6 +1087,31 @@ public class XMLStream extends AbstractStream
       if (ret.isConst())
       {
         ret = AbstractValue.flyweightConst(ret);
+      }
+      
+      return ret;
+    }
+    
+    private Any makeAny(HashMap attr, StringI content)
+    {
+      String className = getAttrVal(attr, ATTR_TYPE);
+      String strScale  = getAttrVal(attr, ATTR_SCALE);
+      Any ret = Util.makeAny(className, content.toString(), strScale);
+      if (className.endsWith("Date") ||
+          className.endsWith("Boolean") ||
+          className.endsWith("AnyNull"))
+        return ret;
+      
+      // Any other class is subject to possible substitution (not
+      // other scalar types really but anything else, yes)
+      StreamFunc f = (StreamFunc)Globals.xmlStreamInputReplacements__.get(ret.getClass());
+      
+      // If there's no func then just hope its OK as is.
+      if (f != null)
+      {
+        ret = f.exec(ret, null);
+        //System.out.println ("Resolved : " + xmlObj.getClass());
+        //System.out.println ("With : " + ret.getClass());
       }
       
       return ret;

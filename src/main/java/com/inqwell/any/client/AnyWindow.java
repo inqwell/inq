@@ -30,6 +30,7 @@ import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
 import java.awt.event.WindowEvent;
 import java.beans.PropertyVetoException;
+import java.io.File;
 
 import javax.swing.JButton;
 import javax.swing.JInternalFrame;
@@ -41,6 +42,7 @@ import com.inqwell.any.AbstractComposite;
 import com.inqwell.any.AbstractValue;
 import com.inqwell.any.Any;
 import com.inqwell.any.AnyException;
+import com.inqwell.any.AnyFile;
 import com.inqwell.any.AnyInt;
 import com.inqwell.any.AnyRuntimeException;
 import com.inqwell.any.Array;
@@ -60,8 +62,11 @@ import com.inqwell.any.Set;
 import com.inqwell.any.Transaction;
 import com.inqwell.any.beans.Facade;
 import com.inqwell.any.beans.WindowF;
+import com.inqwell.any.client.dock.AnyCControl;
 import com.inqwell.any.client.swing.InqWindow;
 import com.inqwell.any.client.swing.SwingInvoker;
+import com.inqwell.any.io.PhysicalIO;
+import com.inqwell.any.io.XMLXStream;
 
 
 public class AnyWindow extends    AnyComponent
@@ -74,15 +79,17 @@ public class AnyWindow extends    AnyComponent
 
 	public     static Any   menuBar__              = AbstractValue.flyweightString("menuBar");
 	public     static Any   toolBar__              = AbstractValue.flyweightString("toolBar");
-	protected  static Any   defaultButton__        = AbstractValue.flyweightString("defaultButton");
-	protected  static Any   defaultableButtons__   = AbstractValue.flyweightString("defaultableButtons");
+	public     static Any   defaultButton__        = AbstractValue.flyweightString("defaultButton");
+	public     static Any   defaultableButtons__   = AbstractValue.flyweightString("defaultableButtons");
   protected  static Any   defaultableCloseOp__   = AbstractValue.flyweightString("defaultCloseOperation");
   protected  static Any   active__               = AbstractValue.flyweightString("active");
   protected  static Any   focused__              = AbstractValue.flyweightString("focused");
   protected  static Any   toolBarChild__         = AbstractValue.flyweightString("toolBar__");
   protected  static Any   disabledText__         = AbstractValue.flyweightString("disabledText");
 
-	private    static Set   preferredListenerTypes__;
+  private    static Any   desktop__              = AbstractValue.flyweightString("desktop");
+
+  private    static Set   preferredListenerTypes__;
 	private    static Set   windowProperties__;
 
   private    static Array allWindows__      = AbstractComposite.array();
@@ -98,8 +105,6 @@ public class AnyWindow extends    AnyComponent
 	private boolean         packed_ = false;
 
   private IntI            closeOperation_ = new AnyInt(HIDE_ON_CLOSE);
-
-  private boolean         isDisposed_ = false;
 
   static
   {
@@ -153,6 +158,54 @@ public class AnyWindow extends    AnyComponent
     }
   }
 
+  public static void saveDesktop(Map m)
+  {
+    Map desktop = AbstractComposite.simpleMap();
+    Iter i = allWindows__.createIterator();
+    while (i.hasNext())
+    {
+      AnyWindow w = (AnyWindow)i.next();
+      w.saveState(desktop);
+    }
+    m.add(desktop__, desktop);
+  }
+  
+  public static void restoreDesktop(Map m)
+  {
+    Map desktop = (Map)m.getIfContains(desktop__);
+    Iter i = allWindows__.createIterator();
+    while (i.hasNext())
+    {
+      AnyWindow w = (AnyWindow)i.next();
+      w.restoreState(desktop);
+    }
+  }
+  
+//  public static Map getDesktopData(Any from) throws AnyException
+//  {
+////    AnyFile f = new AnyFile(new File(System.getProperty("user.home") +
+////                                     System.getProperty("file.separator") +
+////                                     ".inqDesktop"));
+//    
+//    XMLXStream xs = new XMLXStream();
+//    Map ret = null;
+//    
+//    try
+//    {
+//      if (xs.open(Globals.getProcessForThread(Thread.currentThread()),
+//          from,
+//          PhysicalIO.read__))
+//      {
+//        ret = (Map)xs.read();
+//      }
+//    }
+//    finally
+//    {
+//      xs.close();
+//    }
+//    return ret;
+//  }
+  
   public static void inqEventQueue()
   {
     new EventProcessor();
@@ -193,15 +246,15 @@ public class AnyWindow extends    AnyComponent
     w_.addWindowListener(new ClosingMonitor());
 	}
 
-	public void show(boolean withResize)
+	public void show(boolean withResize, AnyComponent relativeTo)
 	{
-    Show show = new Show(withResize);
+    Show show = new Show(withResize, relativeTo);
 		show.maybeSync();
 	}
 
 	public void hide()
 	{
-		new Hide().maybeAsync();
+		new Hide().maybeAsync(false);
 	}
 	
 	public void toFront()
@@ -216,7 +269,7 @@ public class AnyWindow extends    AnyComponent
       }
     };
 
-    ss.maybeAsync();
+    ss.maybeAsync(false);
 	}
 
   /**
@@ -278,12 +331,12 @@ public class AnyWindow extends    AnyComponent
     {
       protected void doSwing()
       {
+        // If we harbour a AnyCControl then destroy it
+        AnyCControl.destroyCControl(AnyWindow.this);
         w_.dispose();
       }
     };
     
-    isDisposed_ = true;
-
     ss.maybeSync();
 	}
 
@@ -422,11 +475,6 @@ public class AnyWindow extends    AnyComponent
     return AnyWindow.preferredListenerTypes__;
   }
 
-  public boolean isDisposed()
-  {
-    return isDisposed_;
-  }
-
   public boolean isFocused()
   {
     return w_.isFocused();
@@ -442,6 +490,14 @@ public class AnyWindow extends    AnyComponent
     return w_.getGlassPane();
   }
 
+  public void saveState(Map m)
+  {
+  }
+
+  public void restoreState(Map m)
+  {
+  }
+  
   private void addDefaultListener(AnyComponent c)
   {
     c.getComponent().addFocusListener(defaultButtonListener_);
@@ -574,11 +630,13 @@ public class AnyWindow extends    AnyComponent
 
   private class Show extends SwingInvoker
   {
-	  private boolean resize_ = false;
+	  private boolean      resize_ = false;
+	  private AnyComponent relativeTo_;
     
-    private Show(boolean resize)
+    private Show(boolean resize, AnyComponent relativeTo)
     {
-      resize_ = resize;
+      resize_     = resize;
+      relativeTo_ = relativeTo;
     }
 
 		protected void doSwing()
@@ -592,7 +650,7 @@ public class AnyWindow extends    AnyComponent
 
         WindowF w = AnyWindow.getParentWindow(AnyWindow.this);
 
-        if (!(AnyWindow.this instanceof AnyInternalFrame))
+        if (relativeTo_ == null && !(AnyWindow.this instanceof AnyInternalFrame))
         {
           // Position window on first show
           Dimension d = null; // size of what we're positioning against
@@ -623,10 +681,6 @@ public class AnyWindow extends    AnyComponent
 
           AnyWindow.this.getComponent().setLocation(p);
         }
-        else
-        {
-          //AnyWindow.this.w_.setIcon();
-        }
 			}
 
       if (resize_)
@@ -634,6 +688,10 @@ public class AnyWindow extends    AnyComponent
 			  w_.pack();
         ensureTitleVisible();
       }
+      
+      if (relativeTo_ != null)
+        AnyWindow.this.w_.setLocationRelativeTo(relativeTo_.getComponent());
+        
 			w_.show();
 			w_.setVisible(true);
       w_.setState(Frame.NORMAL);
@@ -661,11 +719,6 @@ public class AnyWindow extends    AnyComponent
           w_.setSize(mw, w_.getHeight());
       }
     }
-
-		private void setResize(boolean resize)
-		{
-			resize_ = resize;
-		}
 	}
 
   private class Hide extends SwingInvoker

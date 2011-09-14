@@ -183,7 +183,7 @@ public class AnyDialog extends    AnyWindow
         // dialog
         if (d.getModality().equals(modalAll__))
         {
-    			d.show(false);
+    			d.show(false, null);
           return true;
         }
 
@@ -198,7 +198,7 @@ public class AnyDialog extends    AnyWindow
                 parent.getComponent() == wSource ||
       			    (wSource != null && parent.getComponent() == wSource.getOwner()))
       			{
-      			  d.show(false);
+      			  d.show(false, null);
               return true;
       			}
           }
@@ -324,9 +324,9 @@ public class AnyDialog extends    AnyWindow
 	  dialogInactive();
 	}
 
-	public void show(boolean withResize)
+	public void show(boolean withResize, AnyComponent relativeTo)
 	{
-		super.show(withResize);
+		super.show(withResize, relativeTo);
 	  dialogActive();
 	}
 
@@ -428,7 +428,7 @@ public class AnyDialog extends    AnyWindow
     return d_.getContentPane();
 	}
 
-	public Container getAddIn()
+	public Object getAddIn()
   {
     return d_.getContentPane();
   }

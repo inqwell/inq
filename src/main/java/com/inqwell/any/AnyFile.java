@@ -550,7 +550,7 @@ public class AnyFile extends    PropertyAccessMap
 	/**
    * Converts this abstract pathname into a pathname string.
 	 */
-	public Any getPath()
+	public Any getPath(Any to)
 	{
 		return new AnyString(getFile().getPath());
 	}

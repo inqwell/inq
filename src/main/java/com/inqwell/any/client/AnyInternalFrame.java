@@ -89,7 +89,7 @@ public class AnyInternalFrame extends    AnyWindow
     return f_;
 	}
 	
-	public Container getAddIn()
+	public Object getAddIn()
 	{
     return f_.getChildPane();
 	}

@@ -163,7 +163,7 @@ function questionDialog(any    dialog,
 
   // Pop up the dialog. Resize it so the label is visible in case it
   // got bigger from last time.
-  show(dialog, true);
+  show(dialog, resize=true);
   tofront(dialog);
 }
 

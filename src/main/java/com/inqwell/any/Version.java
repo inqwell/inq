@@ -13,6 +13,12 @@
  */
 package com.inqwell.any;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.URL;
+import java.net.URLConnection;
+import java.util.Properties;
+
 /**
  * The Inq Version Number
  * 
@@ -23,30 +29,44 @@ package com.inqwell.any;
 public class Version extends    AbstractFunc
                      implements Cloneable
 {
-  public static Version version__;
-  
-  public static Version getVersion()
-  {
-    synchronized(Version.class)
-    {
-      if (version__ == null)
-        version__ = new Version();
-      
-      return version__;
-    }
-  }
-  
-  public Any version_ = AbstractValue.flyweightString("1.1");
-  
-  private Version() {}
-  
   public Any exec(Any a) throws AnyException
   {
-    return version_;
+    AnyURL u  = new AnyURL("cp:///inq/inq.properties");
+    URL    u1 = u.getURL();
+    InputStream s = null;
+    try
+    {
+      URLConnection uc = u1.openConnection();
+      Properties p = new Properties();
+      p.load(s = uc.getInputStream());
+      Object v = p.get("inq.version");
+      if (v == null)
+        throw new AnyException("Unknown version");
+      Object b = p.get("inq.build");
+      if (b == null)
+        throw new AnyException("Unknown build");
+      return new ConstString("Inq version " + v.toString() +
+                             " (build " + b.toString() + ")");
+    }
+    catch(IOException e)
+    {
+      throw new ContainedException(e);
+    }
+    finally
+    {
+      if (s != null)
+      {
+        try
+        {
+          s.close();
+        }
+        catch(Exception e) {}
+      }
+    }
   }
   
   public Object clone () throws CloneNotSupportedException
   {
-    return this;
+    return super.clone();
   }
 }

@@ -16,6 +16,8 @@ package com.inqwell.any.client.swing;
 import javax.swing.BoxLayout;
 import javax.swing.JMenuBar;
 import javax.swing.JToolBar;
+
+import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.LayoutManager;
 import java.awt.Container;
@@ -134,6 +136,8 @@ public class JInternalFrame extends    javax.swing.JInternalFrame
   }
   
   public void setState(int state) {}
+  
+  public void setLocationRelativeTo(Component c) {}
 
   public boolean isFocused()
   {

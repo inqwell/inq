@@ -14,20 +14,30 @@
 
 package com.inqwell.any.client;
 
-import com.inqwell.any.*;
-import com.inqwell.any.beans.*;
-import java.awt.Frame;
 import java.awt.Container;
 import java.awt.Dimension;
 import java.awt.Image;
+import java.awt.Rectangle;
+
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.JComponent;
-import com.inqwell.any.client.swing.JFrame;
 import javax.swing.JMenuBar;
 import javax.swing.JToolBar;
-import com.inqwell.any.client.swing.SwingInvoker;
-import com.inqwell.any.client.AnyIcon;
+
+import com.inqwell.any.AbstractComposite;
+import com.inqwell.any.Any;
+import com.inqwell.any.Composite;
+import com.inqwell.any.ConstInt;
+import com.inqwell.any.ConstString;
+import com.inqwell.any.EventConstants;
+import com.inqwell.any.EventListener;
+import com.inqwell.any.IntI;
+import com.inqwell.any.Map;
+import com.inqwell.any.Set;
+import com.inqwell.any.beans.FrameF;
+import com.inqwell.any.client.dock.AnyCControl;
+import com.inqwell.any.client.swing.JFrame;
 
 public class AnyFrame extends    AnyWindow
                       implements FrameF
@@ -39,6 +49,7 @@ public class AnyFrame extends    AnyWindow
 	private AnyMenuBar  menuBar_;
 
 	private static Set   frameProperties__;
+  private static Set   preferredListenerTypes__;
 
   public  static Any   icon__ = new ConstString("icon");
   public  static Any   bypassModality__ = new ConstString("bypassModality");
@@ -50,6 +61,11 @@ public class AnyFrame extends    AnyWindow
     frameProperties__.add(toolBar__);
     frameProperties__.add(icon__);
     frameProperties__.add(bypassModality__);
+
+    preferredListenerTypes__ = AbstractComposite.set();
+    preferredListenerTypes__.add(ListenerConstants.WINDOW);
+    preferredListenerTypes__.add(ListenerConstants.CONTEXT);
+    preferredListenerTypes__.add(ListenerConstants.COMPONENT);
   }
 
   public AnyFrame(JFrame f)
@@ -94,7 +110,7 @@ public class AnyFrame extends    AnyWindow
     super.addAdaptedEventListener(l, eventParam);
   }
 
-	public Container getAddIn()
+	public Object getAddIn()
   {
     return f_.getChildPane();
   }
@@ -125,6 +141,11 @@ public class AnyFrame extends    AnyWindow
 		return super.getPropertyOwner(property);
 	}
 
+  protected Composite getPreferredListenerTypes()
+  {
+    return AnyFrame.preferredListenerTypes__;
+  }
+
 	public Icon getIcon()
 	{
     Image i = f_.getIconImage();
@@ -145,7 +166,6 @@ public class AnyFrame extends    AnyWindow
     else
       return null;
 	}
-
 
 	public void setIcon(Icon i)
 	{
@@ -189,11 +209,67 @@ public class AnyFrame extends    AnyWindow
       this.replaceItem(toolBarChild__, toolBar);
 	}
 
+	public JFrame getJFrame()
+	{
+	  return (JFrame)getObject();
+	}
+	
 	public void setSize(int width, int height)
 	{
-		//System.out.println ("AnyFrame.setSize " + width + " " + height + "------");
 		JComponent c = (JComponent)f_.getContentPane();
 		c.setPreferredSize(new Dimension(width, height));
 	}
+	
+	public void saveState(Map m)
+	{
+	  // Place a map in m specifying our state.
+	  Rectangle r = f_.getBounds();
+	  Map state = AbstractComposite.simpleMap();
+    state.add(AnyView.x__,      new ConstInt(r.x));
+    state.add(AnyView.y__,      new ConstInt(r.y));
+    state.add(AnyView.width__,  new ConstInt(r.width));
+    state.add(AnyView.height__, new ConstInt(r.height));
+    
+    AnyCControl dock = (AnyCControl)getIfContains(AnyCControl.cControl__);
+    if (dock != null)
+      dock.saveLayout(state);
+    
+    m.add(getNameInParent(), state);
+	}
+	
+	public void restoreState(Map m)
+  {
+	  // If the map contains a value with our name assume it is
+	  // our restore data
+	  Any k = getNameInParent();
+	  Map state;
+	  if ((state = (Map)m.getIfContains(k)) != null)
+    {
+	    // TODO Reconcile against current screen size etc
+      IntI x      = (IntI)state.getIfContains(AnyView.x__);
+      IntI y      = (IntI)state.getIfContains(AnyView.y__);
+      IntI width  = (IntI)state.getIfContains(AnyView.width__);
+      IntI height = (IntI)state.getIfContains(AnyView.height__);
+      if (x      != null &&
+          y      != null &&
+          width  != null &&
+          height != null)
+      {
+	      Rectangle r = new Rectangle(x.getValue(),
+                                    y.getValue(),
+                                    width.getValue(),
+                                    height.getValue());
+	      f_.setBounds(r);
+      }
+      
+      // If there is a docklayout then restore that
+      Any dock;
+      if ((dock = state.getIfContains(AnyCControl.dockLayout__)) != null)
+      {
+        AnyCControl c = AnyCControl.getCControl(this, false);
+        c.restoreLayout(dock);
+      }
+    }
+  }
 }
 

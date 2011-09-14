@@ -28,22 +28,14 @@ public class Show extends    AbstractFunc
 									implements Cloneable
 {
 	private Any     window_;
-	private WindowF rWindow_;
-	
 	private Any     withResize_;
-	private boolean rWithResize_;
+	private Any     target_;
 	
-	private boolean postTransaction_;
-	
-	public Show (Any window)
-	{
-		this(window, null);
-	}
-
-	public Show (Any window, Any withResize)
+	public Show (Any window, Any withResize, Any relativeTo)
 	{
 		window_     = window;
 		withResize_ = withResize;
+		target_     = relativeTo;
 	}
 
 	/**
@@ -53,40 +45,40 @@ public class Show extends    AbstractFunc
 	 */
 	public Any exec(Any a) throws AnyException
 	{
-		if (!postTransaction_)
-		{
-		  rWindow_  = (WindowF)EvalExpr.evalFunc
-																			(getTransaction(),
-		                                   a,
-		                                   window_,
-		                                   WindowF.class);
-		  
-		  if (rWindow_ == null)
-		    nullOperand(window_);
+	  WindowF window  = (WindowF)EvalExpr.evalFunc
+																		(getTransaction(),
+	                                   a,
+	                                   window_,
+	                                   WindowF.class);
+	  
+	  if (window == null)
+	    nullOperand(window_);
 
-		  Any withResize = EvalExpr.evalFunc
-																			(getTransaction(),
-		                                   a,
-		                                   withResize_);
-		  
-		  if (withResize == null && withResize_ != null)
-		    nullOperand(withResize_);
-		  
-		  BooleanI b = new ConstBoolean(withResize);
-		  rWithResize_ = b.getValue();
+	  Any withResize = EvalExpr.evalFunc
+																		(getTransaction(),
+	                                   a,
+	                                   withResize_);
+	  
+	  if (withResize == null && withResize_ != null)
+	    nullOperand(withResize_);
+	  
+	  BooleanI b = new ConstBoolean(withResize);
+	  boolean resize = b.getValue();
 
-			postTransaction_ = true;
-			getTransaction().addAction(this, Transaction.AFTER_EVENTS);
+    AnyComponent locationTarget = (AnyComponent)EvalExpr.evalFunc
+                                    (getTransaction(),
+                                     a,
+                                     target_,
+                                     AnyComponent.class);
 
-			return rWindow_;
-		
-		}
+    if (locationTarget == null && target_ != null)
+      nullOperand(target_);
 
-		rWindow_.show(rWithResize_);
-		Any ret  = rWindow_;
-		rWindow_ = null;
+		getTransaction().addAction(new OnCommit(window, resize, locationTarget),
+                               Transaction.AFTER_EVENTS);
 
-	  return ret;
+		return window;
+	
 	}
 	
   public Object clone() throws CloneNotSupportedException
@@ -95,9 +87,30 @@ public class Show extends    AbstractFunc
   	
   	s.window_        = window_.cloneAny();
     s.withResize_    = AbstractAny.cloneOrNull(withResize_);
-    s.rWindow_       = null;
-    s.rWithResize_   = false;
+    s.target_        = AbstractAny.cloneOrNull(target_);
   	
     return s;
+  }
+  
+  static private class OnCommit extends AbstractFunc
+  {
+    private WindowF      window_;
+    private boolean      resize_;
+    private AnyComponent target_;
+
+    private OnCommit(WindowF window, boolean resize, AnyComponent target)
+    {
+      window_ = window;
+      resize_ = resize;
+      target_ = target;
+    }
+    
+    @Override
+    public Any exec(Any a) throws AnyException
+    {
+      window_.show(resize_, target_);
+      
+      return null;
+    }
   }
 }

@@ -186,20 +186,23 @@ public abstract class SwingInvoker implements Runnable
 	}
 
 	/**
+	 * Ensure a task runs on the event dispatch thread.
+	 * <p/>
 	 * If we are running in the dispatch thread then just call doSwing;
 	 * if we are not running in the dispatch thread then call
-	 * <code>SwingUtilities.invokeLater(this)<code>
+	 * <code>SwingInvoker.invokeLater(this)<code>
 	 * <p>
-	 * This method is appropriate when data is being set into a
-	 * GUI component, for example <code>Label.setText()</code>
+	 * @param force If <code>true</code> then always post to the
+	 * event queue even if execution is already on it. Used to
+	 * schedule a task to the back of the event queue.  
 	 */
-	public void maybeAsync()
+	public void maybeAsync(boolean force)
 	{
-//		if (SwingUtilities.isEventDispatchThread() || !Globals.awtSync__)
-//		{
-//			doSwing();
-//		}
-//		else
+		if ((SwingUtilities.isEventDispatchThread() || !Globals.awtSync__) && !force)
+		{
+			doSwing();
+		}
+		else
 		{
 //			SwingUtilities.invokeLater(this);
 			//maybeSync();

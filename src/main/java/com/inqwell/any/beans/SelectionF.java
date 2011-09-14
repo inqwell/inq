@@ -20,7 +20,7 @@ import com.inqwell.any.Event;
 /**
  * Represents a selection list of items
  */
-public interface SelectionF extends UIFacade
+public interface SelectionF extends ComponentFacade
 {
 	public static Any selection__      = AbstractValue.flyweightString("selection");
   public static Any selectCount__    = AbstractValue.flyweightString("selectCount");

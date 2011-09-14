@@ -325,9 +325,9 @@ class SynchronizedQueue implements Queue,
     return q_.getNameInParent();
   }
   
-  public Any getPath()
+  public Any getPath(Any to)
   {
-    return q_.getPath();
+    return q_.getPath(to);
   }
   
   public synchronized boolean isParentable()

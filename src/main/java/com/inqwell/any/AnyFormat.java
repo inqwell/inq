@@ -1144,7 +1144,7 @@ public class AnyFormat extends    Format
     throw new UnsupportedOperationException();
   }
 
-  public Any getPath()
+  public Any getPath(Any to)
   {
     throw new UnsupportedOperationException();
   }

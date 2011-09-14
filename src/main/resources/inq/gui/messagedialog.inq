@@ -47,14 +47,14 @@ function createMessageDialogAt(any dialogPath, any parent)
  * Show a message dialog and initialise with the given parameters.
  * If the okText is null then the OK button won't be visible.
  */
-function messageDialog(any    dialog,
-                       string messageText  = "No Message!",
-                       string messageTitle = "Message",
-                       string okText       = "OK",
-                       any    icon,
-                       func   okExpr,
-                       int    maxLines,
-                       boolean resize = true)
+function messageDialog(any     dialog,
+                       string  messageText  = "No Message!",
+                       string  messageTitle = "Message",
+                       string  okText       = "OK",
+                       any     icon,
+                       func    okExpr,
+                       int     maxLines,
+                       boolean fit = true)
 {
 	any dialog = dialog ? dialog : $root.messageDialog;
 
@@ -69,7 +69,7 @@ function messageDialog(any    dialog,
 	dialog.properties.title         = messageTitle;
 	dialog.vars.okExpr              = okExpr;
 
-	show(dialog, resize);
+	show(dialog, resize = fit);
 }
 
 function hideMessageDialog(any dialog)

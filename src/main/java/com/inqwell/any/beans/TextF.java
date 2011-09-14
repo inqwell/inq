@@ -18,7 +18,7 @@ import com.inqwell.any.*;
 /**
  * Represents a selection list of items
  */
-public interface TextF extends UIFacade
+public interface TextF extends ComponentFacade
 {
 	public void setCaretVisible(boolean visible);
 }

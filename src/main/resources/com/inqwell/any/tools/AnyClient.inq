@@ -408,7 +408,7 @@ local function showHideProxy()
 {
   $this.vars.proxy = $this.saved.useProxy ? GRID_PREF : 0;
   //$this.proxyDetails.properties.visible = $this.saved.useProxy;
-  show($this, true); // force resize of window
+  show($this, resize=true); // force resize of window
 }
 
 local function Exit()
@@ -1161,7 +1161,7 @@ local function logoutTimer(any fromTimer)
                                   messageText  = m.message,
                                   okText = "Exit Now",
                                   okExpr = func f = call Exit(),
-                                  resize = false);
+                                  fit = false);
 }
 
 /**

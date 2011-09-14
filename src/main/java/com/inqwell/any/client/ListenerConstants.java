@@ -47,6 +47,7 @@ public interface ListenerConstants extends Any
 	public final Any ITEM           = new ConstString("item");	
 	public final Any CHANGE         = new ConstString("change");	
 	public final Any TREEEXPANSION  = new ConstString("treeExpansion");	
-	public final Any TREEWILLEXPAND = new ConstString("treeWillExpand");	
+  public final Any TREEWILLEXPAND = new ConstString("treeWillExpand");  
+  public final Any COMPONENT      = new ConstString("component");  
 }
 

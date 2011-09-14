@@ -15,7 +15,6 @@
 
 package com.inqwell.any.io;
 
-import java.io.IOException;
 import java.io.InvalidObjectException;
 import java.io.OutputStream;
 import java.io.PrintWriter;
@@ -54,6 +53,7 @@ import com.inqwell.any.Call;
 import com.inqwell.any.Catalog;
 import com.inqwell.any.CharI;
 import com.inqwell.any.Composite;
+import com.inqwell.any.ConstInt;
 import com.inqwell.any.ConstString;
 import com.inqwell.any.ContainedException;
 import com.inqwell.any.DateI;
@@ -114,8 +114,10 @@ public class XMLXStream extends AbstractStream
   private Set     excludes_;
   private Set     excludesBelow_;
   private Set     synthExcludes_;
+  private Set     cData_;
   private boolean writeMeta_;
   private boolean inqAttributes_;
+  private boolean preserveTypes_;
   private boolean enumExt_;
   private boolean groupingUsed_ = true;
   
@@ -143,6 +145,9 @@ public class XMLXStream extends AbstractStream
   public static final Any DESCEND     = AbstractValue.flyweightString("descend");
   public static final Any ATTRIBUTES  = AbstractValue.flyweightString("attributes");
 
+  public static final Any CLASS       = AbstractValue.flyweightString("class");
+  public static final Any SCALE       = AbstractValue.flyweightString("scale");
+  
   public static final Any TYPEDEF_ARG = AbstractValue.flyweightString("Typedef");
   public static final Any FIELD       = AbstractValue.flyweightString("Field");
   public static final Any WIDTH       = AbstractValue.flyweightString("Width");
@@ -635,7 +640,7 @@ public class XMLXStream extends AbstractStream
   {
     if (AnyNull.isNull(excludes))
     {
-      excludes      = null;
+      excludes_ = null;
     }
     else
     {
@@ -667,6 +672,23 @@ public class XMLXStream extends AbstractStream
     }
   }
   
+  /**
+   * A set of paths identifying the nodes to produce as a CDATA section
+   * @param cdata
+   */
+  public void setCdata(Set cdata)
+  {
+    if (AnyNull.isNull(cdata))
+    {
+      cData_ = null;
+    }
+    else
+    {
+      validateSet(cdata, NodeSpecification.class);
+      cData_ = cdata;
+    }
+  }
+  
   public void setWriteMeta(boolean writeMeta)
   {
     writeMeta_ = writeMeta;
@@ -678,6 +700,11 @@ public class XMLXStream extends AbstractStream
     
     if (writeMeta && writer_ != null)
       writer_.meta_ = AbstractComposite.set();
+  }
+  
+  public void setPreserveTypes(boolean preserveTypes)
+  {
+    preserveTypes_ = preserveTypes;
   }
   
   public void setInqAttributes(boolean inqAttributes)
@@ -809,7 +836,7 @@ public class XMLXStream extends AbstractStream
       pw_ = null;
     }
     
-    protected void startTag(Map m)
+    protected void startTag(Map m, Any a)
     {
       if (key_ == null)
         return;
@@ -829,14 +856,24 @@ public class XMLXStream extends AbstractStream
         nodeSetAttr(m);
       }
       else
+      {
         fieldAttr(d_, realKey_);
+        typeAttrs(a);
+      }
       
       attrs();
     }
     
     protected void content(String content, Any a)
     {
-      pw_.print(Util.escapeXML(content));
+      if (cData_ != null && cData_.contains(path_))
+      {
+        pw_.print("<![CDATA[");
+        pw_.print(content);
+        pw_.print("]]>");
+      }
+      else
+        pw_.print(Util.escapeXML(content));
     }
 
     protected void endTag(Map m)
@@ -1051,7 +1088,7 @@ public class XMLXStream extends AbstractStream
       // Nothing to do for DOM
     }
 
-    protected void startTag(Map m)
+    protected void startTag(Map m, Any a)
     {
       if (key_ == null)
         return;
@@ -1438,7 +1475,7 @@ public class XMLXStream extends AbstractStream
         pw_.print("\n");
     }
 
-    protected void startTag(Map m)
+    protected void startTag(Map m, Any a)
     {
       if (ordinal_.getValue() > 0)
         pw_.print(",");
@@ -1481,7 +1518,9 @@ public class XMLXStream extends AbstractStream
         attrs_.empty();
       }
       else
+      {
         fieldAttr(d_, realKey_);
+      }
     }
 
     public void close()
@@ -1613,6 +1652,8 @@ public class XMLXStream extends AbstractStream
     protected Any parent_;
         
     protected Set meta_;
+    
+    protected HashMap<Class<? extends Any>, StringI> classes_;
     
     // The current Descriptor, if any
     protected Descriptor d_;
@@ -1930,7 +1971,7 @@ public class XMLXStream extends AbstractStream
       }
     }
     
-    protected abstract void startTag(Map m);
+    protected abstract void startTag(Map m, Any a);
     
     /**
      * Generate content in the production.
@@ -1977,7 +2018,7 @@ public class XMLXStream extends AbstractStream
       // in the JSON case anyway.
       if (depth_ == 0)
       {
-        startTag(m);
+        startTag(m, a);
         return true;
       }
       
@@ -1990,7 +2031,7 @@ public class XMLXStream extends AbstractStream
         
         // Check if the key was reset to null by any tag function
         if (key_ != null)
-          startTag(m);
+          startTag(m, a);
       }
       
       return key_ != null;
@@ -2056,6 +2097,30 @@ public class XMLXStream extends AbstractStream
       if (inqAttributes_ && d != Descriptor.degenerateDescriptor__)
       {
         attrs_.add(Descriptor.field__, field);
+      }
+    }
+    
+    protected void typeAttrs(Any a)
+    {
+      if (preserveTypes_)
+      {
+        if (classes_ == null)
+          classes_ = new HashMap<Class<? extends Any>, StringI>();
+        
+        StringI className = classes_.get(a.getClass());
+        if (className == null)
+        {
+          className = new ConstString(a.getClass().getName());
+          classes_.put(a.getClass(), className);
+        }
+        attrs_.add(CLASS, className);
+        
+        // Tad messy...
+        if (a instanceof Decimal)
+        {
+          Decimal d = (Decimal)a;
+          attrs_.add(SCALE, new ConstInt(d.scale()));
+        }
       }
     }
     
@@ -2434,7 +2499,16 @@ public class XMLXStream extends AbstractStream
       {
         String s = c.toString().trim();
         if (s.length() != 0)
-          content = new AnyString(s);
+        {
+          String className = (attr != null) ? attr.get("class") : null;
+          if (className == null)
+            content = new AnyString(s);
+          else
+          {
+            String scale = attr.get("scale");
+            content = Util.makeAny(className, s, scale);
+          }
+        }
       }
       
       Any tagName = flyweightTagName(qName);

@@ -15,14 +15,16 @@
 package com.inqwell.any.beans;
 
 import com.inqwell.any.*;
+import com.inqwell.any.client.AnyComponent;
+
 import java.awt.Component;
 
 /**
  * Facade interface for Window objects.
  */
-public interface WindowF extends UIFacade
+public interface WindowF extends ComponentFacade
 {
-	public void show(boolean withResize);
+	public void show(boolean withResize, AnyComponent relativeTo);
   public void hide();
   public void toFront();
 	public void dispose(boolean disposeChildren);

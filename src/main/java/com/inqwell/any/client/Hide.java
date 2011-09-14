@@ -49,7 +49,7 @@ public class Hide extends    AbstractFunc
     if (window != null)
     {
       window.hide();
-      window.getComponent().setVisible(false);
+      //window.getComponent().setVisible(false);
     }
 		                                   
 	  return window;

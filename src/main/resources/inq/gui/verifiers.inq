@@ -240,6 +240,47 @@ local function toUpper(any text)
   toupper(text);
 }
 
+/**
+ * Accept a frame (that is the parent of a docking set)
+ * and setup a callback that maintains the desktop state
+ */
+function setupSaveDesktop(any win, any desktopName)
+{
+  any $this.vars._desktopName = "file:///" +  $properties.user_home + $properties.file_separator + "." + desktopName; 
+  gEvent(win, call saveLayout(desktop = $this.vars._desktopName), event=(gMoved, gResized, gShown));
+}
+
+local function saveLayout(any desktop)
+{
+  ioXMLX strm;
+  strm.properties.preserveTypes = true;
+  set cdata = (path($this*docklayout));
+  strm.properties.cdata = cdata;
+
+  if (open(strm, desktop, OPEN_WRITE))
+  {
+    writestream(strm, getdesktop());
+    close(strm);
+  }
+}
+
+/**
+ * Attempt to restore the named desktop state
+ */
+function restoreDesktop(any desktopName)
+{
+  any $this.vars._desktopName = "file:///" +  $properties.user_home +
+                                              $properties.file_separator +
+                                              "." + desktopName; 
+  ioXMLX strm;
+  if (open(strm, $this.vars._desktopName, OPEN_READ))
+  {
+    any desktop = readstream(strm);
+    close(strm);
+    setdesktop(desktop);
+  }
+}
+
 service ackCallback(any callback, any args)
 {
   xfunc(callback, args);

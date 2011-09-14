@@ -114,13 +114,22 @@ public interface Composite extends Any
   public Any getNameInParent();
   
   /**
-   * Return the full path of this node to its reachable root.
-   * Optional operation.
-   * @return path to this node from root or null if we have
-   * no parent or this implementation does not support the
-   * operation.
+   * Return the full path to this node from <code>to</code>
+   * If <code>to</code> is <code>null</code> then
+   * the path to the root of the process's node space is
+   * returned. If <code>to</code> (or the root node if <code>this</code>
+   * is not in the node space) cannot be found then <code>null</code> is
+   * returned.
+   * <p/>
+   * Optional operation. Only supported by implementations that know
+   * their parent and name in the hierarchy.
+   * @param to The node to stop at as the upward traversal is performed or
+   * the root (which must be known) is null.
+   * @return path to this node from <code>to</code> or the known
+   * root, or null if the traversal is unsuccessful or this implementation
+   * does not support the operation.
    */
-  public Any getPath();
+  public Any getPath(Any to);
   
 	/**
 	 * Check for whether parentage is allowed by this implementation

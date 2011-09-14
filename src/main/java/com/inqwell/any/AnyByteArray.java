@@ -298,7 +298,7 @@ public class AnyByteArray extends    AbstractAny
   }
 
   @Override
-  public Any getPath()
+  public Any getPath(Any to)
   {
     throw new UnsupportedOperationException();
   }

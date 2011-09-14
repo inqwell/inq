@@ -816,7 +816,7 @@ public class AnyRenderInfo extends    NodeFunction
     throw new UnsupportedOperationException();
   }
 
-  public Any getPath()
+  public Any getPath(Any to)
   {
     throw new UnsupportedOperationException();
   }

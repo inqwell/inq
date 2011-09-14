@@ -27,10 +27,10 @@ import com.inqwell.any.AnyURL;
 
 /**
  * Implement the <code>URLConnection</code> sub-class
- * for <code>socket://</code> style URLs.
+ * for <code>classpath://</code> (or <code>cp://</code>) style URLs.
  * <p>
- * URLs of the style <code>classpath:///</code> are handled by
- * this derivation of <code>java.net.URLConnection</code>.
+ * URLs of the style <code>classpath:///</code>  (or <code>cp://</code>)
+ * are handled by this derivation of <code>java.net.URLConnection</code>.
  */
 public class ClassPathURLConnection extends URLConnection
 {
@@ -74,9 +74,6 @@ public class ClassPathURLConnection extends URLConnection
         
       URL u = cl.getResource(path);
       u = AnyURL.fixJarURL(u);
-//System.out.println("Connecting " + getURL().getPath());
-//System.out.println("ClassLoader " + cl);
-//System.out.println("URL " + u);
       if (u != null)
         connection_ = u.openConnection();
       this.connected = true;

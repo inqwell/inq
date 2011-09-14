@@ -1,0 +1,407 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<root>
+  <desktop>
+    <win>
+      <height class="com.inqwell.any.ConstInt">227</height>
+      <width class="com.inqwell.any.ConstInt">308</width>
+      <docklayout class="com.inqwell.any.AnyString"><![CDATA[
+<root>
+	<resource name="ccontrol.frontend">
+		<areas/>
+		<frontend>
+			<settings>
+				<setting name="default">
+					<base>
+						<roots>
+							<root name="ccontrol center">
+								<layout factory="predefined" placeholder="dock.single.ccontrol\ center">
+									<replacement id="rootccontrol center"/>
+									<delegate id="delegate_CommonDockStationFactory">
+										<id>ccontrol center</id>
+										<root>true</root>
+										<content delegate="SplitDockStationFactory">
+											<fullscreen-action>false</fullscreen-action>
+											<node nodeId="1314967847435" orientation="VERTICAL" divider="0.5">
+												<leaf id="1" nodeId="1314967847433">
+													<placeholders>
+														<placeholder>dock.multi.\1\ any</placeholder>
+													</placeholders>
+												</leaf>
+												<leaf id="0" nodeId="1314967847103">
+													<placeholders>
+														<placeholder>dock.multi.\0\ any</placeholder>
+													</placeholders>
+												</leaf>
+											</node>
+										</content>
+									</delegate>
+								</layout>
+								<adjacent>
+									<layout factory="dock.RootStationAdjacentFactory">
+										<type>dock.CContentArea.center</type>
+									</layout>
+								</adjacent>
+								<children ignore="false">
+									<child>
+										<layout factory="delegate_any" placeholder="dock.multi.\0\ any">
+											<id>0 any</id>
+											<multiple>
+												<reference>$root.win</reference>
+												<dockpath>$this..Dock1</dockpath>
+												<buildgui>
+													$catalog..exprs.createGui
+													<name className="com.inqwell.any.ConstString">Dock1</name>
+												</buildgui>
+											</multiple>
+										</layout>
+										<children ignore="false"/>
+									</child>
+									<child>
+										<layout factory="delegate_any" placeholder="dock.multi.\1\ any">
+											<id>1 any</id>
+											<multiple>
+												<reference>$root.win</reference>
+												<dockpath>$this..Dock2</dockpath>
+												<buildgui>
+													$catalog..exprs.createGui
+													<name className="com.inqwell.any.ConstString">Dock2</name>
+												</buildgui>
+											</multiple>
+										</layout>
+										<children ignore="false"/>
+									</child>
+								</children>
+							</root>
+							<root name="external">
+								<layout factory="predefined">
+									<replacement id="rootexternal"/>
+									<delegate id="delegate_CommonDockStationFactory">
+										<root>true</root>
+										<content delegate="screen dock">
+											<placeholders>
+												<version>0</version>
+												<format>dock.PlaceholderList</format>
+											</placeholders>
+										</content>
+									</delegate>
+								</layout>
+								<adjacent>
+									<layout factory="dock.RootStationAdjacentFactory">
+										<type>dock.CExternalizeArea</type>
+									</layout>
+								</adjacent>
+								<children ignore="false"/>
+							</root>
+							<root name="ccontrol north">
+								<layout factory="predefined">
+									<replacement id="rootccontrol north"/>
+									<delegate id="delegate_CommonDockStationFactory">
+										<root>true</root>
+										<content delegate="flap dock">
+											<window auto="false" direction="SOUTH"/>
+											<placeholders>
+												<version>0</version>
+												<format>dock.PlaceholderList</format>
+											</placeholders>
+										</content>
+									</delegate>
+								</layout>
+								<adjacent>
+									<layout factory="dock.RootStationAdjacentFactory">
+										<type>dock.CContentArea.minimize</type>
+									</layout>
+								</adjacent>
+								<children ignore="false"/>
+							</root>
+							<root name="ccontrol south">
+								<layout factory="predefined">
+									<replacement id="rootccontrol south"/>
+									<delegate id="delegate_CommonDockStationFactory">
+										<root>true</root>
+										<content delegate="flap dock">
+											<window auto="false" direction="NORTH"/>
+											<placeholders>
+												<version>0</version>
+												<format>dock.PlaceholderList</format>
+											</placeholders>
+										</content>
+									</delegate>
+								</layout>
+								<adjacent>
+									<layout factory="dock.RootStationAdjacentFactory">
+										<type>dock.CContentArea.minimize</type>
+									</layout>
+								</adjacent>
+								<children ignore="false"/>
+							</root>
+							<root name="ccontrol east">
+								<layout factory="predefined">
+									<replacement id="rootccontrol east"/>
+									<delegate id="delegate_CommonDockStationFactory">
+										<root>true</root>
+										<content delegate="flap dock">
+											<window auto="false" direction="WEST"/>
+											<placeholders>
+												<version>0</version>
+												<format>dock.PlaceholderList</format>
+											</placeholders>
+										</content>
+									</delegate>
+								</layout>
+								<adjacent>
+									<layout factory="dock.RootStationAdjacentFactory">
+										<type>dock.CContentArea.minimize</type>
+									</layout>
+								</adjacent>
+								<children ignore="false"/>
+							</root>
+							<root name="ccontrol west">
+								<layout factory="predefined">
+									<replacement id="rootccontrol west"/>
+									<delegate id="delegate_CommonDockStationFactory">
+										<root>true</root>
+										<content delegate="flap dock">
+											<window auto="false" direction="EAST"/>
+											<placeholders>
+												<version>0</version>
+												<format>dock.PlaceholderList</format>
+											</placeholders>
+										</content>
+									</delegate>
+								</layout>
+								<adjacent>
+									<layout factory="dock.RootStationAdjacentFactory">
+										<type>dock.CContentArea.minimize</type>
+									</layout>
+								</adjacent>
+								<children ignore="false"/>
+							</root>
+						</roots>
+						<children/>
+					</base>
+					<modes>
+						<dockables>
+							<entry id="multi 1 any" current="dock.mode.normal">
+								<history/>
+								<properties/>
+							</entry>
+							<entry id="multi 0 any" current="dock.mode.normal">
+								<history/>
+								<properties/>
+							</entry>
+						</dockables>
+						<modes>
+							<entry id="dock.mode.maximized"/>
+						</modes>
+					</modes>
+					<multi-factories>
+						<factory id="any">
+							<dockable id="0 any"/>
+							<dockable id="1 any"/>
+						</factory>
+					</multi-factories>
+				</setting>
+			</settings>
+			<current name="default">
+				<base>
+					<roots>
+						<root name="ccontrol center">
+							<layout factory="predefined" placeholder="dock.single.ccontrol\ center">
+								<replacement id="rootccontrol center"/>
+								<delegate id="delegate_CommonDockStationFactory">
+									<id>ccontrol center</id>
+									<root>true</root>
+									<content delegate="SplitDockStationFactory">
+										<fullscreen-action>false</fullscreen-action>
+										<node nodeId="1314967847435" orientation="VERTICAL" divider="0.5">
+											<leaf id="1" nodeId="1314967847433">
+												<placeholders>
+													<placeholder>dock.multi.\1\ any</placeholder>
+												</placeholders>
+											</leaf>
+											<leaf id="0" nodeId="1314967847103">
+												<placeholders>
+													<placeholder>dock.multi.\0\ any</placeholder>
+												</placeholders>
+											</leaf>
+										</node>
+									</content>
+								</delegate>
+							</layout>
+							<adjacent>
+								<layout factory="dock.RootStationAdjacentFactory">
+									<type>dock.CContentArea.center</type>
+								</layout>
+							</adjacent>
+							<children ignore="false">
+								<child>
+									<layout factory="delegate_any" placeholder="dock.multi.\0\ any">
+										<id>0 any</id>
+										<multiple>
+											<reference>$root.win</reference>
+											<dockpath>$this..Dock1</dockpath>
+											<buildgui>
+												$catalog..exprs.createGui
+												<name className="com.inqwell.any.ConstString">Dock1</name>
+											</buildgui>
+										</multiple>
+									</layout>
+									<children ignore="false"/>
+								</child>
+								<child>
+									<layout factory="delegate_any" placeholder="dock.multi.\1\ any">
+										<id>1 any</id>
+										<multiple>
+											<reference>$root.win</reference>
+											<dockpath>$this..Dock2</dockpath>
+											<buildgui>
+												$catalog..exprs.createGui
+												<name className="com.inqwell.any.ConstString">Dock2</name>
+											</buildgui>
+										</multiple>
+									</layout>
+									<children ignore="false"/>
+								</child>
+							</children>
+						</root>
+						<root name="external">
+							<layout factory="predefined">
+								<replacement id="rootexternal"/>
+								<delegate id="delegate_CommonDockStationFactory">
+									<root>true</root>
+									<content delegate="screen dock">
+										<placeholders>
+											<version>0</version>
+											<format>dock.PlaceholderList</format>
+										</placeholders>
+									</content>
+								</delegate>
+							</layout>
+							<adjacent>
+								<layout factory="dock.RootStationAdjacentFactory">
+									<type>dock.CExternalizeArea</type>
+								</layout>
+							</adjacent>
+							<children ignore="false"/>
+						</root>
+						<root name="ccontrol north">
+							<layout factory="predefined">
+								<replacement id="rootccontrol north"/>
+								<delegate id="delegate_CommonDockStationFactory">
+									<root>true</root>
+									<content delegate="flap dock">
+										<window auto="false" direction="SOUTH"/>
+										<placeholders>
+											<version>0</version>
+											<format>dock.PlaceholderList</format>
+										</placeholders>
+									</content>
+								</delegate>
+							</layout>
+							<adjacent>
+								<layout factory="dock.RootStationAdjacentFactory">
+									<type>dock.CContentArea.minimize</type>
+								</layout>
+							</adjacent>
+							<children ignore="false"/>
+						</root>
+						<root name="ccontrol south">
+							<layout factory="predefined">
+								<replacement id="rootccontrol south"/>
+								<delegate id="delegate_CommonDockStationFactory">
+									<root>true</root>
+									<content delegate="flap dock">
+										<window auto="false" direction="NORTH"/>
+										<placeholders>
+											<version>0</version>
+											<format>dock.PlaceholderList</format>
+										</placeholders>
+									</content>
+								</delegate>
+							</layout>
+							<adjacent>
+								<layout factory="dock.RootStationAdjacentFactory">
+									<type>dock.CContentArea.minimize</type>
+								</layout>
+							</adjacent>
+							<children ignore="false"/>
+						</root>
+						<root name="ccontrol east">
+							<layout factory="predefined">
+								<replacement id="rootccontrol east"/>
+								<delegate id="delegate_CommonDockStationFactory">
+									<root>true</root>
+									<content delegate="flap dock">
+										<window auto="false" direction="WEST"/>
+										<placeholders>
+											<version>0</version>
+											<format>dock.PlaceholderList</format>
+										</placeholders>
+									</content>
+								</delegate>
+							</layout>
+							<adjacent>
+								<layout factory="dock.RootStationAdjacentFactory">
+									<type>dock.CContentArea.minimize</type>
+								</layout>
+							</adjacent>
+							<children ignore="false"/>
+						</root>
+						<root name="ccontrol west">
+							<layout factory="predefined">
+								<replacement id="rootccontrol west"/>
+								<delegate id="delegate_CommonDockStationFactory">
+									<root>true</root>
+									<content delegate="flap dock">
+										<window auto="false" direction="EAST"/>
+										<placeholders>
+											<version>0</version>
+											<format>dock.PlaceholderList</format>
+										</placeholders>
+									</content>
+								</delegate>
+							</layout>
+							<adjacent>
+								<layout factory="dock.RootStationAdjacentFactory">
+									<type>dock.CContentArea.minimize</type>
+								</layout>
+							</adjacent>
+							<children ignore="false"/>
+						</root>
+					</roots>
+					<children/>
+				</base>
+				<modes>
+					<dockables>
+						<entry id="multi 1 any" current="dock.mode.normal">
+							<history/>
+							<properties/>
+						</entry>
+						<entry id="multi 0 any" current="dock.mode.normal">
+							<history/>
+							<properties/>
+						</entry>
+					</dockables>
+					<modes>
+						<entry id="dock.mode.maximized"/>
+					</modes>
+				</modes>
+				<multi-factories>
+					<factory id="any">
+						<dockable id="0 any"/>
+						<dockable id="1 any"/>
+					</factory>
+				</multi-factories>
+			</current>
+		</frontend>
+	</resource>
+	<resource name="ccontrol.preferences"/>
+	<resource name="dock.ui.ThemeMap">
+		<key>eclipse</key>
+	</resource>
+</root>]]></docklayout>
+      <y class="com.inqwell.any.ConstInt">269</y>
+      <x class="com.inqwell.any.ConstInt">357</x>
+    </win>
+  </desktop>
+</root>

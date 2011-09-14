@@ -1,0 +1,57 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+// A simple docking frames example. This script creates two
+// "non-reusable" dockables in the main frame. You can
+// stack, float and alter their relative positions (though
+// this is all transparent to Inq)
+// See also http://dock.javaforge.com/
+
+local function createDockable(any parent, any name)
+{
+  // Create the dockable
+  gDock dock;
+
+  // Put the dockable into the node space beneath $stack.parent, which
+  // is the main frame. Note that dockables search their ancestor
+  // nodes to find their associated frame so they must be placed in
+  // the node space before their properties can be manipulated.
+  any parent.{name} = dock;
+
+  dock.properties.contextNode = true;
+  dock.properties.title = name + " Test";
+
+  gTextField tfText;
+  string dock.vars.text = "Hello";
+  tfText.properties.renderInfo = renderinfo($this.vars.text, label="Text", editable=true);
+
+  layout(., dock, "Table Columns GRID_PREF, 5, GRID_FILL
+                     Rows GRID_PREF, GRID_PREF;
+                     {
+                       Row
+                       {
+                         Label tfText
+                         ~
+                         tfText
+                       }
+                     }");
+
+  show(dock);
+}
+
+gWindow $this.win;
+$this.win.properties.defaultCloseOperation = EXIT_ON_CLOSE;
+$this.win.properties.title = "Dock Main Frame";
+$this.win.properties.size = array size = (300,200);
+
+call createDockable(parent = $this.win, name="Dock1");
+call createDockable(parent = $this.win, name="Dock2");
+
+show($this.win);
+

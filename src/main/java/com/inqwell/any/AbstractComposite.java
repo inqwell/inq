@@ -242,7 +242,7 @@ public abstract class AbstractComposite implements Composite
 		return null;
   }
 
-  public Any getPath()
+  public Any getPath(Any to)
   {
 		return null;
   }

@@ -17,7 +17,6 @@ package com.inqwell.any.beans;
 import com.inqwell.any.client.RenderInfo;
 import com.inqwell.any.Any;
 import com.inqwell.any.AnyException;
-import java.awt.Container;
 import javax.swing.border.Border;
 import javax.swing.JComponent;
 
@@ -26,23 +25,17 @@ import javax.swing.JComponent;
  */
 public interface UIFacade extends Facade
 {
-	public Container getComponent();
-
   /**
    * Establish rendering information, including a node from
    * where this component gets its data from
    */
 	public void setRenderInfo(RenderInfo r);
 
-	public void setModelRoot(Any newRoot) throws AnyException;
-
 	public String getLabel();
 
 	public JComponent getBorderee();
 	public Object     getAddee();
-	public Container  getAddIn();
-
-	public void applyBorder(Border border);
+	public Object     getAddIn();
 
 	public void setEnabled(Any enabled);
 

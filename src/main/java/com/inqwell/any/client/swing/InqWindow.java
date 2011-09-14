@@ -77,6 +77,7 @@ public interface InqWindow
 
   public Font getFont();
   public FontMetrics getFontMetrics(Font f);
+  public void setLocationRelativeTo(Component c);
 
   public void setDisabledText(Any text);
   

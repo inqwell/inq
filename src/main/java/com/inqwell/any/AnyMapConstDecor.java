@@ -263,9 +263,9 @@ public final class AnyMapConstDecor implements Map,
     return instance_.getNameInParent();
   }
   
-  public Any getPath()
+  public Any getPath(Any to)
   {
-    return instance_.getPath();
+    return instance_.getPath(to);
   }
   
   public boolean isParentable()

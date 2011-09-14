@@ -99,14 +99,32 @@ public class ParseException extends Exception {
       return super.getMessage();
     }
     Token tok = currentToken.next;
-    return "Syntax error after \"" +
-           add_escapes(currentToken.image) +
-           "\" near \"" +
-           add_escapes(tok.image) +
-           "\" at line " +
-           tok.beginLine +
-           ", column " +
-           tok.beginColumn;
+    String s;
+    if ((tok.kind >= InqConstants.SUM) &&
+        (tok.kind <= InqConstants.DECEMBER))
+    {
+      s = "Unexpected keyword \"" + 
+      add_escapes(tok.image) +
+      "\" after \"" +
+      add_escapes(currentToken.image) +
+      "\" at line " +
+      tok.beginLine +
+      ", column " +
+      tok.beginColumn;
+    }
+    else
+    {
+      s = "Syntax error after \"" +
+             add_escapes(currentToken.image) +
+             "\" near \"" +
+             add_escapes(tok.image) +
+             "\" at line " +
+             tok.beginLine +
+             ", column " +
+             tok.beginColumn;
+    }
+    
+    return s;
     /*
     String expected = "";
     int maxSize = 0;

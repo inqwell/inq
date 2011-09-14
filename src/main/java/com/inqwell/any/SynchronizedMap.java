@@ -288,9 +288,9 @@ public class SynchronizedMap implements Map,
     return m_.getNameInParent();
   }
   
-  public synchronized Any getPath()
+  public synchronized Any getPath(Any to)
   {
-    return m_.getPath();
+    return m_.getPath(to);
   }
   
   public synchronized boolean isParentable()

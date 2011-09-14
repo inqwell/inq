@@ -1,0 +1,178 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+// A simple docking frames example. This script creates two
+// "reusable" dockables in the main frame. You can
+// stack, float and alter their relative positions (though
+// this is all transparent to Inq).
+// Reusable dockables are associated with a function
+// to recreate them when the desktop is restored.
+// Usage: ./mdock.inq to create default desktop
+//        ./mdock.inq -load to restore last desktop
+// See also http://dock.javaforge.com/
+
+
+// This function is called explicitly when the GUI is created
+// directly, that is not restored from its last saved state.
+local function createDockable(any win, any name)
+{
+  // Create the dockable. An associated call statement
+  // defines the dockable as "reusable" (compare the
+  // gDock declaration in dock.inq)
+  gDock(call createGui(name)) dock;
+
+  // Put the dockable into the node space beneath $stack.parent, which
+  // is the main frame. Note that dockables search their ancestor
+  // nodes to find their associated frame so they must be placed in
+  // the node space before their properties can be manipulated.
+  any win.{name} = dock;
+
+  // Create the dockable's contents. This is most likely the
+  // same function that is specified in the gDock declaration.
+  call createGui(parent = dock, name);
+}
+
+// Because this function is a restore function (currently) it must be global.
+// Restore functions always have the argument "parent", which is the
+// dockable into which the content is created. They can have any number of
+// additional arguments, though these must be simple scalars and form part
+// of the desktop saved state. Anything else that is required must
+// be available under $this, which is the dockables' associated frame.
+function createGui(any parent, any name)
+{
+  parent.properties.contextNode = true;
+  parent.properties.title = name + " Test";
+
+  // Save our frame's functions beneath our own context
+  // so we have access to its entry points
+  any parent.funcs = $this.funcs;
+
+  // Create and layout the dockable's content
+  gTextField tfText;
+  string parent.vars.text = "Hello";
+  tfText.properties.renderInfo = renderinfo($this.vars.text, label="Text", editable=true);
+
+  layout(., parent, "Table Columns GRID_PREF, 5, GRID_FILL
+                     Rows GRID_PREF, GRID_PREF;
+                     {
+                       Row
+                       {
+                         Label tfText
+                         ~
+                         tfText
+                       }
+                     }");
+
+  if (name == "Dock1")
+  {
+    // Actions demonstration
+
+    gDockButton b;
+    b.properties.icon = image("cp:///com/inqwell/any/tools/q16.png");
+    b.properties.text = "Trade";
+    gEvent(b, call toggleShow());
+
+    // Choose between menu or dropdown and see the difference
+    // in the result
+    //gDockMenu m;
+    gDockDropDown m;
+    m.properties.icon = image("edit16.png");
+    m.properties.text = "A Menu";
+    gDockButton m1;
+    m1.properties.icon = image("mag.gif");
+    m1.properties.text = "Magnify";
+    gEvent(m1, call magnify());
+
+    gDockButton m2;
+    m2.properties.icon = image("cancel.png");
+    m2.properties.text = "Cancel";
+    gEvent(m2, call cancel());
+
+    gDockButton m3;
+    m3.properties.icon = image("cherry16.gif");
+    m3.properties.text = "Cherry";
+    gEvent(m3, call cherry());
+
+    gDockPopup popup;
+    popup.properties.icon = image("popup.gif");
+    popup.properties.text = "Popup";
+    gButton b1;
+    b1.properties.text = "1";
+    gTextField tf1;
+
+    // Now lay out all the actions
+    gDockActions actions;
+    layout(., parent, actions, "b m { m1 m2 m3 } popup { b1 tf1 }");
+
+    // Tell the dockable what its actions are
+    parent.properties.actions = actions;
+  }
+
+  // Show the dockable
+  show(parent);
+}
+
+local function toggleShow()
+{
+  $this.vars.text = getdate();
+  xfunc($this.funcs.show, name="Dock2");
+}
+
+local function cherry()
+{
+  $this.vars.text = "cherry";
+}
+
+local function magnify()
+{
+  $this.vars.text = "magnify";
+}
+
+local function cancel()
+{
+  $this.vars.text = "cancel";
+}
+
+local function contextEstablished()
+{
+  // See cp://inq/gui/verifiers.inq for this function. It sets
+  // up an event handler to track and save the desktop state.
+  // The state is stored in $HOME/.mdock
+  call inq.gui.util:setupSaveDesktop(win = $this, desktopName = "mdock");
+
+  // Set up a smap and put a function in it assumed to be called with
+  // an argument "name". Toggle the visibility of the dockable.
+  smap $this.funcs;
+  func $this.funcs.show = {
+                            $this.{name}.properties.visible ? hide($this.{name})
+                                                            : show($this.{name});
+                          };
+
+  // When the -load option was specified, reload the desktop from
+  // its saved state. Otherwise just create the default. Note
+  // dockable initial locations are to-do.
+  if ($catalog.argsMap.load)
+    call inq.gui.util:restoreDesktop(desktopName = "mdock");
+  else
+  {
+    call createDockable(win = $this, name="Dock1");
+    call createDockable(win = $this, name="Dock2");
+  }
+}
+
+gWindow win;
+win.properties.defaultCloseOperation = EXIT_ON_CLOSE;
+win.properties.title = "Dock Main Frame";
+win.properties.size = array size = (300,200);
+win.properties.contextNode = true;
+gEvent(win, call contextEstablished(), event=(gContext));
+any $this.win = win;
+
+show($this.win);
+

@@ -177,7 +177,13 @@ public final class EventConstants
 	public static final Any E_TREEWILLEXPAND   = new ConstString("E_TREEWILLEXPAND");
 	public static final Any E_TREEWILLCOLLAPSE = new ConstString("E_TREEWILLCOLLAPSE");
 
-	// Document Events
+  // Component events
+  public static final Any E_HIDDEN    = new ConstString("E_HIDDEN");
+  public static final Any E_MOVED     = new ConstString("E_MOVED");
+  public static final Any E_RESIZED   = new ConstString("E_RESIZED");
+  public static final Any E_SHOWN     = new ConstString("E_SHOWN");
+
+  // Document Events
 	public static final Any D_CHANGE        = new ConstString("D_CHANGE");
 	public static final Any D_INSERT        = new ConstString("D_INSERT");
 	public static final Any D_REMOVE        = new ConstString("D_REMOVE");

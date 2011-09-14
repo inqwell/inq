@@ -51,8 +51,6 @@ public class AnyRadio extends AnyToggleButton
   
 	public void setObject(Object o)
 	{
-		//System.out.println ("AnyRadio.setObject " + o.getClass());
-
 		if (!(o instanceof AbstractButton))
 			throw new IllegalArgumentException
 									("AnyRadio wraps javax.swing.AbstractButton and sub-classes");
@@ -151,7 +149,6 @@ public class AnyRadio extends AnyToggleButton
       {
         // Get the value we represent
         dataItem = r.resolveDataNode(getContextNode(), true);
-        //System.out.println ("AnyRadio.notifyButtonGroup: 1 dataItem: " + dataItem);
       }
       if (g_ != null)
         g_.radioChanged(dataItem);

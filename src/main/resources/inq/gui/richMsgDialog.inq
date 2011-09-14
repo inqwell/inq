@@ -87,7 +87,7 @@ function richMsgDialog(any    dialog,
               }
             }");
 
-	show(dialog, true);
+	show(dialog, resize=true);
 }
 
 function hideRichMsgDialog(any dialog)

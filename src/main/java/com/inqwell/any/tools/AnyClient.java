@@ -116,10 +116,11 @@ public class AnyClient extends DefaultPropertyAccessMap
     Globals.lockManager__               = new LockManager();
 
     System.out.println("Inq Client");
-    System.out.println("Copyright (c) InqWell Ltd 2002-2011");
-    System.out.println("Java Compiler Compiler Version 3.2 Copyright (c) 2003 Sun Microsystems, Inc. All  Rights Reserved.");
-    System.out.println("JDateChooser Copyright (c) Kai Toedter 1999 - 2009");
-    System.out.println("TableLayout Copyright (c) 2001 Daniel Barbalace. All rights reserved.");
+    System.out.println("Copyright (c) Inqwell Ltd 2002-2011");
+    System.out.println("JavaCC Copyright (c) 2006, Sun Microsystems, Inc.");
+    System.out.println("Docking Frames Copyright (c) Benjamin Sigg and others 2011");
+    System.out.println("JDateChooser Copyright (c) Kai Toedter 1999 - 2009; Inqwell 2011");
+    System.out.println("TableLayout Copyright (c) 2001 Daniel Barbalace.");
 
 //    if (args.length == 0)
 //      usage();

@@ -348,9 +348,9 @@ public class AnyCellRenderer extends    PropertyAccessMap
 //    renderInfo_.setRenderPath((NodeSpecification)path);
 //  }
   
-  public Any getPath()
+  public Any getPath(Any to)
   {
-    return renderInfo_.getRenderPath();
+    throw new UnsupportedOperationException();
   }
   
   public RenderInfo getRenderInfo()

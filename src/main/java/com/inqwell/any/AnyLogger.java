@@ -349,7 +349,7 @@ public class AnyLogger extends Logger implements Map, Cloneable
     return null;
   }
 
-  public Any getPath()
+  public Any getPath(Any to)
   {
     throw new UnsupportedOperationException();
   }

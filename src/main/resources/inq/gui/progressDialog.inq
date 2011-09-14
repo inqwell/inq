@@ -88,7 +88,7 @@ function progressDialog(object  dialog,
 	dialog.vars.stopExpr = stopExpr;
 
 
-	show(dialog, true);
+	show(dialog, resize=true);
 }
 
 /**

@@ -93,7 +93,7 @@ local function getFile()
                   $this.vars.status = $this.vars.statusVisible;
                   $this.status.properties.maximum = numChunks;
                   writeln($catalog.system.out, "Starting: " + filename);
-                  show($this, true);
+                  show($this, resize=true);
                 }
 
                 when (chunk)
@@ -107,7 +107,7 @@ local function getFile()
                 when (fileEnd)
                 {
                   $this.vars.status = 0;
-                  show($this, true);
+                  show($this, resize=true);
                   //$this.vars.status = filename + ": done";
                   writeln($catalog.system.out, "\nDone: " + filename);
                   //writeln($catalog.system.out, .);
