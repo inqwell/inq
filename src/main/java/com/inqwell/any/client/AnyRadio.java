@@ -23,11 +23,15 @@ import javax.swing.ButtonModel;
 import com.inqwell.any.AbstractComposite;
 import com.inqwell.any.Any;
 import com.inqwell.any.AnyException;
+import com.inqwell.any.AnyNull;
+import com.inqwell.any.AnyRuntimeException;
 import com.inqwell.any.AnyString;
 import com.inqwell.any.Array;
 import com.inqwell.any.ConstString;
+import com.inqwell.any.Descriptor;
 import com.inqwell.any.Event;
 import com.inqwell.any.Func;
+import com.inqwell.any.Map;
 import com.inqwell.any.RuntimeContainedException;
 import com.inqwell.any.Set;
 import com.inqwell.any.Transaction;
@@ -79,33 +83,45 @@ public class AnyRadio extends AnyToggleButton
   {
     if (r != null && !isRenderer())
     {
-      String s = r.getLabel();
-      if (s.equals(AnyString.EMPTY.toString()))
-        s = null;
-      b_.setText(s);
+      // Radios set their text to either their enum external value or
+      // their label, with the priority on the former
+      if (!setTextFromButtonGroup(r))
+      {
+        String s = r.getLabel();
+        if (s.equals(AnyString.EMPTY.toString()))
+          s = null;
+        b_.setText(s);
+      }
     }
-    
     super.setRenderInfo(r);
   }
 
 	
-	public void setButtonGroup(AnyButtonGroup g)
+	public void setButtonGroup(Any g)
 	{
     if (g_ != null)
     {
       ButtonGroup bg = g_.getButtonGroup();
       bg.remove(b_);
-      g.removeButton(this);
+      g_.removeButton(this);
     }
-		g_ = g;
-		if (g != null)
-		{
-		  g.getButtonGroup().add(b_);
-      g.addButton(this);
-		}
+    
+    g_ = null;
+    
+    if (!AnyNull.isNull(g))
+    {
+      if (!(g instanceof AnyButtonGroup))
+        throw new AnyRuntimeException("Not a button group");
+      
+  		g_ = (AnyButtonGroup)g;
+  		
+		  g_.getButtonGroup().add(b_);
+      g_.addButton(this);
+      setTextFromButtonGroup(getRenderInfo());
+    }
 	}
 	
-	public AnyButtonGroup getButtonGroup()
+	public Any getButtonGroup()
 	{
 		return g_;
 	}
@@ -157,6 +173,51 @@ public class AnyRadio extends AnyToggleButton
     {
       throw new RuntimeContainedException(e);
     }
+	}
+	
+	// Check if the button group is rendering an enum and if so
+	// whether any value our renderinfo represents is part of
+	// that enum. If so then set our text property from to the
+	// enum's external value and return true.
+	private boolean setTextFromButtonGroup(RenderInfo myRenderInfo)
+	{
+	  boolean ret = false;
+
+	  RenderInfo r = null;
+	  if (g_ != null)
+	    r = g_.getRenderInfo();
+	  
+	  if (r != null)
+	  {
+  	  Descriptor d = r.getDescriptor();
+      if (d != Descriptor.degenerateDescriptor__ && d != null)
+      {
+        Any        f = r.getField();
+        
+        if (d.isEnum(f) && myRenderInfo != null)
+        {
+          try
+          {
+            Any v = myRenderInfo.resolveResponsibleData(getContextNode());
+            Map enums = d.getEnums();
+            enums = (Map)enums.get(f);
+            
+            if (enums.contains(v))
+            {
+              v = enums.get(v);
+              b_.setText(v.toString());
+              ret = true;
+            }
+          }
+          catch(AnyException e)
+          {
+            throw new RuntimeContainedException(e);
+          }
+        }
+      }
+    }
+	  
+	  return ret;
 	}
   
   private class ModelUpdateListener extends EventBinding
