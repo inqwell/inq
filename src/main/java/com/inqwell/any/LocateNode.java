@@ -49,7 +49,8 @@ public class LocateNode extends    AbstractFunc
 	private static final long serialVersionUID = 1L;
 
 	public  static LocateNode null__ = new LocateNode(NodeSpecification.null__);
-	private static AnyObject  emptyIndirect__ = new AnyObject();
+  private static AnyObject  emptyIndirect__ = new AnyObject();
+  private static Map dummy__ = AbstractComposite.simpleMap();
 
 	//private Any op1_;
 	//private Any root_;
@@ -365,6 +366,13 @@ public class LocateNode extends    AbstractFunc
   	//System.out.println ("Evaluating against " + a);
 
 		found_ = null;
+		
+		// If the initial starting point is null then use
+		// a dummy map to get us going. Either location
+		// will break or the first token references another
+		// scope space like $stack or $catalog
+		if (a == null)
+		  a = dummy__;
 
 		res_.root_ = a;
 
