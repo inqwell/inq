@@ -40,5 +40,3 @@ $catalog.inq.system.Server.properties.defaultExceptionHandler =
 // There should be a logger called "inq" configured or
 // messages logged there will go to stderr
 any $catalog.inq.system.logger = getlogger("inq");
-
-writeln($catalog.system.out, "Server Started");
