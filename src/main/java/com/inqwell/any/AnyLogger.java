@@ -46,18 +46,27 @@ public class AnyLogger extends Logger implements Map, Cloneable
    */
   public void log(LogRecord record)
   {
-    Transaction t = Globals.getProcessForCurrentThread().getTransaction();
+    // Something outside the Inq environment may be doing some logging.
+    // For example the listener threads do so. In this case
+    // there will be no process and therefore no Inq source information
+    // to include in the log record.
+    Process p = Globals.getProcessForCurrentThread(false);
     
-    if (!t.getCallStack().isEmpty())
+    if (p != null)
     {
-      CallStackEntry se = (CallStackEntry)t.getCallStack().peek();
-      StringBuffer sb = new StringBuffer(se.getSourceUrl().toString());
-      sb.append(':');
-      sb.append(t.getLineNumber());
+      Transaction t = p.getTransaction();
       
-      record.setSourceClassName(sb.toString());
-      
-      record.setSourceMethodName(se.getFQName().toString());
+      if (!t.getCallStack().isEmpty())
+      {
+        CallStackEntry se = (CallStackEntry)t.getCallStack().peek();
+        StringBuffer sb = new StringBuffer(se.getSourceUrl().toString());
+        sb.append(':');
+        sb.append(t.getLineNumber());
+        
+        record.setSourceClassName(sb.toString());
+        
+        record.setSourceMethodName(se.getFQName().toString());
+      }
     }
     
     super.log(record);
