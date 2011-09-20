@@ -14,8 +14,24 @@
 
 package com.inqwell.any.server;
 
-import com.inqwell.any.*;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
+import com.inqwell.any.AbstractProcess;
+import com.inqwell.any.AddTo;
+import com.inqwell.any.Any;
+import com.inqwell.any.AnyException;
+import com.inqwell.any.AnyTimer;
+import com.inqwell.any.Array;
+import com.inqwell.any.ConstDate;
+import com.inqwell.any.ConstString;
+import com.inqwell.any.Map;
+import com.inqwell.any.NodeSpecification;
+import com.inqwell.any.PermissionException;
 import com.inqwell.any.Process;
+import com.inqwell.any.RemoveFrom;
+import com.inqwell.any.StackUnderflowException;
+import com.inqwell.any.Transaction;
 
 /**
  * Start a new thread
@@ -26,6 +42,8 @@ public class DeadlockScanner extends    AbstractProcess
 										         implements Process,
 										                    Runnable
 {
+  private static Logger logger = Logger.getLogger("inq");
+  
 	private Thread           thread_;
 	
 	private boolean          killed_;
@@ -44,7 +62,8 @@ public class DeadlockScanner extends    AbstractProcess
 	{
 		// make sure our members are not garbage collected!
 		Process p = this;
-		System.out.println ("DeadlockScanner Started");
+
+		logger.log(Level.INFO, "Deadlock scanner");
 		
 		initInThread();
 
@@ -57,17 +76,16 @@ public class DeadlockScanner extends    AbstractProcess
 		    if (processList != null && processList.entries() != 0)
 		    {
 			    Process dp = (Process)processList.get(0);
-			    System.out.println("DeadlockScanner victim: " + dp);
+			    logger.log(Level.INFO, "DeadlockScanner victim: " + dp);
 			    dp.deadlockVictim();
 			  }
 		  }
 		  catch (Exception e)
 		  {
-			  System.out.println("DeadlockScanner caught exception");
-			  e.printStackTrace();
+        logger.log(Level.SEVERE, "DeadlockScanner caught exception", e);
 			}
 	  }
-  	System.out.println ("DeadlockScanner terminating......");
+    logger.log(Level.INFO, "DeadlockScanner terminating......");
     RemoveFrom removeFrom = new RemoveFrom(this);
     removeFrom.setTransaction(getTransaction());
     try

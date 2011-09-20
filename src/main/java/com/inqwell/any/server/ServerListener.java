@@ -14,20 +14,26 @@
 
 package com.inqwell.any.server;
 
-import com.inqwell.any.*;
-import com.inqwell.any.Process;
-import com.inqwell.any.channel.AnyChannel;
-import com.inqwell.any.channel.Socket;
-import com.inqwell.any.channel.ChannelDriver;
-import com.inqwell.any.channel.FIFO;
-import com.inqwell.any.channel.ChannelConstants;
 import java.net.ServerSocket;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import com.inqwell.any.io.ResolvingInputStream;
-import com.inqwell.any.io.ReplacingOutputStream;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
+import com.inqwell.any.AbstractProcess;
+import com.inqwell.any.AddTo;
+import com.inqwell.any.Any;
+import com.inqwell.any.AnyException;
+import com.inqwell.any.AnyRuntimeException;
+import com.inqwell.any.AnyTimer;
+import com.inqwell.any.ConstDate;
+import com.inqwell.any.ConstInt;
+import com.inqwell.any.ConstString;
+import com.inqwell.any.Map;
+import com.inqwell.any.NodeSpecification;
+import com.inqwell.any.PermissionException;
+import com.inqwell.any.Process;
+import com.inqwell.any.RemoveFrom;
+import com.inqwell.any.StackUnderflowException;
+import com.inqwell.any.Transaction;
 
 /**
  * Start a new thread
@@ -40,10 +46,10 @@ public class ServerListener extends    AbstractProcess
 {
 	public static final Any PORT = new ConstString("port");
 	
+	private static Logger logger = Logger.getLogger("inq");
+	
 	private Thread           thread_;
 	
-	private ExceptionHandler eh_;
-
 	private int              port_;
 	
 	private boolean          killed_ = false;
@@ -53,11 +59,9 @@ public class ServerListener extends    AbstractProcess
 	private Any              catalogPath_;
 	
 	public ServerListener (int              port,
-												 ExceptionHandler exceptionHandler,
 												 ProtocolHandler  ph)
 	{
 		port_     = port;
-		eh_       = exceptionHandler;
 		ph_       = ph;
 		init(ph_.getProtocolName());
 	}
@@ -72,16 +76,12 @@ public class ServerListener extends    AbstractProcess
 		}
 		catch (Exception sse)
 		{
-			eh_.handleException (new ContainedException(sse), getTransaction());
-  	  System.out.println ("Socket Listener terminating......");
+      logger.log(Level.SEVERE, "Socket Listener cannot get server socket - terminating......", sse);
 			return;
 		}
 			
-		
-		System.out.println (ph_.getProtocolName() +
-		                    " Socket Listener Started on port " +
-		                    port_);
-		
+    logger.log(Level.INFO, "Socket Listener started on port " + port_);
+
 		initInThread();
 		
 	  while (!killed_)
@@ -109,9 +109,9 @@ public class ServerListener extends    AbstractProcess
 					}
 					catch (Exception e)
 					{
-						eh_.handleException (new ContainedException(e), getTransaction());
+					  logger.log(Level.SEVERE, "Cannot handle new connection", e);
 					}
-          eh_.handleException (ae, getTransaction());
+          logger.log(Level.SEVERE, "Cannot handle new connection (close)", ae);
 				}
         catch (AnyRuntimeException ae)
         {
@@ -121,16 +121,16 @@ public class ServerListener extends    AbstractProcess
           }
           catch (Exception e)
           {
-            eh_.handleException (new ContainedException(e), getTransaction());
+            logger.log(Level.SEVERE, "Cannot handle new connection", e);
           }
-          eh_.handleException (ae, getTransaction());
+          logger.log(Level.SEVERE, "Cannot handle new connection (close)", ae);
         }
 			}
 			
 			// Handle uncaught JDK exceptions
 			catch (Exception e) // ss.accept()
 			{
-				eh_.handleException (new ContainedException(e), getTransaction());
+        logger.log(Level.SEVERE, "accept()", e);
 				try
 				{
           if (s != null)
@@ -138,15 +138,13 @@ public class ServerListener extends    AbstractProcess
 				}
 				catch (Exception e1)
 				{
-				  eh_.handleException (new ContainedException(e1), getTransaction());
+	        logger.log(Level.SEVERE, "close()", e);
 				}
 				break;
 			}
   	}
 
-		System.out.println (ph_.getProtocolName() +
-        " Socket Listener on port " +
-        port_ + " terminated");
+    logger.log(Level.INFO, "Socket Listener started on port " + port_ + " terminated");
 
     RemoveFrom removeFrom = new RemoveFrom(this);
     removeFrom.setTransaction(getTransaction());
