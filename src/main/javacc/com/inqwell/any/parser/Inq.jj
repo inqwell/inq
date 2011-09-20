@@ -485,7 +485,7 @@ public class Inq extends AbstractAny
                                                   t,
                                                   root);
 
-    eh = new ExceptionToStream(System.out);
+    eh = new ExceptionToStream(System.err);
     URL initInq = null;
     try
     {
