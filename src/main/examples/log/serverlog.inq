@@ -1,0 +1,59 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * serverlog.inq
+ *
+ * Test unhandled exceptions are logged in server spawned
+ * processes.
+ *
+ * To run this example:
+ *  1) Start an Inq server
+ *  2) Load this script into the server
+ *    inq -load -u admin -p inqwell -server -url $INQHOME/examples/log/serverlog.inq
+ *  3) The default logging configuration defines the "inq" logger
+ *     whose output goes to ${inq.home}/log/server%g.%u.log
+ */
+
+package inq.test.logger;
+
+// process argument is provided by Inq
+local function loggerStart(any process)
+{
+  // Just send a service request to the process
+  // to run the demo
+  send runtimeException(@channel = process.ichannel);
+  send userException(@channel = process.ichannel);
+}
+
+service runtimeException()
+{
+  // Cause a runtime exception - in this case an
+  // unresolved reference to $stack.foo
+  int i = foo;
+}
+
+service userException()
+{
+  // Just throw an exception and then terminate the process
+  try
+  {
+    throw("Explicit exception thrown");
+  }
+  finally
+  {
+    exit(0);
+  }
+}
+
+// Start the process
+any loggertest  = spawn("LoggerTest",
+                        type  = PROCESS_DETACHED,
+                        start = call loggerStart());
+
