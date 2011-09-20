@@ -24,16 +24,6 @@ import com.inqwell.any.identity.AnyMapDecor;
  */
 public class AnyLogManager extends LogManager implements Map, Cloneable
 {
-//public static IntI LOG_ALL     = (IntI)AbstractValue.flyweightConst(new ConstInt(Level.ALL.intValue()+1));
-//public static IntI LOG_CONFIG  = (IntI)AbstractValue.flyweightConst(new ConstInt(Level.CONFIG.intValue()));
-//public static IntI LOG_FINE    = (IntI)AbstractValue.flyweightConst(new ConstInt(Level.FINE.intValue()));
-//public static IntI LOG_FINER   = (IntI)AbstractValue.flyweightConst(new ConstInt(Level.FINER.intValue()));
-//public static IntI LOG_FINEST  = (IntI)AbstractValue.flyweightConst(new ConstInt(Level.FINEST.intValue()));
-//public static IntI LOG_INFO    = (IntI)AbstractValue.flyweightConst(new ConstInt(Level.INFO.intValue()));
-//public static IntI LOG_OFF     = (IntI)AbstractValue.flyweightConst(new ConstInt(Level.OFF.intValue()));
-//public static IntI LOG_SEVERE  = (IntI)AbstractValue.flyweightConst(new ConstInt(Level.SEVERE.intValue()));
-//public static IntI LOG_WARNING = (IntI)AbstractValue.flyweightConst(new ConstInt(Level.WARNING.intValue()));
-
   // Slightly hacky but makes toString look like the symbol.
   public static IntI LOG_ALL     = new ConstInt(Level.ALL.intValue()+1)   { public String toString() { return "ALL"; } };
   public static IntI LOG_CONFIG  = new ConstInt(Level.CONFIG.intValue())  { public String toString() { return "CONFIG"; } };
@@ -45,27 +35,14 @@ public class AnyLogManager extends LogManager implements Map, Cloneable
   public static IntI LOG_SEVERE  = new ConstInt(Level.SEVERE.intValue())  { public String toString() { return "SEVERE"; } };
   public static IntI LOG_WARNING = new ConstInt(Level.WARNING.intValue()) { public String toString() { return "WARNING"; } };
 
-//  public static Any LOG_ALL     = AbstractValue.flyweightString("ALL");
-//  public static Any LOG_CONFIG  = AbstractValue.flyweightString("CONFIG");
-//  public static Any LOG_FINE    = AbstractValue.flyweightString("FINE");
-//  public static Any LOG_FINER   = AbstractValue.flyweightString("FINER");
-//  public static Any LOG_FINEST  = AbstractValue.flyweightString("FINEST");
-//  public static Any LOG_INFO    = AbstractValue.flyweightString("INFO");
-//  public static Any LOG_OFF     = AbstractValue.flyweightString("OFF");
-//  public static Any LOG_SEVERE  = AbstractValue.flyweightString("SEVERE");
-//  public static Any LOG_WARNING = AbstractValue.flyweightString("WARNING");
-  
   private   DefaultPropertyAccessMap propertyMap_;
   
   private   String                   lastName_;
   
-  // Hold loggers as strong references until they are first
-  // requested via getAnyLogger(). The JVM can GC a logger held
-  // within java.util.logging.LogManager before it is even used
+  // The JVM can GC a logger before it is even used
   // because it holds them as weak references. They would get
-  // re-created when using Logger.getLogger() but surely this
-  // is not the intention - code would be expected to hold a
-  // reference to 
+  // re-created when using Logger.getLogger(). Do we ever
+  // want to hold them as strong references?
   //private   HashMap<String, Logger>  loggers_ = new HashMap<String, Logger>();
   
   public static Level toLevel(Any l)
