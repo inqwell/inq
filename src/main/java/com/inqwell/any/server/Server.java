@@ -14,18 +14,49 @@
 
 package com.inqwell.any.server;
 
-import com.inqwell.any.*;
-import com.inqwell.any.Process;
-import com.inqwell.any.channel.AnyChannel;
-import com.inqwell.any.client.AnyComponent;
-import java.net.URL;
-import com.inqwell.any.net.InqStreamHandlerFactory;
-import com.inqwell.any.util.CommandArgs;
-import java.net.MalformedURLException;
-import java.io.InputStream;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.Properties;
+import java.util.logging.Logger;
+
+import com.inqwell.any.AbstractComposite;
+import com.inqwell.any.AbstractValue;
+import com.inqwell.any.Any;
+import com.inqwell.any.AnyException;
+import com.inqwell.any.AnyFuncHolder;
+import com.inqwell.any.AnyInt;
+import com.inqwell.any.AnyString;
+import com.inqwell.any.AnyTimeZone;
+import com.inqwell.any.AnyURL;
+import com.inqwell.any.Array;
+import com.inqwell.any.BuildNodeMap;
+import com.inqwell.any.Call;
+import com.inqwell.any.Catalog;
+import com.inqwell.any.Composite;
+import com.inqwell.any.ConstString;
+import com.inqwell.any.DegenerateIter;
+import com.inqwell.any.Globals;
+import com.inqwell.any.Iter;
+import com.inqwell.any.LocateNode;
+import com.inqwell.any.LockManager;
+import com.inqwell.any.Map;
+import com.inqwell.any.MultiHierarchyMap;
+import com.inqwell.any.NodeSpecification;
+import com.inqwell.any.NullService;
+import com.inqwell.any.Process;
+import com.inqwell.any.PropertyAccessMap;
+import com.inqwell.any.RunInq;
+import com.inqwell.any.SendRequest;
+import com.inqwell.any.ServerConstants;
+import com.inqwell.any.StringI;
+import com.inqwell.any.UserProcess;
+import com.inqwell.any.channel.AnyChannel;
+import com.inqwell.any.client.AnyComponent;
+import com.inqwell.any.net.InqStreamHandlerFactory;
+import com.inqwell.any.util.CommandArgs;
 
 /**
  * Server start up and singleton handling
@@ -34,9 +65,8 @@ import java.util.Properties;
  */
 public final class Server extends PropertyAccessMap
 {
-  private static final long serialVersionUID = 1L;
-
   public static Any startup__ = new ConstString("startup");
+  private static Logger logger = Logger.getLogger("inq");
 
   public static StringI serverPath__ = new ConstString("$catalog.inq.system.Server");
 
@@ -247,7 +277,7 @@ public final class Server extends PropertyAccessMap
 
     System.out.println("Inq Server");
     System.out.println("Copyright (c) InqWell Ltd 2002-2011");
-    System.out.println("Java Compiler Compiler Version 3.2 Copyright (c) 2003 Sun Microsystems, Inc. All  Rights Reserved.");
+    System.out.println("JavaCC Copyright (c) 2006, Sun Microsystems, Inc.");
 
 		try
 		{
@@ -356,15 +386,23 @@ public final class Server extends PropertyAccessMap
 
 			// Now start the socket listener for speakinq...
 			new ServerListener(speakinqPort.getValue(),
-			                   new ExceptionToStream(System.out),
 			                   new SpeakinqProtocolHandler());
 
       // ... speakinqs if the ssl system property is there
 			if (System.getProperty("javax.net.ssl.keyStore") != null)
 				new ServerListener(speakinqsPort.getValue(),
-				                   new ExceptionToStream(System.out),
 				                   new SpeakinqsProtocolHandler());
 
+			Runtime.getRuntime().addShutdownHook(new Thread()
+                                      		 {
+                                      			 public void run()
+                                      			 {
+                                      			   setName("Shutdown");
+                                      			   logger.info("Server stopped");
+                                      			 }
+                                      		 });
+      logger.info("Server started");
+      
 			// and one for httpinq TO BE RETIRED
 //      if (httpinqPort.getValue() > 0)
 //        new ServerListener(httpinqPort.getValue(),
