@@ -34,13 +34,11 @@ public class ExceptionToStream extends    AbstractExceptionHandler
 
 	protected void handle(AnyException e, Transaction t)
 	{
-		System.out.println(e.getMessage());
 		e.printStackTrace(ps_);
 	}
 	
 	protected void handle(AnyRuntimeException e, Transaction t)
 	{
-		System.out.println(e.getMessage());
 		e.printStackTrace(ps_);
 	}
 }
