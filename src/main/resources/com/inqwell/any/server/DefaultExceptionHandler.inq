@@ -13,20 +13,8 @@
  */
 package system.server;
 
-// For exceptionToService
-service handleException(string  msg,
-                        string  stackTrace,
-                        func    handler,
-                        boolean isUser,
-                        object  exInfo)
-{
-  writeln($catalog.system.out, msg);
-  writeln($catalog.system.out, stackTrace);
-  if(exInfo)
-    writeln($catalog.system.out, exInfo);
-}
-
-// For exceptionToFunction.
+// Set up the default exception handler for spawned processes
+// to log to the default logger "inq"
 local function handleException(string  msg,
                                string  stackTrace,
                                boolean isUser,
@@ -34,12 +22,11 @@ local function handleException(string  msg,
                                date    exTime,
                                object  exInfo)
 {
-  writeln($catalog.system.err, "*** Default Exception Handler ***");
-  writeln($catalog.system.err, msg);
-  writeln($catalog.system.err, exTime);
-  writeln($catalog.system.err, stackTrace);
-  if(exInfo)
-    writeln($catalog.system.out, exInfo);
+  logsevere($catalog.inq.system.logger,
+             "*** Default Exception Handler ***\n{0}\n{1}{2}\n",
+             msg,
+             stackTrace,
+             exInfo ? exInfo : "No further information");
 }
 
 $catalog.inq.system.Server.properties.defaultExceptionHandler =
@@ -49,5 +36,9 @@ $catalog.inq.system.Server.properties.defaultExceptionHandler =
                                  isCommit,
                                  exTime,
                                  exInfo);
+
+// There should be a logger called "inq" configured or
+// messages logged there will go to stderr
+any $catalog.inq.system.logger = getlogger("inq");
 
 writeln($catalog.system.out, "Server Started");
