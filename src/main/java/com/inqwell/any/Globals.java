@@ -51,7 +51,7 @@ public class Globals
   // Made available so that the process (and associated
   // transaction, context etc) can be retrieved for the
   // currently running thread.
-  static private HashMap threadMap__ = new HashMap();
+  static private HashMap<Thread, Process> threadMap__ = new HashMap<Thread, Process>();
 	
 	static
 	{
@@ -75,7 +75,12 @@ public class Globals
   
   public static Process getProcessForCurrentThread()
   {
-    return getProcessForThread(Thread.currentThread());
+    return getProcessForThread(Thread.currentThread(), true);
+  }
+  
+  public static Process getProcessForCurrentThread(boolean mandatory)
+  {
+    return getProcessForThread(Thread.currentThread(), mandatory);
   }
   
   public static boolean haveProcessForThread()
@@ -85,18 +90,19 @@ public class Globals
   
   public static Process getProcessForThread(Thread t)
   {
+    return getProcessForThread(t, true);
+  }
+  
+  public static Process getProcessForThread(Thread t, boolean mandatory)
+  {
     synchronized(Globals.class)
     {
-      if (!threadMap__.containsKey(t))
+      Process p = null;
+
+      if (((p = threadMap__.get(t)) == null) && mandatory)
       {
-//        // Might be the awt thread
-//        if (process__ != null)
-//          return process__;
-//          
         throw new AnyRuntimeException("No process for thread!");
       }
-      
-      Process p = (Process)threadMap__.get(t);
       
       return p;
     }
@@ -108,10 +114,6 @@ public class Globals
     {
       if (!threadMap__.containsKey(t))
       {
-//        // Might be the awt thread
-//        if (process__ != null)
-//          return true;
-          
         return false;
       }
       
