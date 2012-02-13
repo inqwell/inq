@@ -31,7 +31,8 @@ public interface Descriptor extends Any
 	static Any new__          = new ConstString("new");
 	static Any old__          = new ConstString("old");
   
-	static Any construct__    = new ConstString("<construct>");
+  static Any construct__    = new ConstString("<construct>");
+  static Any join__         = new ConstString("<join>");
 	static Any mutate__       = new ConstString("<mutate>");
 	static Any destroy__      = new ConstString("<destroy>");
   
@@ -151,10 +152,12 @@ public interface Descriptor extends Any
 	public void destroy();
   
   /**
-   * Perform any construction on new instances.  Should be called before
+   * Perform any construction on new instances.  Will be called before
    * object is managed/written
    */
   public void construct(Map m, Transaction t) throws AnyException;
+
+  public void join(Map m, Transaction t) throws AnyException;
   
   /**
    * Perform any mutation on existing instances.  Will be called

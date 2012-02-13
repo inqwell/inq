@@ -14,22 +14,63 @@
 package com.inqwell.any.io.sql;
 
 
-import java.sql.DriverManager;
+import java.io.InputStream;
+import java.math.BigDecimal;
 import java.sql.Connection;
-import java.sql.Statement;
+import java.sql.Driver;
+import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.SQLWarning;
-import java.sql.Driver;
+import java.sql.Statement;
 import java.sql.Types;
-import java.math.BigDecimal;
-import java.io.InputStream;
-import java.io.IOException;
 import java.util.ArrayList;
 
-import com.inqwell.any.*;
+import com.inqwell.any.AbstractAny;
+import com.inqwell.any.AbstractComposite;
+import com.inqwell.any.AbstractFunc;
+import com.inqwell.any.AbstractVisitor;
+import com.inqwell.any.Any;
+import com.inqwell.any.AnyBigDecimal;
+import com.inqwell.any.AnyBlob;
+import com.inqwell.any.AnyBoolean;
+import com.inqwell.any.AnyByte;
+import com.inqwell.any.AnyDate;
+import com.inqwell.any.AnyDouble;
+import com.inqwell.any.AnyException;
+import com.inqwell.any.AnyFloat;
+import com.inqwell.any.AnyInt;
+import com.inqwell.any.AnyLong;
+import com.inqwell.any.AnyMessageFormat;
+import com.inqwell.any.AnyNull;
+import com.inqwell.any.AnyRuntimeException;
+import com.inqwell.any.AnyShort;
+import com.inqwell.any.AnyString;
+import com.inqwell.any.Array;
+import com.inqwell.any.BooleanI;
+import com.inqwell.any.ByteI;
+import com.inqwell.any.Catalog;
+import com.inqwell.any.CharI;
+import com.inqwell.any.ConstBoolean;
+import com.inqwell.any.ConstInt;
+import com.inqwell.any.ConstString;
+import com.inqwell.any.ContainedException;
+import com.inqwell.any.DateI;
+import com.inqwell.any.Decimal;
+import com.inqwell.any.DoubleI;
+import com.inqwell.any.FloatI;
+import com.inqwell.any.Func;
+import com.inqwell.any.IntI;
+import com.inqwell.any.Iter;
+import com.inqwell.any.LongI;
+import com.inqwell.any.Map;
+import com.inqwell.any.ObjectI;
+import com.inqwell.any.RuntimeContainedException;
+import com.inqwell.any.ShortI;
+import com.inqwell.any.StringI;
+import com.inqwell.any.Value;
 
 /**
  * Provides an interface to JDBC expressing result sets and database
@@ -57,7 +98,6 @@ public class AnySql extends AbstractAny
   public static Any sqlDebug__   = new ConstString("sqlDebug");
 
   private Connection _conn;
-  private	boolean	_libertyDriver;
   private Statement  _lastStatement;  // remember the last statement we used
 
   private PrepareStatement _prepareStatement = new PrepareStatement();
@@ -87,7 +127,9 @@ public class AnySql extends AbstractAny
   // Whether this connection has ever been used successfully.
   // Helps in determining whether the underlying database is
   // running or that the connection has just timed out.
-  private int               _statementsDone;
+  private int                _statementsDone;
+  
+  private Array              _onException;
 
   private SQLWarning         _warnings;
   private SQLWarning         _currentWarning;
@@ -196,7 +238,7 @@ public class AnySql extends AbstractAny
    */
   public void executeSql (String sql) throws AnyException
   {
-    //System.out.println ("executeSql : " + sql);
+    boolean done = false;
     try
     {
       // If _lastStatement is not null we assume that it is a Statement and
@@ -211,7 +253,10 @@ public class AnySql extends AbstractAny
         getStatement();
 
       printSql(sql);
-      boolean isResultSet = _lastStatement.execute (sql);
+      // boolean isResultSet =
+      _lastStatement.execute (sql);
+      done = true;
+      
 //System.out.println("getQueryTimeout() returns " + _lastStatement.getQueryTimeout());
 //System.out.println ("*** Query T/O is zero");
 //_lastStatement.setQueryTimeout (0);
@@ -223,6 +268,9 @@ public class AnySql extends AbstractAny
     }
     catch (SQLException e)
     {
+      if (done)
+        onException(e);
+      
       throw (new ContainedException(e, sql));
     }
     _statementsDone++;
@@ -261,12 +309,13 @@ public class AnySql extends AbstractAny
    * in this case, the parameters have an implicit order and can be carried
    * in an Array only
    */
-  public void executeSql (String sql, Array params)  throws AnyException
+  private void executeSql (String sql, Array params)  throws AnyException
   {
     Iter i = params.createIterator();
     int  paramIndex = 0;
 
 
+    boolean done = false;
     try
     {
       cleanUp();
@@ -284,13 +333,17 @@ public class AnySql extends AbstractAny
 
       // execute the callable statement
       printSql(sql);
-      boolean isResultSet = _prepareStatement._s.execute();
-
+      //boolean isResultSet =
+      _prepareStatement._s.execute();
+      done = true;
       //readyResults (isResultSet, true);
     }
 
     catch (SQLException e)
     {
+      if (done)
+        onException(e);
+      
       throw (new ContainedException(e, sql, params));
     }
     _statementsDone++;
@@ -317,6 +370,7 @@ public class AnySql extends AbstractAny
 
       int  paramIndex = 1;
 
+      boolean done = false;
       try
       {
         checkIsClosed();
@@ -334,13 +388,18 @@ public class AnySql extends AbstractAny
         }
 
         // execute the callable statement
-        boolean isResultSet = _prepareStatement._s.execute();
+        //boolean isResultSet =
+        _prepareStatement._s.execute();
+        done = true;
 
         //readyResults (isResultSet, true);
       }
 
       catch (SQLException e)
       {
+        if (done)
+          onException(e);
+        
         throw (new ContainedException(e));
       }
       _statementsDone++;
@@ -363,6 +422,7 @@ public class AnySql extends AbstractAny
       return;
     }
 
+    boolean done = false;
     try
     {
       cleanUp();
@@ -391,14 +451,19 @@ public class AnySql extends AbstractAny
         }
       }
 
-      // execute the callable statement
-      boolean isResultSet = _prepareStatement._s.execute();
+      // Execute the callable statement
+      //boolean isResultSet = 
+      _prepareStatement._s.execute();
+      done = true;
 
       //readyResults (isResultSet, true);
     }
 
     catch (SQLException e)
     {
+      if (done)
+        onException(e);
+      
       throw (new ContainedException(e, sql, params));
     }
     _statementsDone++;
@@ -420,21 +485,13 @@ public class AnySql extends AbstractAny
     {
       if (!_firstResult)
       {
-//					_lastStatement.getMoreResults();
-				if (!_libertyDriver)
-				{
-					_lastStatement.getMoreResults();
-				}
-				else
-				{
-					return ResNoMore;
-				}
+        _lastStatement.getMoreResults();
       }
       _firstResult = false;
 
       _updateCount = _lastStatement.getUpdateCount();
 
-      if ((!_libertyDriver) && (_updateCount >= 0))
+      if (_updateCount >= 0)
         return ResUpdateCount;
 
       _resultSet = _lastStatement.getResultSet();
@@ -899,42 +956,10 @@ public class AnySql extends AbstractAny
   {
 	 	// load up required driver if not done already
 		Driver 		driver;
-		_libertyDriver = false;
 
 		try
 		{
-			if (url.startsWith("jdbc:liberty:"))
-			{
-					driver = (Driver)Class.forName("liberty.jdbc.LibertyDriver").newInstance();
-					_libertyDriver = true;
-			}
-      
       driver = DriverManager.getDriver(url);
-      
-//			else if (url.startsWith("jdbc:odbc:"))
-//			{
-//					driver = (Driver)Class.forName("sun.jdbc.odbc.JdbcOdbcDriver").newInstance();
-//			}
-//			else if (url.startsWith("jdbc:oracle:"))
-//			{
-//					driver = (Driver)Class.forName("oracle.jdbc.driver.OracleDriver").newInstance();
-//
-//          }
-//			else if (url.startsWith("jdbc:microsoft:sqlserver:"))
-//			{
-//					driver = (Driver)Class.forName("com.microsoft.jdbc.sqlserver.SQLServerDriver").newInstance();
-//			}
-//			else if (url.startsWith("jdbc:mysql:"))
-//			{
-//					// mysql jdbc url can be :
-//					// 	jdbc:mysql://[hostname][:port]/[dbname][?param1=value1][&param2=value2].....
-//					driver = (Driver)Class.forName("com.mysql.jdbc.Driver").newInstance();
-//			}
-//			else
-//			{
-//					driver = (Driver)Class.forName("com.sybase.jdbc.SybDriver").newInstance();
-//					//driver = (Driver)Class.forName("com.sybase.jdbc2.jdbc.SybDriver").newInstance();
-//			}
 		}
 		catch (Exception eX)
 		{
@@ -1031,7 +1056,6 @@ public class AnySql extends AbstractAny
           _conn.rollback();
         else
         {
-          //System.out.println("Committing " + this);
           _conn.commit();
         }
       }
@@ -1114,6 +1138,11 @@ public class AnySql extends AbstractAny
     _dateAsTime = dateAsTime;
   }
   
+  public void setOnException(Array stmts)
+  {
+    _onException = stmts;
+  }
+
   private void init()
   {
 		_conn  = null;
@@ -1261,32 +1290,32 @@ public class AnySql extends AbstractAny
   }
   
   // defunct
-  private void readyResults(boolean isResultSet,
-                            boolean first) throws AnyException
-  {
-    try
-    {
-      if (isResultSet)
-      {
-        if (first)
-          System.out.println ("first");
-        else
-          System.out.println ("subsequent");
-        _resultSet   = _lastStatement.getResultSet();
-        _updateCount = -1;
-      }
-      else
-      {
-        _updateCount = _lastStatement.getUpdateCount();
-        _resultSet   = null;
-      }
-      _firstResult = first;
-    }
-    catch (SQLException e)
-    {
-      throw (new ContainedException(e));
-    }
-  }
+//  private void readyResults(boolean isResultSet,
+//                            boolean first) throws AnyException
+//  {
+//    try
+//    {
+//      if (isResultSet)
+//      {
+//        if (first)
+//          System.out.println ("first");
+//        else
+//          System.out.println ("subsequent");
+//        _resultSet   = _lastStatement.getResultSet();
+//        _updateCount = -1;
+//      }
+//      else
+//      {
+//        _updateCount = _lastStatement.getUpdateCount();
+//        _resultSet   = null;
+//      }
+//      _firstResult = first;
+//    }
+//    catch (SQLException e)
+//    {
+//      throw (new ContainedException(e));
+//    }
+//  }
 
   private int getColumnRange () throws AnyException
   {
@@ -1448,6 +1477,23 @@ public class AnySql extends AbstractAny
 	{
 		if (_debug.getValue())
 			System.out.println (sql);
+	}
+	
+	private Any onException(SQLException e)
+	{
+	  if (_onException == null)
+	    return null;
+	  
+	  try
+	  {
+	    //cleanUp();
+	    // TODO: run any onException sql statement and return its results
+	  }
+	  catch(Throwable  t)
+	  {
+	    // TODO: log
+	  }
+	  return null;
 	}
 
   // Wrap up the execution of the Function classes to process the
@@ -1992,354 +2038,352 @@ public class AnySql extends AbstractAny
 				//								 o.getClass().getName());
 		}
   }
-}
 
-// Package classes to process column results into suitable Anys
-
-class ProcessColumnINTEGER extends AbstractFunc
-{
-  private AnySql _anySql;
-  private AnyInt _anyInt;
-
-  ProcessColumnINTEGER (AnySql anySql)
+  static class ProcessColumnINTEGER extends AbstractFunc
   {
-    _anySql = anySql;
-    _anyInt = new AnyInt();
+    private AnySql _anySql;
+    private AnyInt _anyInt;
+  
+    ProcessColumnINTEGER (AnySql anySql)
+    {
+      _anySql = anySql;
+      _anyInt = new AnyInt();
+    }
+  
+    public Any exec (Any a) throws AnyException
+    {
+      try
+      {
+        _anySql.processColumnINTEGER (_anyInt, a);
+      }
+      catch (SQLException e)
+      {
+        throw (new ContainedException (e));
+      }
+      return (_anyInt);
+    }
   }
 
-  public Any exec (Any a) throws AnyException
+  static class ProcessColumnSMALLINT extends AbstractFunc
   {
-    try
+    private AnySql   _anySql;
+    private ShortI _anyShort;
+  
+    ProcessColumnSMALLINT (AnySql anySql)
     {
-      _anySql.processColumnINTEGER (_anyInt, a);
+      _anySql   = anySql;
+      _anyShort = new AnyShort();
     }
-    catch (SQLException e)
+  
+    public Any exec (Any a) throws AnyException
     {
-      throw (new ContainedException (e));
+      try
+      {
+        _anySql.processColumnSMALLINT (_anyShort, a);
+      }
+      catch (SQLException e)
+      {
+        throw (new ContainedException (e));
+      }
+      return (_anyShort);
     }
-    return (_anyInt);
-  }
-}
-
-class ProcessColumnSMALLINT extends AbstractFunc
-{
-  private AnySql   _anySql;
-  private ShortI _anyShort;
-
-  ProcessColumnSMALLINT (AnySql anySql)
-  {
-    _anySql   = anySql;
-    _anyShort = new AnyShort();
-  }
-
-  public Any exec (Any a) throws AnyException
-  {
-    try
-    {
-      _anySql.processColumnSMALLINT (_anyShort, a);
-    }
-    catch (SQLException e)
-    {
-      throw (new ContainedException (e));
-    }
-    return (_anyShort);
-  }
-}
-
-class ProcessColumnTINYINT extends AbstractFunc
-{
-  private AnySql  _anySql;
-  private ByteI   _anyByte;
-
-  ProcessColumnTINYINT (AnySql anySql)
-  {
-    _anySql  = anySql;
-    _anyByte = new AnyByte();
   }
 
-  public Any exec (Any a) throws AnyException
+  static class ProcessColumnTINYINT extends AbstractFunc
   {
-    try
+    private AnySql  _anySql;
+    private ByteI   _anyByte;
+  
+    ProcessColumnTINYINT (AnySql anySql)
     {
-      _anySql.processColumnTINYINT (_anyByte, a);
+      _anySql  = anySql;
+      _anyByte = new AnyByte();
     }
-    catch (SQLException e)
+  
+    public Any exec (Any a) throws AnyException
     {
-      throw (new ContainedException (e));
+      try
+      {
+        _anySql.processColumnTINYINT (_anyByte, a);
+      }
+      catch (SQLException e)
+      {
+        throw (new ContainedException (e));
+      }
+      return (_anyByte);
     }
-    return (_anyByte);
-  }
-}
-
-class ProcessColumnBIGINT extends AbstractFunc
-{
-  private AnySql  _anySql;
-  private AnyLong _anyLong;
-
-  ProcessColumnBIGINT (AnySql anySql)
-  {
-    _anySql = anySql;
-    _anyLong = new AnyLong();
-  }
-
-  public Any exec (Any a) throws AnyException
-  {
-    try
-    {
-      _anySql.processColumnBIGINT (_anyLong, a);
-    }
-    catch (SQLException e)
-    {
-      throw (new ContainedException (e));
-    }
-    return (_anyLong);
-  }
-}
-
-class ProcessColumnREAL extends AbstractFunc
-{
-  private AnySql   _anySql;
-  private FloatI   _anyFloat;
-
-  ProcessColumnREAL (AnySql anySql)
-  {
-    _anySql   = anySql;
-    _anyFloat = new AnyFloat();
   }
 
-  public Any exec (Any a) throws AnyException
+  static class ProcessColumnBIGINT extends AbstractFunc
   {
-    try
+    private AnySql  _anySql;
+    private AnyLong _anyLong;
+  
+    ProcessColumnBIGINT (AnySql anySql)
     {
-      _anySql.processColumnREAL (_anyFloat, a);
+      _anySql = anySql;
+      _anyLong = new AnyLong();
     }
-    catch (SQLException e)
+  
+    public Any exec (Any a) throws AnyException
     {
-      throw (new ContainedException (e));
+      try
+      {
+        _anySql.processColumnBIGINT (_anyLong, a);
+      }
+      catch (SQLException e)
+      {
+        throw (new ContainedException (e));
+      }
+      return (_anyLong);
     }
-    return (_anyFloat);
-  }
-}
-
-class ProcessColumnDOUBLE extends AbstractFunc
-{
-  private AnySql    _anySql;
-  private AnyDouble _anyDouble;
-
-  ProcessColumnDOUBLE (AnySql anySql)
-  {
-    _anySql    = anySql;
-    _anyDouble = new AnyDouble();
-  }
-
-  public Any exec (Any a) throws AnyException
-  {
-    try
-    {
-      _anySql.processColumnDOUBLE (_anyDouble, a);
-    }
-    catch (SQLException e)
-    {
-      throw (new ContainedException (e));
-    }
-    return (_anyDouble);
-  }
-}
-
-class ProcessColumnDECIMAL extends AbstractFunc
-{
-  private AnySql        _anySql;
-  private Decimal       _anyBigDecimal;
-
-  ProcessColumnDECIMAL (AnySql anySql)
-  {
-    _anySql        = anySql;
-
-    // This is a working variable that is used to retrieve Decimal
-    // columns.  The scale is arbitrary as it will be adjusted for
-    // the column value in question.  Just set it now to put the
-    // AnyBigDecimal into a suitable state (i.e. not the default value)
-    _anyBigDecimal = new AnyBigDecimal("0.00");
   }
 
-  public Any exec (Any a) throws AnyException
+  static class ProcessColumnREAL extends AbstractFunc
   {
-    try
+    private AnySql   _anySql;
+    private FloatI   _anyFloat;
+  
+    ProcessColumnREAL (AnySql anySql)
     {
-      _anySql.processColumnDECIMAL (_anyBigDecimal, a);
+      _anySql   = anySql;
+      _anyFloat = new AnyFloat();
     }
-    catch (SQLException e)
+  
+    public Any exec (Any a) throws AnyException
     {
-      throw (new ContainedException (e));
+      try
+      {
+        _anySql.processColumnREAL (_anyFloat, a);
+      }
+      catch (SQLException e)
+      {
+        throw (new ContainedException (e));
+      }
+      return (_anyFloat);
     }
-    return (_anyBigDecimal);
-  }
-}
-
-class ProcessColumnCHAR extends AbstractFunc
-{
-  private AnySql    _anySql;
-  private AnyString _anyString;
-
-  ProcessColumnCHAR (AnySql anySql)
-  {
-    _anySql    = anySql;
-    _anyString = new AnyString();
-  }
-
-  public Any exec (Any a) throws AnyException
-  {
-    try
-    {
-      _anySql.processColumnCHAR (_anyString, a);
-    }
-    catch (SQLException e)
-    {
-      throw (new ContainedException (e));
-    }
-    return (_anyString);
-  }
-}
-
-class ProcessColumnDATE extends AbstractFunc
-{
-  private AnySql  _anySql;
-  private DateI   _anyDate;
-
-  ProcessColumnDATE (AnySql anySql)
-  {
-    _anySql  = anySql;
-    _anyDate = new AnyDate();
   }
 
-  public Any exec (Any a) throws AnyException
+  static class ProcessColumnDOUBLE extends AbstractFunc
   {
-    try
+    private AnySql    _anySql;
+    private AnyDouble _anyDouble;
+  
+    ProcessColumnDOUBLE (AnySql anySql)
     {
-      _anySql.processColumnDATE (_anyDate, a);
+      _anySql    = anySql;
+      _anyDouble = new AnyDouble();
     }
-    catch (SQLException e)
+  
+    public Any exec (Any a) throws AnyException
     {
-      throw (new ContainedException (e));
+      try
+      {
+        _anySql.processColumnDOUBLE (_anyDouble, a);
+      }
+      catch (SQLException e)
+      {
+        throw (new ContainedException (e));
+      }
+      return (_anyDouble);
     }
-    return (_anyDate);
-  }
-}
-
-class ProcessColumnTIME extends AbstractFunc
-{
-  private AnySql  _anySql;
-  private DateI   _anyDate;
-
-  ProcessColumnTIME (AnySql anySql)
-  {
-    _anySql  = anySql;
-    _anyDate = new AnyDate();
-  }
-
-  public Any exec (Any a) throws AnyException
-  {
-    try
-    {
-      _anySql.processColumnTIME (_anyDate, a);
-    }
-    catch (SQLException e)
-    {
-      throw (new ContainedException (e));
-    }
-    return (_anyDate);
-  }
-}
-
-class ProcessColumnTIMESTAMP extends AbstractFunc
-{
-  private AnySql  _anySql;
-  private DateI   _anyDate;
-
-  ProcessColumnTIMESTAMP (AnySql anySql)
-  {
-    _anySql  = anySql;
-    _anyDate = new AnyDate();
   }
 
-  public Any exec (Any a) throws AnyException
+  static class ProcessColumnDECIMAL extends AbstractFunc
   {
-    try
+    private AnySql        _anySql;
+    private Decimal       _anyBigDecimal;
+  
+    ProcessColumnDECIMAL (AnySql anySql)
     {
-      _anySql.processColumnTIMESTAMP (_anyDate, a);
+      _anySql        = anySql;
+  
+      // This is a working variable that is used to retrieve Decimal
+      // columns.  The scale is arbitrary as it will be adjusted for
+      // the column value in question.  Just set it now to put the
+      // AnyBigDecimal into a suitable state (i.e. not the default value)
+      _anyBigDecimal = new AnyBigDecimal("0.00");
     }
-    catch (SQLException e)
+  
+    public Any exec (Any a) throws AnyException
     {
-      throw (new ContainedException (e));
+      try
+      {
+        _anySql.processColumnDECIMAL (_anyBigDecimal, a);
+      }
+      catch (SQLException e)
+      {
+        throw (new ContainedException (e));
+      }
+      return (_anyBigDecimal);
     }
-    return (_anyDate);
-  }
-}
-
-class ProcessColumnBLOB extends AbstractFunc
-{
-  private AnySql  _anySql;
-
-  ProcessColumnBLOB (AnySql anySql)
-  {
-    _anySql  = anySql;
-  }
-
-  public Any exec (Any a) throws AnyException
-  {
-    try
-    {
-      _anySql.processColumnBLOB(a);
-    }
-    catch (SQLException e)
-    {
-      throw (new ContainedException (e));
-    }
-    return (a);
-  }
-}
-
-class ProcessColumnCLOB extends AbstractFunc
-{
-  private AnySql  _anySql;
-
-  ProcessColumnCLOB (AnySql anySql)
-  {
-    _anySql  = anySql;
   }
 
-  public Any exec (Any a) throws AnyException
+  static class ProcessColumnCHAR extends AbstractFunc
   {
-    try
+    private AnySql    _anySql;
+    private AnyString _anyString;
+  
+    ProcessColumnCHAR (AnySql anySql)
     {
-      _anySql.processColumnCLOB(a);
+      _anySql    = anySql;
+      _anyString = new AnyString();
     }
-    catch (SQLException e)
+  
+    public Any exec (Any a) throws AnyException
     {
-      throw (new ContainedException (e));
+      try
+      {
+        _anySql.processColumnCHAR (_anyString, a);
+      }
+      catch (SQLException e)
+      {
+        throw (new ContainedException (e));
+      }
+      return (_anyString);
     }
-    return (a);
   }
-}
 
-// Package classes for AnySql enumerated types
-class ResultType
-{
-  public static final int RESULT_NOMORE       = -1;
-  public static final int RESULT_UPDATECOUNT  =  0;
-  public static final int RESULT_ROWSAVAIL    =  1;
+  static class ProcessColumnDATE extends AbstractFunc
+  {
+    private AnySql  _anySql;
+    private DateI   _anyDate;
+  
+    ProcessColumnDATE (AnySql anySql)
+    {
+      _anySql  = anySql;
+      _anyDate = new AnyDate();
+    }
+  
+    public Any exec (Any a) throws AnyException
+    {
+      try
+      {
+        _anySql.processColumnDATE (_anyDate, a);
+      }
+      catch (SQLException e)
+      {
+        throw (new ContainedException (e));
+      }
+      return (_anyDate);
+    }
+  }
 
-  int _resultType;
+  static class ProcessColumnTIME extends AbstractFunc
+  {
+    private AnySql  _anySql;
+    private DateI   _anyDate;
+  
+    ProcessColumnTIME (AnySql anySql)
+    {
+      _anySql  = anySql;
+      _anyDate = new AnyDate();
+    }
+  
+    public Any exec (Any a) throws AnyException
+    {
+      try
+      {
+        _anySql.processColumnTIME (_anyDate, a);
+      }
+      catch (SQLException e)
+      {
+        throw (new ContainedException (e));
+      }
+      return (_anyDate);
+    }
+  }
 
-  ResultType (int resType) {_resultType = resType; }
-}
+  static class ProcessColumnTIMESTAMP extends AbstractFunc
+  {
+    private AnySql  _anySql;
+    private DateI   _anyDate;
+  
+    ProcessColumnTIMESTAMP (AnySql anySql)
+    {
+      _anySql  = anySql;
+      _anyDate = new AnyDate();
+    }
+  
+    public Any exec (Any a) throws AnyException
+    {
+      try
+      {
+        _anySql.processColumnTIMESTAMP (_anyDate, a);
+      }
+      catch (SQLException e)
+      {
+        throw (new ContainedException (e));
+      }
+      return (_anyDate);
+    }
+  }
 
-class MetaSpec
-{
-  public static final int META_BASIC = 0;
-  public static final int META_FULL  = 1;
+  static class ProcessColumnBLOB extends AbstractFunc
+  {
+    private AnySql  _anySql;
+  
+    ProcessColumnBLOB (AnySql anySql)
+    {
+      _anySql  = anySql;
+    }
+  
+    public Any exec (Any a) throws AnyException
+    {
+      try
+      {
+        _anySql.processColumnBLOB(a);
+      }
+      catch (SQLException e)
+      {
+        throw (new ContainedException (e));
+      }
+      return (a);
+    }
+  }
 
-  int _metaSpec;
+  static class ProcessColumnCLOB extends AbstractFunc
+  {
+    private AnySql  _anySql;
+  
+    ProcessColumnCLOB (AnySql anySql)
+    {
+      _anySql  = anySql;
+    }
+  
+    public Any exec (Any a) throws AnyException
+    {
+      try
+      {
+        _anySql.processColumnCLOB(a);
+      }
+      catch (SQLException e)
+      {
+        throw (new ContainedException (e));
+      }
+      return (a);
+    }
+  }
 
-  MetaSpec (int mSpec) {_metaSpec = mSpec; }
+  // Package classes for AnySql enumerated types
+  static class ResultType
+  {
+    public static final int RESULT_NOMORE       = -1;
+    public static final int RESULT_UPDATECOUNT  =  0;
+    public static final int RESULT_ROWSAVAIL    =  1;
+  
+    int _resultType;
+  
+    ResultType (int resType) {_resultType = resType; }
+  }
+
+  static class MetaSpec
+  {
+    public static final int META_BASIC = 0;
+    public static final int META_FULL  = 1;
+  
+    int _metaSpec;
+  
+    MetaSpec (int mSpec) {_metaSpec = mSpec; }
+  }
 }

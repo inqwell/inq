@@ -1,0 +1,21 @@
+array a = ("hello", "World", "again");
+
+writeln($catalog.system.out, "Unsorted array: " + a);
+
+writeln($catalog.system.out, "Default sorting (case sensitive): " + sort(a, $loop));
+
+writeln($catalog.system.out, "Crude case insensitive: " +
+        sort(a, $loop, ignorecase=true));
+
+writeln($catalog.system.out, "Basic descending: " +
+        sort(a, $loop, descending=true));
+
+collator c;
+writeln($catalog.system.out, "Default collation: " +
+        sort(a, collate(c, $loop)));
+
+// If the output is not as documented on your system try uncommenting this line
+// c.properties.strength = STRENGTH_SECONDARY;
+
+writeln($catalog.system.out, "Default collation, descending: " +
+        sort(a, -collate(c, $loop)));

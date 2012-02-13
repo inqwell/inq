@@ -47,9 +47,11 @@ public class AnyMenu extends AnyComponent
 
   protected void setValueToComponent(Any v)
   {
-    // For a button we assume the text property as the default
+    // For a menu we assume the text property as the default
     // rendered value.
-    Format f = getRenderInfo().getFormat(v);
-    m_.setText(f.format(v));
+    // TODO: remove if not required
+    super.setValueToComponent(v);
+//    Format f = getRenderInfo().getFormat(v);
+//    m_.setText(f.format(v));
   }
 }

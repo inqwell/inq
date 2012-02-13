@@ -25,15 +25,15 @@ import com.inqwell.any.identity.AnyMapDecor;
 public class AnyLogManager extends LogManager implements Map, Cloneable
 {
   // Slightly hacky but makes toString look like the symbol.
-  public static IntI LOG_ALL     = new ConstInt(Level.ALL.intValue()+1)   { public String toString() { return "ALL"; } };
+  public static IntI LOG_SEVERE  = new ConstInt(Level.SEVERE.intValue())  { public String toString() { return "SEVERE"; } };
+  public static IntI LOG_WARNING = new ConstInt(Level.WARNING.intValue()) { public String toString() { return "WARNING"; } };
+  public static IntI LOG_INFO    = new ConstInt(Level.INFO.intValue())    { public String toString() { return "INFO"; } };
   public static IntI LOG_CONFIG  = new ConstInt(Level.CONFIG.intValue())  { public String toString() { return "CONFIG"; } };
   public static IntI LOG_FINE    = new ConstInt(Level.FINE.intValue())    { public String toString() { return "FINE"; } };
   public static IntI LOG_FINER   = new ConstInt(Level.FINER.intValue())   { public String toString() { return "FINER"; } };
   public static IntI LOG_FINEST  = new ConstInt(Level.FINEST.intValue())  { public String toString() { return "FINEST"; } };
-  public static IntI LOG_INFO    = new ConstInt(Level.INFO.intValue())    { public String toString() { return "INFO"; } };
+  public static IntI LOG_ALL     = new ConstInt(Level.ALL.intValue()+1)   { public String toString() { return "ALL"; } };
   public static IntI LOG_OFF     = new ConstInt(Level.OFF.intValue())     { public String toString() { return "OFF"; } };
-  public static IntI LOG_SEVERE  = new ConstInt(Level.SEVERE.intValue())  { public String toString() { return "SEVERE"; } };
-  public static IntI LOG_WARNING = new ConstInt(Level.WARNING.intValue()) { public String toString() { return "WARNING"; } };
 
   private   DefaultPropertyAccessMap propertyMap_;
   
@@ -298,11 +298,11 @@ public class AnyLogManager extends LogManager implements Map, Cloneable
     return propertyMap_.get(key);
   }
 
-  public Any getAux()
+  public boolean valueEquals(Map m)
   {
-    throw new UnsupportedOperationException();
+    return this.equals(m);
   }
-
+  
   public Descriptor getDescriptor()
   {
     return Descriptor.degenerateDescriptor__;
@@ -314,11 +314,6 @@ public class AnyLogManager extends LogManager implements Map, Cloneable
       propertyMap_ = new LogManagerPropertyAccess();
 
     return propertyMap_.getIfContains(key);
-  }
-
-  public java.util.Map getMap()
-  {
-    throw new UnsupportedOperationException();
   }
 
   public short getPrivilegeLevel(Any access, Any key)
@@ -368,11 +363,6 @@ public class AnyLogManager extends LogManager implements Map, Cloneable
   }
 
   public void replaceValue(Any key, Any value)
-  {
-    throw new UnsupportedOperationException();
-  }
-
-  public void setAux(Any aux)
   {
     throw new UnsupportedOperationException();
   }

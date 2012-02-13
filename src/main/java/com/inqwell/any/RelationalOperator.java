@@ -24,6 +24,6 @@ public abstract class RelationalOperator extends OperatorVisitor
 {
   protected BooleanI getBooleanResult(boolean b)
   {
-    return new AnyBoolean(b);
+    return b ? AnyBoolean.TRUE : AnyBoolean.FALSE;
   }
 }

@@ -215,6 +215,14 @@ public class AnyComparator extends    AbstractAny
 	{
 	  t_ = t;
 	}
+	
+	public String toString()
+	{
+	  if (orderingItems_ != null)
+	    return orderingItems_.toString();
+	  
+	  return super.toString();
+	}
 
   public Object clone () throws CloneNotSupportedException
   {

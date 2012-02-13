@@ -88,14 +88,14 @@ service loadPackages(string setName = "vars.pkgList")
 
 service loadClient(any obj)
 {
-  writeln($catalog.system.out, "Package is ", obj);
+  // TODO upgrade to use logging writeln($catalog.system.out, "Package is ", obj);
   if (read(META:Package, obj))
   {
-    writeln($catalog.system.out, "Read ", Package);
+    //writeln($catalog.system.out, "Read ", Package);
     ioPrint src;
     if (open(src, Package.ClientURL, OPEN_READ))
     {
-      writeln($catalog.system.out, "Opened ", Package.ClientURL);
+      //writeln($catalog.system.out, "Opened ", Package.ClientURL);
       ioPrint srcout;
       string srctxt;
       open(srcout, "string://srctxt", OPEN_WRITE);
@@ -110,8 +110,6 @@ service loadClient(any obj)
         writeln(srcout, Package.InitStmt);
 
       close(srcout);
-
-      //writeln($catalog.system.out, "SRCTEXT", srctxt);
 
       // Run in client. Specifying a service context of null causes the client service to
       // execute at $root.

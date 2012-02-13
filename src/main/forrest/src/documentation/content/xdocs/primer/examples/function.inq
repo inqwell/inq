@@ -1,0 +1,9 @@
+// Declare the function
+function whoWroteWhat(string writer = "William Blake", string work = "Jerusalem")
+{
+  writeln($catalog.system.out, writer + " wrote " + work);
+}
+
+call whoWroteWhat(work = "On Another's Sorrow");
+call whoWroteWhat(work = "Seven Deadly Sins", writer = "Carl Barât and Peter Doherty");
+call whoWroteWhat();

@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright 2008 Inqwell Ltd.
+-->
+<!DOCTYPE document PUBLIC "-//APACHE//DTD Documentation V2.0//EN" "http://forrest.apache.org/dtd/document-v20.dtd">
+<document>
+  <header>
+    <title>Inq White Paper</title>
+  </header>
+  <body>
+    <section id="whitepaper">
+      <title>Reified Application Frameworks</title>
+      <p>
+        Inq is built upon our own experience and the work of others. 
+      </p>
+      <p class="white12">
+        <a href="reify1.pdf">Inq: The Argument for a Reified Application Framework</a>
+      </p>
+      <p class="white12">
+        <strong>Abstract</strong>
+      </p>
+      <p class="white">
+        <em>The overwhelming popularity of object oriented techniques and
+            languages promotes their use in the implementation of business systems
+            almost without question. This has led to more than one generation of
+            OO frameworks for common services, such as transaction management
+            and long-term persistence.</em>
+      </p>
+      <p class="white">
+        <em>However over the complete life-cycle of design, implementation,
+          test/rework and maintenance experience can show the benefits are
+          doubtful and some question the consensus [Hickey].</em>
+      </p>
+      <p class="white">
+        <em>The theory presented here has been developed into a procedural
+          language and execution environment known as Inq.
+          In turn, Inq has been used to great effect to develop the Synthetics
+          trading system </em>Xylinq<em> [www.xylinq.com]</em>
+      </p>
+    </section>
+  </body>
+</document>

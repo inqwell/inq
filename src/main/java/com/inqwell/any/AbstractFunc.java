@@ -58,7 +58,7 @@ public abstract class AbstractFunc implements NamedFunc
     return c;
   }
   
-  public void setTransaction(Transaction t)
+  public final void setTransaction(Transaction t)
   {
     if (t == null)
       t = Transaction.NULL_TRANSACTION;
@@ -118,8 +118,12 @@ public abstract class AbstractFunc implements NamedFunc
 		return null;
 	}
   
-  public Any execFunc (Any a) throws AnyException
+  public final Any execFunc (Any a) throws AnyException
   {
+    Process p = getTransaction().getProcess();
+    if (p != null && p.killed())
+      throw new ProcessKilledException(new InterruptedException());
+
     beforeExecute(a);
     Any ret = exec(a);
     return afterExecute(ret, a);

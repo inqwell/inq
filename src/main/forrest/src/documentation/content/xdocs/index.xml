@@ -1,0 +1,339 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright 2008 Inqwell Ltd.
+-->
+<!DOCTYPE document PUBLIC "-//APACHE//DTD Documentation V2.0//EN" "http://forrest.apache.org/dtd/document-v20.dtd">
+<document>
+  <header>
+    <title>Welcome to Inqwell</title>
+  </header>
+  <body>
+    <!--
+    <section id="overview">
+      <title>Who are Inqwell?</title>
+      <p>Inqwell is a software consultancy that offers bespoke new system
+        development and integration of existing disparate systems. Inqwell
+        differs from similar companies in its ethos of empowering the client
+        to take control of its own projects where required and the genuinely
+        innovative approach we take to solving systems development problems.</p>
+      <p>Inqwell has produced a new language called Inq<sup>TM</sup> in
+        which we perform all of our development. Inq is a scripting language
+        written entirely in Java<sup>TM</sup>. Inq's simplicity and the vast
+        support its run time environment has for common enterprise problems
+        dramatically cuts development times and therefore engages users.
+      </p>
+    </section>
+    -->
+    <section id="inq">
+      <title>What Is Inq?</title>
+      <p>
+        Inq is a dynamic scripting language aimed at the rapid development
+        and streamlined maintenance of enterprise systems.
+      </p>
+      <p>
+        As a language, Inq is procedural though it has specific
+        code blocks for application instance life-cycle stages and a general
+        purpose closure concept.
+      </p>
+      <p>
+        As a server-side container, Inq manages transactions, caching,
+        cross-vendor database persistence and events. As a minimum, these
+        concepts require no user-written code. Inq also supports
+        communicating processes and Hoare style monitors.
+      </p>
+      <p>
+        At the application level Inq has a type system, where things
+        such as persistence bindings, labels, preferred rendering widths
+        and formats are defined. These additional attributes are
+        captured within the application type and available for
+        clients and Inq's reporting engine to use.
+      </p>
+      <p>
+        At the language level Inq is typeless. Everything is represented
+        as a node of type <code>any</code>, which may contain other nodes.
+        Because of this distinction between the application and language
+        levels, Inq is able to offer high levels of functionality already
+        built in. Examples are aggregate operations (for example <em>weighted
+        average</em>) and <code>sort</code>.
+      </p>
+      <p>
+        Inq is parsed once then executed. Applications can be modified
+        while they are executing with no requirement for a restart.
+      </p>
+      <p>
+        Inq is is written in Java (requires Java 1.6) and is therefore fully
+        cross-platform. It treads very lightly on the various Java APIs it
+        uses (for example its transaction mechanism is its own; JMS
+        integration adheres strictly to the specification) so combining
+        Inq with vendor implementations of (say) JDBC and JMS holds no
+        surprises.
+      </p>
+    </section>
+    <section id="client">
+      <title>What About Clients?</title>
+      <section id="desktop">
+        <title>The Desktop Client</title>
+        <p>
+          At present Inq includes a desktop client that works closely with the
+          server. This client uses the server to maintain its state; events are
+          pushed both ways. This client also employs the Inq language and
+          presents the Swing components. 
+        </p>
+        <p>
+          The client has access to all the application type meta data which
+          it uses to label and provide default dimensions for components.
+          Together with its layout models and syntax, these aspects make
+          GUI construction and maintenance easy.
+        </p>
+        <p>
+          As well as the standard Swing component set, Inq
+          includes <a class="fork" href="ext:dock">Docking Frames</a> and
+          a calendar component. Try out the examples from the
+          distribution, in <code>./examples/gui</code>.
+        </p>
+        <p>
+          With its typeless node structure and events pushed from the
+          server, Inq automatically implements MVC between the node
+          space and the GUI components. This is another example of Inq's
+          built-in high level functionality that the users do not
+          have to write themselves.
+        </p>
+      </section>
+      <section id="webclient">
+        <title>Web Clients</title>
+        <p>
+          This is work-in-progress. Inq already has a stream type that
+          produces JSON and we are in the process of integrating this
+          with the <a class="fork" href="ext:qooxdoo.org">qooxdoo</a>
+          JavaScript framework. The same server-side application types
+          and code can be used with both desktop and web clients. 
+        </p>
+        <p>
+          As before, the application type meta data is included in the
+          JSON structure. The user-written JavaScript can be confined
+          to data presentation and input. 
+        </p>
+        <p>
+          A servlet runs in the same VM as the Inq environment. Requests
+          from the browser are executed as Inq service calls and the
+          node structure produced is returned as JSON. By extending the
+          qooxdoo components to reference appropriate subnodes and meta data,
+          rich internet applications can be rapidly developed.
+          Application types and code can be reparsed in the server at
+          any time.
+        </p>
+      </section>
+      <!--
+      <p>
+        Inq is more than just a language - it is also an execution environment
+        that runs as either a client or a server and handles many of the areas
+        developers of complex distributed systems face time and again. Some
+        of the issues Inq addresses are:
+      </p>
+      <dl>
+        <dt><strong>Transaction Handling</strong></dt>
+        <dd>The Inq server automatically enters server-side objects into
+          a transaction context as they are modified by user code. Objects
+          are then locked, preventing mutation by competing threads.</dd>
+        <dt><strong>Object Persistence</strong></dt>
+        <dd>If a transaction successfully commits, all modified objects are
+          written to their persistent storage medium.</dd>
+        <dt><strong>Database Independence</strong></dt>
+        <dd>Inq completely separates the application code from the SQL required
+          to read and write objects. Such SQL is often specific to the database
+          vendor, however because of this separation Inq applications can run
+          on multiple databases simultaneously.</dd>
+        <dt><strong>Object Events and Client Synchronisation</strong></dt>
+        <dd>As part of its transaction processing, the Inq server raises events
+          on objects as instances are created, modified and destroyed. These
+          events can be processed by application code, however in many cases
+          the default handlers of the Inq environment are sufficient. The Inq
+          server automatically propagates such events to connected clients
+          in order that their loaded copies of objects are always up to date.</dd>
+        <dt><strong>Threads and Locks</strong></dt>
+        <dd>Inq supports locks and wait-for conditions, which together with
+          its process abstraction help to simplify the problems encountered
+          in multi-threaded applications.</dd>
+        <dt><strong>Rapid GUI Building</strong></dt>
+        <dd>Inq succinctly creates and lays out GUIs, supporting modular
+          construction of reusable component groups.</dd>
+        <dt><strong>Implicit Binding of Models to Views</strong></dt>
+        <dd>By associating data items with the GUI components that are viewing
+          them, Inq automatically updates graphical displays as events are
+          received. No user code is required to do this.</dd>
+      </dl>
+      -->
+    </section>
+    <section id="whatelse">
+      <title>What Else Does Inq Do?</title>
+      <section id="deskcomponents">
+        <title>Desktop Components</title>
+        <p>
+          Because the Inq language is typeless yet an application type's meta
+          data is available, many complex functions can be supported
+          completely independently of specific applications. For example,
+          the <em><a href="examples/petstore/neworder.html#itemChooser">Item
+          Chooser</a></em>
+          is a desktop client dialog that accepts some function arguments (Inq's
+          closure concept) and cooperates with the server to query and select
+          amongst a number of items. We expect this type of component to
+          translate to the web client environment as that is developed
+          further. 
+        </p>
+      </section>
+      <section id="interfacing">
+        <title>External Interfacing</title>
+        <p>
+          Inq has full <a href="primer/jms.html">JMS functionality</a>
+          and has been tested against GlassFish Open Message Queue.
+          See the <a href="primer/jms.pdf">Mini Guide</a> for more
+          information.
+        </p>
+        <p>
+          There is a plugin architecture that allows existing Java code to
+          access the transaction environment. Such code can create application
+          type instances, mutate or destroy them within the Inq server's
+          transaction model. 
+        </p>
+        <p>
+          Inq can call Java code via its <code>callmethod</code> function.
+        </p>
+      </section>
+      <section id="reporting">
+        <title>Report Writing</title>
+        <p>
+          It is very quick and straightforward to write reports in Inq.
+          Once more, the meta data kept in the application types is
+          made available to templates when a node structure is transformed
+          into XML. Such an XML document can be transformed using external
+          tools, for example Apache FOP. 
+        </p>
+        <p>
+          Examples can be found in the <a href="examples/petstore/myorders.html#reports">reports</a>
+          produced in the Inq version of
+          petstore. 
+        </p>
+      </section>
+      <section id="involved">
+        <title>Get Involved</title>
+        <p>
+          If you like the look of Inq and think it is missing something, or
+          if you would like to help with the web client integration then
+          we'd love to hear from you.
+        </p>
+        <p>
+          Get in touch at <code>inq&#64;inqwell&#46;&#99;&#111;&#109;</code>
+        </p>
+      </section>
+    </section>
+    <section id="bottle">
+      <title>Inq in a Bottle</title>
+      <p>
+        Whether writing and running client or server code, much of what the
+        programmer wants to happen is handled automatically by the Inq runtime.
+        Inq has been written to allow the developers of complex applications to
+        concentrate entirely on exactly that - only the application. Inq removes
+        two major facets of application development that are often traumatic:
+      </p>
+      <ul>
+        <li>
+          The engraining of the chosen view of the "real world" in the code.
+          Inq is not an OO language.  It has user-defined types but its simple
+          procedural approach and typeless language means that application
+          areas are not tightly coupled to each other. Maintenance for anything
+          unanticipated is unlikely to cause major rework or result in
+          duplicated or spaghetti code.
+        </li>
+        <li>
+          There are no multiple layers of software to integrate and write against
+          the APIs of. So no JDBC, no endless classes implementing this or that
+          interface, no transaction calls to make.  No table models to continually
+          implement and to adapters to write.  Inq is RAD in the extreme.
+        </li>
+      </ul>
+      <figure src="images/homepage.png" alt="homepage"/>
+      <section id="legacy">
+        <title>Inq Protects Your Investment in Legacy Systems</title>
+        <p>
+          A "big bang" approach to upgrading your systems to the latest technologies
+          is rarely an option. Because Inq cleanly separates database schemas from
+          the application code, clients are able to migrate their existing systems
+          in discrete sections of whatever size they choose.
+        </p>
+        <p>
+          Inq will tolerate database schema changes much more readily than code
+          whose dependency on the SQL is engrained. As larger sections are migrated,
+          so the schema can be updated as required and the legacy code retired. The
+          pace and size of the migration is entirely at the discretion of the user.
+        </p>
+        <p>
+          The preferred method of implementing server-side application logic is
+          by expressing it as Inq code. However, legacy processing held as database
+          stored-procedures can be maintained as long as required. Inq can be
+          notified that a class or defined set of objects have been modified
+          externally, upon which it will resynchronise with the external data source,
+          raising events about what has happened as required.
+        </p>
+      </section>
+      <section id="distribution-app">
+        <title>Inq Instantly Distributes Your Application</title>
+        <p>
+          Inq is a scripted language - it needs no compilation. The source files
+          are maintained centrally and downloaded to connected clients by the
+          Inq server.
+        </p>
+        <p>
+          Inq clients are indistinguishable from their traditionally coded Java
+          counterparts. Once parsed, the source is not needed again. With the
+          runtime available locally, Inq combines the instant distribution of
+          browser-based solutions with the rich functionality of desktop
+          applications.
+        </p>
+      </section>
+      <section id="distribution-data">
+        <title>Inq Efficiently Distributes Your Data</title>
+        <p>
+          Inq propagates events between server and client according to whether
+          the client is observing the data raising the event. By only
+          notifying clients of the data they are interested in, Inq makes efficient
+          use of network bandwidth.
+        </p>
+        <p>
+          When retrieving large datasets, Inq can use compression to reduce its
+          network usage by up to seven times. Inq solutions solve the problems of
+          centrally managed applications often suffering from network bottlenecks.
+        </p>
+        <p>
+          The Inq server caches objects it has read from a database. Together with
+          the efficiency of its own client-server protocol, Inq operates effectively
+          when client, server and database are coupled over a wide-area
+          network.
+        </p>
+      </section>
+      <section id="developers">
+        <title>Inq Brings Users and Developers Together</title>
+        <p>
+          The speed and simplicity of Inq development means that users and
+          developers can work much more closely together. Developers can rapidly
+          produce and refine prototypes that users can see and try for themselves.
+        </p>
+        <p>
+          This highly iterative process becomes the de facto methodology of
+          development. The users and developers have confidence in each other,
+          leading to much better project management and a more assured delivery
+          schedule.
+        </p>
+      </section>
+    </section>
+    <section id="roadmap">
+      <title>Inq Roadmap</title>
+      <p>
+        <a href="download/index.html">Download</a> Inq and try out the examples.
+        Read about Inq's implementation
+        of <a href="examples/petstore/index.html">petstore</a> for
+        a good appreciation of what Inq is. Then <a href="primer/nodes.html">learn
+        more</a> about how Inq works and the issues it addresses.
+      </p>
+    </section>
+  </body>
+</document>

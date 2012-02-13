@@ -1,0 +1,220 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright 2006 Inqwell Ltd.
+-->
+<!DOCTYPE document PUBLIC "-//APACHE//DTD Documentation V2.0//EN" "http://forrest.apache.org/dtd/document-v20.dtd">
+<document>
+  <header>
+    <title>A Chat Utility</title>
+  </header>
+  <body>
+    <section id="intro">
+      <title>Introduction</title>
+      <p>
+        The Chat application is an instant messaging utility that supports one-to-one
+        chat sessions, private conferences and public chat rooms.
+      </p>
+    </section>
+    <section id="modelling">
+      <title>Domain Modelling</title>
+      <section id="typedefs">
+        <title>Typedefs</title>
+        <p>
+          Inq is not an object oriented language. Instead, it uses the
+          construct known as a <a href="../../primer/typedef.html">typedef</a>
+          to model application entities. Part of application design will be
+          to arrive at a set of typedefs, their relationships and life-cycle.
+          In this way, typedefs lend themselves
+          to <a class="fork" href="ext:wikipedia/ermodelling">Entity-Relationship
+          modelling</a>.
+          <!-- however these relationships can be fine-tuned
+          through <a href="../../primer/typedef.html#nodenameoverride">aliasing</a>
+          and <a href="../../primer/structures.html#aggregate"><code>aggregate()</code></a>.
+          -->
+        </p>
+        <p>
+          The <code>Chat</code> utility is straightforward enough to require only
+          four typedefs, which together with their relationships are depicted below:
+        </p>
+        <figure src="images/chattypes.png" alt="Chat Typedefs"/>
+        <p>
+          We give each one a brief explanation here and come back to them in
+          more detail when discussing the server-side fuctionality.
+        </p>
+        <section id="online">
+          <title>OnLine</title>
+          <p>
+            The <code>OnLine</code> typedef models a user logged into the chat system
+            and that may take part in a chat session represented by
+            a <code>ChatChannel</code>.
+          </p>
+          <p>
+            An <code>OnLine</code> instance is
+            created when the user signs into the chat system and destroyed
+            when he leaves.
+          </p>
+        </section>
+        <section id="chatchannel">
+          <title>ChatChannel</title>
+          <p>
+            The <code>ChatChannel</code> typedef models chat session - a conversation
+            that any number of users (represented by their <code>OnLine</code>
+            instance) may take part in.
+          </p>
+          <p>
+            A <code>ChatChannel</code> whose <code>IsPublic</code> field
+            is <code>false</code> represents a one-to-one conversation or
+            a private conference (when <code>IsConference</code> is <code>true</code>).
+            The <code>PartyCount</code> field is the number of <code>OnLine</code>
+            instances taking part in the conversation and <code>BackChatCount</code>
+            is the number of messages retained for replay when a user joins
+            the channel.
+          </p>
+          <p>
+            Instances whose <code>IsPublic</code> field is <code>true</code>
+            are public chat rooms that are (other than by management functions
+            not implemented) never destroyed. Private channels are destroyed
+            when the last correspondent leaves.
+          </p>
+        </section>
+        <section id="channelparticipant">
+          <title>ChannelParticipant</title>
+          <p>
+            Within the chat system of course, many users can take part in many
+            conversations. A many-to-many relationship such as this is often modelled
+            using an entity to resolve it into two one-to-many relationships.
+            The <code>ChannelParticipant</code> typedef performs this function
+            and gives us a place to support additional useful fields.
+          </p>
+          <ul>
+            <li>
+              As we see later, in a one-to-one conversation the <em>calling</em> party
+              creates the <code>ChatChannel</code> and a <code>ChannelParticipant</code>
+              instance to represent himself in it. At this point the caller knows
+              who he wants to call but the <em>called</em> party is only joined into
+              in the conversation when the caller sends the first message.
+              The <code>ChannelParticipant.OtherUser</code> field holds
+              the <code>OnLine.OnLine</code> field of the called party for use when
+              this takes place.
+            </li>
+            <li>
+              The <code>DisplayName</code> field is used by the client GUI to
+              identify the conversation to the user. In one-to-one conversations
+              this is different for the two users. In the windows shown here,
+              Alice and Bob are chatting to one another. Bob's window is top-left
+              and Alice's is bottom-right.
+              <img src="images/alicebob.png" alt="Alice and Bob"/>
+              The conversation is represented by a single instance
+              of <code>ChatChannel</code> but is known as <code>Alice</code> to
+              Bob and vice-versa. We can support this by modelling the channel's
+              display name in the <code>ChannelParticipant</code> typedef.
+            </li>
+          </ul>
+          <p>
+            Instances are created and destroyed as participants join and leave
+            a channel.
+          </p>
+        </section>
+        <section id="backchat">
+          <title>BackChat</title>
+          <p>
+            The <code>BackChat</code> typedef models a message sent to
+            a <code>ChatChannel</code>. When the Client sends message text
+            a <em>prototype</em> instance is created by calling
+            the <a href="../../primer/types.html#new">new()</a> function
+            and the other fields filled in. If the channel uses BackChat
+            (that is <code>ChatChannel.BackChatCount</code> is greater than zero)
+            only then is it <em>created</em> to become a <em>managed</em> instance,
+            discussed in the section
+            on <a href="../../primer/typedef.html">typedefs</a>.
+          </p>
+          <p>
+            When a new <code>BackChat</code> instance is
+            created <code>ChatChannel.BackChatCount</code> is checked to see
+            if the oldest available should be destroyed.
+          </p>
+        </section>
+      </section>
+      <section id="nodespace">
+        <title>The Node Space</title>
+        <p>
+          When designing Inq applications consideration is given to the
+          node structures required to support its function. This happens
+          at a number of levels:
+        </p>
+        <ol>
+          <li>
+            A set of typedef instances
+            is <a href="../../primer/structures.html">built</a>
+            using <code>read()</code>, <code>aggregate()</code> and
+            possibly <code>groupby()</code>. These structures can be
+            considered similar
+            to <a class="fork" href="ext:wikipedia/objcomposition">Object Composition</a>
+            however in Inq they are built at run time. While consideration
+            of what these structures will be takes place during the modelling phase
+            as the relationships between the entities are established, structures
+            are built for a particular functional purpose as and when required.
+          </li>
+          <li>
+            At a higher level, applications often comprise larger functional
+            units (each hosting their required structures). Inq terms such a
+            unit a <em>context</em> and the node space it manages is rooted
+            at
+            its <em><a href="../../primer/nodes.html#contextnode">context node</a></em>.
+            The emergence of what constitutes a context is often driven by the
+            client GUI, since this is where the path from the application's root
+            node to a context is defined. This topic is discussed in
+            the <a href="../../primer/guibasics.html">GUI Basics</a> section.
+          </li>
+          <li>
+            What, if any, interaction there is between contexts. Script execution
+            can switch between one context and another with the use of
+            a <a href="../../primer/controlflow.html#xfunc"><code>func</code></a>
+            variable. We will return to this topic later in the example.
+          </li>
+        </ol>
+        <p>
+          Considering these points, in the chat utility we have the following
+          requirements:
+        </p>
+        <ol>
+          <li>
+            A context that represents a given conversation;
+          </li>
+          <li>
+            A super-context of the above that represents all conversations.
+          </li>
+        </ol>
+        <p>
+          Within 1. above we decide to build a structure containing:
+        </p>
+        <ol>
+          <li>
+            The <code>ChatChannel</code> instance
+          </li>
+          <li>
+            The <code>ChannelParticipant</code> instance representing us in the
+            channel;
+          </li>
+          <li>
+            The list of <code>ChannelParticipant</code> instances representing
+            us and everyone else in the channel;
+          </li>
+        </ol>
+        <p>
+          These considerations give rise the node structure shown here:
+        </p>
+        <figure src="images/chatnodes.png" alt="Chat Nodes"/>
+        <p>
+          This structure exists in both the Server and Client, however some
+          nodes on the Client side represent the GUI items depicted. GUI
+          construction and establishing context nodes shown here bolded,
+          is covered shortly.
+        </p>
+      </section>
+      <p>
+        <a href="services.html"><icon src="../images/nextpage.gif" alt="nextpage"/></a>
+      </p>
+    </section>
+  </body>
+</document>

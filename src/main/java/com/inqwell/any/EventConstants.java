@@ -44,10 +44,10 @@ public final class EventConstants
 	public static final IntI NODE_REMOVED        = new ConstInt(9);
 	public static final IntI NODE_REMOVED_CHILD  = new ConstInt(10);
 	
-	public static final IntI ROUTE_MSG           = new ConstInt(11);
+	//public static final IntI ROUTE_MSG           = new ConstInt(11); ... this can be recycled
 	
 	public static final IntI START_USERPROCESS    = new ConstInt(12);
-	public static final IntI START_ROUTERPROCESS  = new ConstInt(13);
+	//public static final IntI START_ROUTERPROCESS  = new ConstInt(13); ... this can be recycled
 	public static final IntI START_WEBPROCESS     = new ConstInt(14);
 	public static final IntI START_IOPROCESS      = new ConstInt(34);
 	public static final IntI START_MONITORPROCESS = new ConstInt(45);

@@ -22,11 +22,6 @@ public abstract class AbstractNamedFunc extends    AbstractFunc
     return fqName_;
   }
   
-  public Any exec(Any a) throws AnyException
-  {
-    return fqName_;
-  }
-  
   public boolean equals(Any o)
   {
     if (this == o)

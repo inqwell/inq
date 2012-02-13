@@ -8,8 +8,9 @@
 
 package com.inqwell.any;
 
-import java.text.Format;
+import java.text.ChoiceFormat;
 import java.text.FieldPosition;
+import java.text.Format;
 
 /**
  * This is a wrapper around the standard java.text.MessageFormat class
@@ -22,6 +23,8 @@ import java.text.FieldPosition;
 
 public class ArrayMessageFormat extends java.text.MessageFormat
 {
+  private boolean usesChoice_;
+  
   public ArrayMessageFormat (String    pattern) { super(pattern); }
   public ArrayMessageFormat (ConstString pattern) { super(pattern.getValue()); }
 
@@ -42,7 +45,19 @@ public class ArrayMessageFormat extends java.text.MessageFormat
                                    FieldPosition ignore)
   {
     Object[] objs = source.toArray();
-    return super.format(objs,result,ignore);
+    StringBuffer ret = super.format(objs,result,ignore);
+    
+    // If there were any ChoiceFormats in the pattern then at this
+    // stage all they have done is make the choice. If the chosen
+    // alternative itself contains a format pattern then this is
+    // yet to be evaluated. Check the current result and format
+    // again if necessary
+    if (usesChoice_ && ret.indexOf("{") >= 0)
+    {
+      ArrayMessageFormat f = new ArrayMessageFormat(ret.toString());
+      ret = f.format(objs, new StringBuffer(), ignore);
+    }
+    return ret;
   }
 
   public void applyPattern (String pattern)
@@ -91,6 +106,9 @@ public class ArrayMessageFormat extends java.text.MessageFormat
     // be sure not to double-wrap
     if (!(f instanceof AnyFormat))
     {
+      if (f instanceof ChoiceFormat)
+        usesChoice_ = true;
+      
       f = new AnyFormat (f);
     }
     return f;

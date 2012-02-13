@@ -1,0 +1,1757 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright 2006 Inqwell Ltd.
+-->
+<!DOCTYPE document PUBLIC "-//APACHE//DTD Documentation V2.0//EN" "http://forrest.apache.org/dtd/document-v20.dtd">
+<document>
+  <header>
+    <title>New Order</title>
+  </header>
+  <body>
+    <section id="intro">
+      <title>Introduction</title>
+      <p>
+        The New Order window introduces the following Inq GUI features:
+      </p>
+      <ul>
+      <li>Table displays, including rendering, editable cells and totals</li>
+      <li>Property bindings, including enabling and disabling components
+      according to model events</li>
+      <li>The reusable <em>item chooser</em> bundled with Inq</li>
+      <li>Popup menus</li>
+      <li>Custom dialogs</li>
+      </ul>
+      <p>
+        Also covered are client/server exception handling and
+        raising events in the server.
+      </p>
+    </section>
+    <section id="using">
+      <title>Using the New Order Window</title>
+      <p>
+        This is self-explanatory other than to explain the use of
+        the <em>item chooser</em>
+      </p>
+      <figure src="images/newordermenu.png" alt="newordermenu"/>
+      <p>
+        The <em>Lookup</em> text field and the check buttons in the popup
+        are bound to the fields of the key <code>Item.Search</code>. Here is
+        how that key is defined in <code>Item.inq</code>
+      </p>
+      <source>
+  key Search max=100
+  (
+    fields (Product.Description SearchValue,
+            typedef Flag ItemActive,
+            typedef Flag Attr1Active,
+            typedef Flag NameActive,
+            typedef Flag DescrActive)
+           
+    #include &lt;{db}/Item.Search.sql&gt;
+  )
+</source>
+      <p>
+        The <em>Misc</em> button is bound to the <code>Search.Attr1Active</code>
+        field and <code>Item</code> to <code>Search.ItemActive</code> and the fields
+        are initialised so the menu is as shown.
+      </p>
+      <p>
+        The SQL for <code>Search</code> is this (see <code>mysql/Item.Search.sql</code>):
+      </p>
+      <source>
+    "prepared", true,
+    "read-sql",
+        "
+        {select-stmt},
+            product P
+
+        -- joins
+        WHERE I.productid = P.productid
+
+        -- values
+        AND (    (? = ''Y'' AND UPPER(I.itemid) LIKE UPPER(CONCAT(?, ''%'')))
+              OR (? = ''Y'' AND UPPER(I.attr1)  LIKE UPPER(CONCAT(''%'', ?, ''%'')))
+              OR (? = ''Y'' AND UPPER(P.name)   LIKE UPPER(CONCAT(?, ''%'')))
+              OR (? = ''Y'' AND UPPER(P.descn)  LIKE UPPER(CONCAT(''%'', ?, ''%'')))
+            )
+        ",
+    "read-order",
+        array a = (
+            "ItemActive",       "SearchValue",
+            "Attr1Active",      "SearchValue",
+            "NameActive",       "SearchValue",
+            "DescrActive",      "SearchValue"
+        )
+</source>
+      <p>
+        We can see how the logical expression uses the values of the
+        various <em>Active</em> flags
+        to control which columns (including a join with the <code>product</code>
+        table) are considered in the search. Hence, if the user types in "doubles"
+        then the following results are presented:
+      </p>
+      <figure src="images/psitemchooser.png" alt="itemchooser"/>
+      <p>
+        If the user checks the <em>Item</em> menu option then things
+        like "EST-1" would also work.
+      </p>
+      <p>
+        Try playing with New Order. Once items have been added the <em>Quantity</em>
+        column in the Items table can be edited to modify them.
+      </p>
+      <figure src="images/psneworder.png" alt="neworder"/>
+      <note>When placing an order and entering credit card numbers, the
+      petstore client has a
+      validation routine. If you are using the online demonstration, please
+      don't enter your real credit card number - any old digits will do.
+      This is not a harvesting exercise!</note>
+    </section>
+    <section id="placing">
+      <title>Placing an Order</title>
+      <p>
+        Clicking the <em>Place Order</em> button raises a custom dialog
+        for filling in shipping and payment details, as shown here;
+      </p>
+      <figure src="images/psplaceorder.png" alt="placeorder"/>
+      <p>
+        This dialog is scripted in the file <code>gui/placeOrder.inq</code>.
+      </p>
+      <section id="abtdialogs">
+        <title>About Dialogs</title>
+        <p>
+        </p>
+        <section id="dialogcreate">
+          <title>Creating a Dialog</title>
+          <p>
+            A dialog is created with a declaration like this:
+          </p>
+          <source>
+gDialog(parent) placeOrder;
+</source>
+          <p>
+            The argument <code>parent</code> must be a window or another
+            dialog, though a dialog can also have no parent if it is
+            declared as: <code>gDialog()&nbsp;fooDialog;</code>
+          </p>
+          <p>
+            Dialogs with no parent cannot be parent-modal (see below).
+            By default, a dialog will hide itself on Window Manager close.
+            For placeOrder we take over management of the dialog with
+            explicit event handling so this behaviour is disabled:
+          </p>
+          <source>
+placeOrder.properties.defaultCloseOperation = DO_NOTHING_ON_CLOSE;
+</source>
+        </section>
+        <section id="dialogmodal">
+          <title>Dialog Modality</title>
+          <p>
+            Inq dialogs support the following modalities:
+          </p>
+          <dl>
+          <dt>MODAL_ALL</dt>
+          <dd>All other application windows will not respond to events until
+          the dialog is dismissed</dd>
+          <dt>MODAL_PARENT</dt>
+          <dd>The dialog's parent window will not respond to events until
+          the dialog is dismissed; other application windows remain active</dd>
+          <dt>MODAL_NONE</dt>
+          <dd>All application windows continue to be active while the
+          dialog is showing.</dd>
+          </dl>
+          <p>
+          The default is MODAL_ALL.
+          </p>
+          <note>In Inq, modality does not imply synchronous execution of
+          script in-line with the call to <code>show()</code>. Inq uses
+          event call-backs for dialogs just like any of the basic
+          components.</note>
+          <p>
+            When input events are received in parts of the application a
+            visible dialog is modal to, Inq attempts to raise the dialog.
+            Whether it becomes visible depends on how the host windowing
+            system manages this request or what other gesture (which may
+            be configurable) it uses. 
+          </p>  
+        </section>
+        <section id="dialogevents">
+          <title>Dialog Events</title>
+          <p>
+            An Inq dialog defines events for Ok and Cancel,
+            called <code>gDialogok</code> and <code>gDialogcancel</code>.
+            Like any other component, functions can be attached to
+            these events using <code>gEvent()</code>. In order for these
+            events to fire, a dialog needs to know what events from
+            its components, "real" events if you like, represent them.
+          </p>
+          <p>
+            In <code>placeOrder</code> the cancel button's default
+            and the dialog's window-closing events are set up
+            as the <code>gDialogcancel</code> event: 
+          </p>
+          <source>
+gEvent(bCancel,    gDialog=gDialogcancel);
+gEvent(placeOrder, gDialog=gDialogcancel, event=(gWclosing));
+</source>
+          <p>
+            Picking up the cancel event, whether it arises from closing the
+            window or clicking the cancel button, is then achieved with:
+          </p>
+          <source>
+gEvent(placeOrder, call dialogCancel(), event=(gDialogcancel));
+</source>
+        </section>
+        <section id="dialogdiscard">
+          <title>Discarding a Dialog</title>
+          <p>
+            To discard a dialog (or in fact any top-level window) simply remove
+            it from the node space. The <code>placeOrder</code> dialog is a
+            context node, meaning that the dialog itself is <code>$this</code>
+            when any of its (or its components) event handlers run. The cancel
+            callback is therefore simply:
+          </p>
+          <source>
+local function dialogCancel()
+{
+  // The dialog cancel event handler. Remove ourselves from the
+  // node space, thus discarding the window.
+  remove($this);
+}
+
+</source>
+        </section>
+      </section>
+      <section id="otherfeatures">
+        <title>Other GUI Features</title>
+        <p>
+          The <code>placeOrder</code> dialog uses a number of other
+          features of Inq GUI construction
+        </p>
+        <section id="enumcombo">
+          <title>Rendering an Enumeration in a Combo Box</title>
+          <p>
+            Inq can render enumerations in a combo box, displaying their
+            external value and updating a single data node with the
+            corresponding internal value. The <em>Card Type</em> combo box
+            does this for the <code>CardType</code> typedef, defined
+            in <code>defs.inq</code> as
+          </p>
+          <source>
+typedef string CardType label={i18n}.ps.general.CARD_TYPE
+(
+  VISA   : "VISA"   : "Visa/Delta/Electron";
+  MASTER : "MASTER" : "MasterCard/EuroCard";
+  AMEX   : "AMEX"   : "American Express";
+  DINERS : "DINERS" : "Diners Club";
+);
+</source>
+          <figure src="images/enumcombo.png"  alt="enumcombo"/>
+          <p>
+            The combo box is set up with the following lines:
+          </p>
+          <source>
+gComboBox  cbCCType;
+  .
+  .
+any ccTypeModel.internal  = renderinfo(typedef = Order.CardType);
+cbCCType.properties.model = ccTypeModel;
+cbCCType.properties.renderInfo = renderinfo($this.vars.Order.CardType, typedef = Order.CardType);
+</source>
+          <p>
+            Combo boxes can also be loaded with dynamic lists by rendering
+            a <a href="../../primer/structures.html#nodeset">node set</a>.
+            We look at that method when discussing <code>browseItems.inq</code>.
+          </p>
+        </section>
+        <section id="validation">
+          <title>Text Field Validation</title>
+          <p>
+            Text fields support the <code>validateInsert</code> property.
+            This is a function that Inq will call whenever text is typed
+            or pasted into the component. Here are the relevant lines
+            in <code>gui/placeOrder.inq</code>:
+          </p>
+          <source>
+// Set up a custom validateInsert function for the credit card and expiry fields
+tfExpMonth.properties.validateInsert = cfunc f = call validateCCField(len = 2);
+tfExpYear.properties.validateInsert  = cfunc f = call validateCCField(len = 4);
+tfCCNumber.properties.validateInsert = cfunc f = call validateCCField(len = 16);
+</source>
+          <p>
+            The property must be a <code>call</code> statement. In this example,
+            the function <code>validateCCField()</code> will be called.
+            As well as including any arguments included in the <code>call</code>
+            Inq  passes the following, as illustrated in the definition
+            of <code>validateCCField()</code>:
+          </p>
+          <source>
+local function validateCCField(any text,
+                               any value,
+                               any formatter,
+                               any component,
+                               any len)
+</source>
+          <p>
+            The arguments are:
+          </p>
+          <dl>
+          <dt><code>component</code></dt>
+          <dd>The component with the focus</dd>
+          <dt><code>text</code></dt>
+          <dd>The characters that would enter the text field</dd>
+          <dt><code>value</code></dt>
+          <dd>The current value of the component's rendered data node</dd>
+          <dt><code>formatter</code></dt>
+          <dd>A formatter suitable for parsing the value</dd>
+          </dl>
+          <p>
+            In this example, the function determines that entering
+            the given text would not exceed the additional <code>len</code>
+            argument, in other words there is a maximum limit to the
+            total number of characters that can be entered. Here is the
+            function in full:
+          </p>
+          <source>
+local function validateCCField(any text,
+                               any value,
+                               any formatter,
+                               any component,
+                               any len)
+{
+  // Do we already have enough characters?
+  any t = component.properties.text;
+  int l = length(t);
+  if (l &lt; len)
+  {
+    // Otherwise would adding the length of the would-be text
+    // take us over the desired length (remember we could paste several
+    // characters)
+    if (l + length(text) &lt;= len)
+    {
+      // Now we just need to check if the text is numeric. See
+      // if it will assign to an integer. Note we can't validate the
+      // actual value because we don't know where in the string
+      // text is being inserted.
+      l = text;
+      isnull(l) ? null : text;
+    }
+    else
+      null;
+  }
+  else
+    null;
+}
+</source>
+          <note>A <code>validateInsert</code> function is called before
+          the characters are added to the text field. The function
+          returns <code>null</code> to veto the insertion or the text
+          to be inserted (which can be different to the <code>text</code>
+          argument if required).</note>
+          <p>
+            Furthermore <code>validateCCField()</code> checks if the text
+            that would be entered is numeric. This is most easily achieved
+            by assigning it to an integer. The result will be <code>null</code>
+            if the characters are not convertible to a number.
+          </p> 
+        </section>
+        <section id="state">
+          <title>Complex GUI State Control</title>
+          <p>
+            One of the most important aspects a of GUI is to perform
+            adequate validation so that downstream processing is most
+            likely to succeed. In <code>placeOrder</code> we want to
+            prevent confirmation of the order if the dialog is not
+            complete. The confirm button has its <code>enabled</code>
+            property bound like this: 
+          </p>
+          <source>
+gProperty(bConfirm, enabled, renderinfo(call checkOk()));
+</source>
+          <p>
+            The <a href="../../primer/guibasics.html#rinfoexpr">renderinfo expression</a>
+            was discussed in GUI Basics. In this example it is a call to the
+            function <code>checkOk()</code>:
+          </p>
+          <source>
+local function checkOk()
+{
+  // All these things must be true for the order to be confirmed
+  $this.vars.Order.ShipToFirstName &amp;&amp;
+  $this.vars.Order.ShipToLastName &amp;&amp;
+  $this.vars.Order.ShipAddr1 &amp;&amp;
+  $this.vars.Order.ShipAddr2 &amp;&amp;
+  $this.vars.Order.ShipCity &amp;&amp;
+  $this.vars.Order.ShipState &amp;&amp;
+  $this.vars.Order.ShipZIP &amp;&amp;
+  $this.vars.Order.ShipCountry &amp;&amp;
+    ($this.vars.sameAddr ||
+      (
+        $this.vars.Order.BillToFirstName &amp;&amp;
+        $this.vars.Order.BillToLastName &amp;&amp;
+        $this.vars.Order.BillAddr1 &amp;&amp;
+        $this.vars.Order.BillAddr2 &amp;&amp;
+        $this.vars.Order.BillCity &amp;&amp;
+        $this.vars.Order.BillState &amp;&amp;
+        $this.vars.Order.BillZIP &amp;&amp;
+        $this.vars.Order.BillCountry
+      )
+    ) &amp;&amp;
+  ($this.vars.expMonth &lt; 13) &amp;&amp;
+  ($this.vars.expMonth &gt; 0)  &amp;&amp;
+  ($this.vars.expYear &gt;= datepart(YEAR, getdate())) &amp;&amp;
+  $this.vars.Order.CardType &amp;&amp;
+  $this.vars.Order.CreditCard  // full validation on confirmation
+  ;
+}
+</source>
+          <p>
+            This makes <code>bConfirm</code>'s <code>enabled</code> property
+            dependent on all the variables in the context <code>$this.vars....</code>
+            (even though the references are within <code>checkOk()</code>). 
+          </p>
+          <p>
+            In turn, all the components rendering these variables have
+            suitable events established on them with
+            the <a href="../../primer/guibasics.html#rinfofire"><code>firemodel=true</code></a> argument
+            specified: 
+          </p>
+          <source>
+local function setupFireModels(any components)
+{
+  // Set up various components whose rendered value is part of a
+  // properly completed order.
+  gEvent(components.tfShipToFirstName, event=(gDocchange, gDocinsert, gDocremove), firemodel=true);
+  gEvent(components.tfShipToLastName, event=(gDocchange, gDocinsert, gDocremove), firemodel=true);
+  gEvent(components.tfShipAddr1, event=(gDocchange, gDocinsert, gDocremove), firemodel=true);
+    .
+    .
+</source>
+          <p>
+            Thus, models (the
+            variables <code>$this.vars.Order.ShipToFirstName</code>...),
+            views (<code>bConfirm</code>'s <code>enabled</code> property)
+            and controllers (the text fields) can be tied together quite
+            simply to make robust and effective GUIs.
+          </p>
+        </section>
+      </section>
+      <section id="ccvalid">
+        <title>A Bit About Credit Card Validation</title>
+        <p>
+          As a demonstration of the use of regular expressions and a bit
+          of string handling, <code>gui/placeOrder.inq</code> contains the
+          functions <code>ccBadCheckSum(any&nbsp;CreditCard)</code>
+          and <code>ccBadPattern(any&nbsp;CardType,&nbsp;any&nbsp;CreditCard)</code>.
+          These might be worth a look as potentially useful resources.
+        </p>
+      </section>
+      <section id="funcs">
+        <title>Calling newOrder Entry Points</title>
+        <p>
+          When <code>placeOrder</code> is created, its parent,
+          the <code>newOrder</code> window, is passed as an argument
+          to <code>gui/placeOrder.inq:createGUI(parent, Account)</code>. As
+          well as using <code>parent</code> as the graphical owner of the
+          dialog, the script retains it as <code>$this.svars.parent</code>:
+        </p>
+        <source>
+// Remember our parent here so we can use any function entry points
+// it defines (see funcs.getQuestionDialog in newOrder.inq for another
+// example). It must be saved under a simple map so as not to violate
+// Inq hierarchy constraints.
+smap placeOrder.svars;
+any placeOrder.svars.parent = parent;
+</source>
+        <p>
+          In <code>gui/newOrder.inq</code> the following <code>func</code>
+          variables are defined:
+        </p>
+        <source>
+// Create a function that placeOrder.inq can use to get at the question
+// dialog we have created. This is an example of how different contexts can
+// cooperate. The function must be a func, so it encapsulates the current
+// context.
+func $this.funcs.getQuestionDialog = {
+                                       $this.questionDialog;
+                                     };
+
+// Similarly a function to recover the items
+func $this.funcs.getItems = $this.vars.items;
+</source>
+        <p>
+          These
+          are <a href="../../primer/controlflow.html#xfunc"><code>func</code></a>
+          variables. so they encapsulate the context they were declared in. This
+          means they can be called from other contexts such as <code>placeOrder</code>
+          and offer structured access to data in <code>newOrder</code>.
+        </p>
+      </section>
+    </section>
+    <section id="gui">
+      <title>GUI Construction</title>
+      <p>
+        The New Order window introduces several new areas of GUI
+        building compared to My Account. We'll look at each of these.
+      </p>
+      <section id="itemtable">
+        <title>The Items Table</title>
+        <p>
+          As items are added to the order they appear in the <em>Items</em>
+          table. The simplest tables are read-only without any need
+          to configure rendering, however this example, shared with the
+          items table in the My Orders window, adds an editor component and
+          some rendering nicities. Included also is a fixed row used for
+          a totals line.
+        </p>
+        <section id="dimprops">
+          <title>Dimensioning Properties</title>
+          <p>
+            An Inq table supports two properties that affect its dimensioning
+            during layout.
+          </p>
+          <dl>
+          <dt><code>visibleRows</code></dt>
+          <dd>Sets the initial height of the table so the specified number
+          of rows will display without scrolling. The default is 10.</dd>
+          <dt><code>visibleColumns</code></dt>
+          <dd>Sets the initial width of the table so the specified number
+          of columns will display without scrolling. Setting this property
+          to zero attempts to make all columns visible. By default this
+          property is not set.</dd>
+          </dl>
+        </section>
+        <section id="tablecols">
+          <title>Setting Up The Columns</title>
+          <p>
+            A table's columns are established by setting its <code>columns</code>
+            property to an <a href="../../primer/types.html#omap">ordered map</a>
+            containing
+            suitable <a href="../../primer/guibasics.html#renderinfo"><code>renderinfo</code></a>
+            expressions. The label implied by
+            the <code>renderinfo</code> is used for the column headings and its width
+            to dimension them.
+          </p>
+          <note><code>columns</code> cannot be set until the table knows
+          its context node, so that Inq can arrange to listen for the
+          appropriate node events.</note>
+          <p>
+            The function <code>gui/newOrder.inq:itemTableColumns()</code>
+            creates and returns a suitable map, varying slightly for the
+            New Order and My Order usage. Once assigned to a
+            table's <code>columns</code> property, such as
+          </p>
+          <source>
+omap columns;
+any columns.itemid      = renderinfo(typedef=Item.Item);
+any columns.Category    = renderinfo(typedef=Product.Category);
+  .
+  .
+itemTable.properties.columns = columns;
+</source>
+          <p>
+            properties relating to the columns within the specific table
+            can be set.
+          </p>
+        </section>
+        <section id="celledit">
+          <title>Cell Rendering and Editing</title>
+          <p>
+            In New Order the <em>Quantity</em> column is editable. Inq supports
+            cell editing by creating the component in the usual way and
+            establishing it as the column's <code>editor</code> property. The
+            following excerpt from <code>gui/newOrder.inq</code> does this:
+          </p>
+          <source>
+gTextField tf;
+any context.vars.qtyEdit = clone(context.vars.LineItem.Qty);
+tf.properties.renderInfo = renderinfo($this.vars.qtyEdit, typedef=LineItem.Qty, editable=true);
+tf.properties.validateInsert = $catalog.guiFuncs.positiveInteger;
+itemTable.properties.columns.qty.editor.properties.component = tf;
+</source>
+          <p>
+            The component <code>tf</code> is set up to render a data
+            node created at <code>context.vars.qtyEdit</code>,
+            uses a <a href="#validation"><code>validateInsert</code></a> function
+            to limit input to positive integer values and is set as
+            the <code>qty</code> column's editor.
+          </p>
+          <p>
+            A column editor supports the following properties:
+          </p>
+          <table>
+            <tr>
+              <th>Name</th>
+              <th>Type</th>
+              <th>Notes</th>
+            </tr>
+            <tr>
+              <td><code>component</code></td>
+              <td>A <code>component</code></td>
+              <td>The editor component</td>
+            </tr>
+            <tr>
+              <td><code>canStartEdit</code></td>
+              <td>A <code>cfunc</code> that must be a <code>call</code> statement</td>
+              <td>Returns <code>true</code> or <code>false</code>. With an
+              editor component established this property can be used to decide
+              whether editing is possible on a given occasion.</td>
+            </tr>
+            <tr>
+              <td><code>onStopEdit</code></td>
+              <td>A <code>cfunc</code> that must be a <code>call</code> statement.</td>
+              <td>Called as editing completes, once before and once after the
+              underlying cell's data node is updated with the editor component's
+              value.</td>
+            </tr>
+            <tr>
+              <td><code>clickCountToStart</code></td>
+              <td><code>int</code></td>
+              <td>The number of mouse clicks required to start editing. Default value
+              is 2.</td>
+            </tr>
+          </table>
+          <p>
+            Cell functions, such as <code>onStopEdit</code>, accept at most the
+            following arguments:
+          </p>
+          <table>
+            <tr>
+              <th>Name</th>
+              <th>Description</th>
+            </tr>
+            <tr>
+              <td><code>parent</code></td>
+              <td>The parent component, that is the gTable</td>
+            </tr>
+            <tr>
+              <td><code>component</code></td>
+              <td>The editor component</td>
+            </tr>
+            <tr>
+              <td><code>rowRoot</code></td>
+              <td>The node-set child of the row being edited</td>
+            </tr>
+            <tr>
+              <td><code>row</code></td>
+              <td>The row number</td>
+            </tr>
+            <tr>
+              <td><code>rowKey</code></td>
+              <td>The map key of the row (that is the map key of the node-set child)</td>
+            </tr>
+            <tr>
+              <td><code>column</code></td>
+              <td>The column number</td>
+            </tr>
+            <tr>
+              <td><code>columnName</code></td>
+              <td>The column name (that is the name the column
+                  was given in the original <code>omap</code> set as the table's columns
+                  property).</td>
+            </tr>
+            <tr>
+              <td><code>mouseCell</code></td>
+              <td>For rendering (not editing) functions - <code>true</code>
+                  if the mouse is in the cell being rendered, <code>false</code>
+                  if it is not. Always <code>false</code> for editing functions.</td>
+            </tr>
+            <tr>
+              <td><code>isUser</code></td>
+              <td>Whether editing was stopped because of user action
+                  or by the underlying system (for example because focus was lost)</td>
+            </tr>
+            <tr>
+              <td><code>value</code></td>
+              <td>The current value within the table's data structure this cell is
+                  rendering.</td>
+            </tr>
+            <tr>
+              <td><code>after</code></td>
+              <td>An <code>onStopEdit</code> function is called at least once and at
+                  most twice. The first call passes <code>after</code> == <code>false</code>
+                  and at this point the underlying cell value has not been changed.
+                  The function can
+                  veto the edit by assignment <code>newValue = value</code>.
+                  The second call only occurs if <code>value != newValue</code>
+                  and is passed <code>after</code> == <code>true</code>.
+                  At this point the underlying cell value has been updated.
+              </td>
+            </tr>
+            <tr>
+              <td><code>newValue</code></td>
+              <td>the value from the editor component that the cell
+                  will become (<code>after</code> = <code>false</code>)
+                  or is now (<code>after</code> = <code>true</code>)</td>
+            </tr>
+            <tr>
+              <td><code>formatter</code></td>
+              <td>the formatter associated with the column</td>
+            </tr>
+            <tr>
+              <td><code>level</code></td>
+              <td>the level name (trees only)</td>
+            </tr>
+            <tr>
+              <td><code>isLeaf</code></td>
+              <td><code>true</code> is the cell represents a tree
+                leaf, <code>false</code> otherwise (trees only)</td>
+            </tr>
+            <tr>
+              <td><code>expanded</code></td>
+              <td><code>true</code> is the cell represents a tree
+                branch and is expanded, <code>false</code> otherwise (trees only)</td>
+            </tr>
+          </table>
+          <p><code>itemTable</code> sets the <code>qty</code>
+            column's <code>onStopEdit</code> function with this line:
+          </p>
+          <source>
+itemTable.properties.columns.qty.editor.properties.onStopEdit = cfunc f = call qtyChanged();
+</source>
+          <p>
+            The <code>qtyChanged()</code> function generates an event to update
+            the total for the current row and recalculates the order total:
+          </p>
+          <source>
+local function qtyChanged(any parent,
+                          any component,
+                          any rowRoot,
+                          any row,
+                          any rowKey,
+                          any column,
+                          any columnName,
+                          any isMouseCell,
+                          any isUser,
+                          any value,
+                          any newValue,
+                          any after,
+                          any formatter)
+{
+  // This assignment simply kicks out an event on rowRoot.LineItem.UnitPrice
+  // We do it because we want the Total column to be re-rendered.
+  rowRoot.LineItem.UnitPrice = rowRoot.Item.ListPrice;
+  call calcOrderTotal();
+}
+</source>
+          <p>
+            When used in the My Orders window, the items table includes a
+            column for <code>OrderStatus.Status</code>. This uses a different
+            cell function, one for rendering, as well as a rendering component
+            to achieve the effect as shown:
+          </p>
+          <figure src="images/psmyorderszoom.png" alt="myorders"/>
+          <p>
+            Firstly, the column is added to the ordered map in the same way as
+            the others:
+          </p>
+          <source>
+any columns.status      = renderinfo(typedef=OrderStatus.Status);
+</source>
+          <p>
+            As for the editor setup, a rendering function can be added once
+            the table's <code>columns</code> property has been set. This line
+            sets <code>style</code> property of the <code>status</code> column's
+            renderer:
+          </p> 
+          <source>
+itemTable.properties.columns.status.renderer.properties.style = cfunc f = call statusStyle();
+</source>
+          <p>
+            This property is a <code>call</code> statement to the scripted
+            cell function <code>statusStyle()</code>. We'll look at what this
+            function does shortly.
+          </p> 
+          <p>
+            A <code>status</code> cell renders text and an icon. If you resize
+            the column you will see that the icon stays at the right-hand edge
+            of the cell and the area for text resizes. 
+            By default, Inq uses a <code>gLabel</code> for rendering table cells,
+            however using property access this can be overridden with any component.
+            To render the text and icon in this way we use a small layout
+            comprising two labels:
+          </p>
+          <source>
+gLabel cxlIcon;
+gLabel statusValue;
+
+// Create a box explicitly (instead of using Row{...}) as this
+// becomes the renderer component for the column
+gBox   statusRenderer;
+statusRenderer.properties.axis = X_AXIS;
+layout(., statusRenderer, "statusValue Geometry xy:fv cxlIcon");
+</source>
+          <p>
+            This script uses a horizontal box and lays out the two labels
+            within it using a simple <code>Geometry</code> constraint.
+            The <code>statusRenderer</code> box is then set as the renderer's
+            component:
+          </p>
+          <source>
+// Make it the renderer component of the status column
+itemTable.properties.columns.status.renderer.properties.component = statusRenderer;
+</source>
+          <p>
+            Inq will try so set the rendered value into whatever rendering
+            component has been established. When using a "composite" component
+            this behaviour is still supported, however Inq has to be told which
+            component to use: 
+          </p>
+          <source>
+// Tell Inq which component the value should be set into
+itemTable.properties.columns.status.renderer.properties.setValueToComponent = statusValue;
+</source>
+          <p>
+            When there is no suitable component (for example is the cell is only
+            displaying an icon) then <code>setValueToComponent</code> can
+            be set to <code>null</code>. In that case all responsibility for
+            rendering lies with the style function. In our example the style
+            function is <code>statusStyle()</code>. Here's what it looks like:
+          </p>
+          <source>
+local function statusStyle(any component,
+                           any value,
+                           any rowRoot,
+                           any isMouseCell)
+{
+  // Decide what style and icon, if any, to apply to the value and
+  // icon parts of the custom renderer
+  switch
+  {
+    when (rowRoot.OrderStatus.Status == enum(OStatus, O))
+    {
+      component.statusValue.properties.style = $catalog.ps.styles.open;
+      component.cxlIcon.properties.icon = $catalog.icons.cxlItem;
+    }
+
+    when (rowRoot.OrderStatus.Status == enum(OStatus, A))
+    {
+      component.statusValue.properties.style = $catalog.ps.styles.allocated;
+      component.cxlIcon.properties.icon = $catalog.icons.cxlItem;
+    }
+      
+    when (rowRoot.OrderStatus.Status == enum(OStatus, C))
+    {
+      component.statusValue.properties.style = $catalog.ps.styles.cancelled;
+      component.cxlIcon.properties.icon = null;
+    }
+      
+    when (rowRoot.OrderStatus.Status == enum(OStatus, S))
+    {
+      component.statusValue.properties.style = $catalog.ps.styles.shipped;
+      component.cxlIcon.properties.icon = null;
+    }
+    
+    otherwise
+      component.cxlIcon.properties.icon = null;
+  }
+  
+  // returns no style for Inq to apply - everything required is already done
+  null;
+}
+</source>
+          <p>
+            A style function returns a <em>style</em> that Inq will apply
+            to the renderer component or <code>null</code> if all rendering issues
+            are handled in the function. As the component is only a box this
+            example always returns <code>null</code>.
+          </p>
+          <p>
+            The work of <code>statusStyle()</code> is to apply a style (in
+            these cases specifying the foreground colour) to the text and perhaps
+            display an icon.
+          </p>
+        </section>
+        <section id="tableevents">
+          <title>Table GUI Events</title>
+          <p>
+            Petstore's <a href="orderprocessor.html">Order Processor</a>
+            progresses items and orders through to the <em>shipped</em>
+            state. Until then individual items can be cancelled by clicking
+            on the icon in the <code>status</code> cell. We can solicit
+            the <code>gMclicked</code> event from the table as a way to
+            do this:
+          </p>
+          <source>
+gEvent(itemTable, call maybeCxl(), event=(gMclicked));
+</source>
+          <p>
+            When the event occurs and <code>maybeCxl()</code> is called
+            Inq passes the event to the function as <code>@event</code>.
+            The event is a map containing various information about the
+            event. When occurring on a table this example yields something
+            like:
+          </p>
+          <source>
+cellX=63
+cellY=10
+rowRoot={ ... }
+component={ ... }
+cell={height=17, width=69, y=0, x=744}
+column=7
+columnName=status
+y=10
+x=807
+row=0
+</source>
+          <p>
+            with these meanings:
+          </p>
+          <table>
+            <tr>
+              <th><code>@event</code> info</th>
+              <th>Comments</th>
+            </tr>
+            <tr>
+              <td><code>x=807, y=10</code></td>
+              <td>The coordinates of the event in the component's (<code>gTable</code>)
+              geometry</td>
+            </tr>
+            <tr>
+              <td><code>cellX=63, cellY=10</code></td>
+              <td>The coordinates of the event in the cell's geometry</td>
+            </tr>
+            <tr>
+              <td><code>row=0, column=7</code></td>
+              <td>The row and column numbers for the event</td>
+            </tr>
+            <tr>
+              <td><code>columnName=status</code></td>
+              <td>The column name for the event</td>
+            </tr>
+            <tr>
+              <td><code>rowRoot</code></td>
+              <td>The node-set child for the table row</td>
+            </tr>
+            <tr>
+              <td><code>component</code></td>
+              <td>The component (the <code>gTable</code>)</td>
+            </tr>
+            <tr>
+              <td><code>cell={height=17, width=69, y=0, x=744}</code></td>
+              <td>The cell dimensions and location in the <code>gTable</code>'s
+              geometry.</td>
+            </tr>
+          </table>
+          <p>
+            Using this information the <code>maybeCxl</code> event callback
+            function can determine whether the mouse click occurred in the
+            icon region of the <code>status</code> cell:
+          </p>
+          <source>
+local function maybeCxl()
+{
+  // We only respond to the mouse event if:
+  //   1) The status is Allocated or Open
+  //   2) The event occurred in the status column
+  //   2) The event is in the cell region where we have placed the cancel icon
+
+  if (@event.cellX &amp;&amp;       // No coordinates if event is outside the data/cell region
+      (@event.rowRoot.OrderStatus.Status == enum(OStatus, O) ||
+       @event.rowRoot.OrderStatus.Status == enum(OStatus, A)) &amp;&amp;
+      @event.columnName == "status" &amp;&amp;   // Must be in the 'status' column
+      @event.cell.width - @event.cellX &lt;= $catalog.icons.cxlItem.properties.width) // In the icon area
+  {
+    send cxlItem(@event.rowRoot.OrderStatus);
+  }
+}
+</source>
+          <p>
+          </p>
+        </section>
+        <section id="totalstable">
+          <title>The Totals Line</title>
+          <p>
+            The items table includes a fixed row to display the order total.
+            This is set up as follows:
+          </p>
+          <source>
+gTable itemTable;
+
+// Add a totals table. We only need one row. This must be done prior
+// to layout
+
+gTable totalsTable;
+totalsTable.properties.visibleRows  = 1;
+totalsTable.properties.showGrid     = false;
+itemTable.properties.totalsTable    = totalsTable;
+</source>
+          <p>
+            By setting the <code>visibleRows</code> the surrogate table
+            is dimensioned appropriately. This property can be set to any
+            value if, for example, there is a requirement for more fixed
+            rows.
+          </p>
+          <p>
+            The <code>totalsTable</code> must have the same name and number of
+            columns as its parent, however the <code>renderinfo</code>
+            information can be different. Rendering components and style functions
+            can also be particular to to it.
+          </p>
+          <p>
+            In <code>gui/newOrder.inq</code> the totals table is set up
+            in <code></code>:
+          </p>
+          <source>
+// Finalise the setup of the totals row
+local function setupTotalTable(any context,
+                               any itemTable,
+                               any columns,
+                               any i18n)
+{
+  // Fetch any totals table out of itemTable
+  any totalsTable = itemTable.properties.totalsTable;
+  if (totalsTable)
+  {
+    // Make the data for totalsTable to render. As stated elsewhere, there is
+    // only one row. The ValueHelper type is used just to get a suitably typed
+    // field to hold the order total.
+    any context.vars.orderTotal.row.OrderTotal = new(ValueHelper);
+    context.vars.orderTotal.row.OrderTotal.String = {i18n}.ps.title.TOTAL;
+  
+    // Establish its columns. The columns are the same as the parent
+    // table with the exception of the description and total columns,
+    // so replace those.
+    any columns.total  = renderinfo($this.OrderTotal.Price, typedef=ValueHelper.Price, format="\u00A4#,##0.00");
+    any columns.description = renderinfo($this.OrderTotal.String);
+    totalsTable.properties.columns = columns;
+  
+    // Tell it where the total root is
+    totalsTable.properties.modelRoot  = path($this.vars.orderTotal);
+    
+    // Bold the font used for the totals
+    totalsTable.properties.font = itemTable.properties.font.properties.bold;
+
+    totalsTable.properties.columns.total.renderer.properties.style = cfunc f = call totalStyle();
+  }
+}
+</source>
+          <p>
+            The steps can be summarised:
+          </p>
+          <ol>
+          <li>Create the data in as a "one row node-set" structure
+            form. <code>OrderTotal</code> is an instance of the
+            typedef <code>ValueHelper</code>, which exists only to
+            provide formatting information here and in the pdf reports.</li>
+          <li>The <code>total</code> and <code>description</code>
+            columns from the original <code>columns</code> map are
+            overwritten with new <code>renderinfo</code>s.</li>
+          <li><code>totalsTable</code>'s <code>columns</code>
+            and <code>modelRoot</code> properties are established.</li>
+          <li>
+            The font (for the entire table) is bolded, based on the font
+            of the parent table.</li>
+          <li>
+            A style function is placed on the <code>total</code> column.</li>  
+          </ol>
+        </section>
+      </section>
+      <section id="itemChooser">
+        <title>Deploying The Item Chooser</title>
+        <p>
+          The <em>Item Chooser</em> is a reusable element contained within
+          the Inq distribution Jar file. It is an example of how significant
+          levels of (in this case GUI) functionality can be written ahead of
+          time and applied in unrelated applications designed much later.
+        </p>
+        <p>
+          Item Chooser adopts a component supplied by the client
+          and applies the input value to
+          a search algorithm. The search may return
+          none, one or more than one items found. If more than
+          one item is found a popup dialog gives the user the opportunity to select
+          amongst those available. The dialog includes a table to display the
+          choices and some buttons to confirm or cancel the operation.
+          The following sequence summarises how Item Chooser, the
+          application client and server message one-another: 
+        </p>
+        <figure src="images/itemchoosermsg.png" alt="itemmessageflow"/>
+        <section id="createic">
+          <title>Creating an Item chooser</title>
+          <p>
+            The first step to using the item chooser is to create one.
+            In <code>gui/newOrder.inq:setupPetChooser()</code> this is done by:
+          </p>
+          <source>
+gTable table;
+
+call inq.gui.util:createItemChooser(parent,
+                                    title = {i18n}.ps.title.CHOOSE_PET,
+                                    table,
+                                    at = path($root.psChooser),
+                                    items  = {i18n}.ps.title.CHOOSE_PET);
+</source>
+          <note>To use the Item Chooser the application must first have
+            parsed its source. In petstore this is done
+            in <code>gui/userStart.inq</code> with the
+            statement <code>exec("cp:///inq/gui/itemChooser.inq");</code>.</note>
+          <p>
+            The signature of <code>inq.gui.util:createItemChooser()</code> includes
+            some further arguments for customising the Item Chooser GUI. Looking
+            at <code>cp://inq/gui/itemChooser.inq</code> we have
+          </p>
+          <source>
+function createItemChooser(any    parent,
+                           any    title,
+                           any    table,
+                           any    at,
+                           string ok     = "OK",
+                           string cancel = "Cancel",
+                           string items  = "Items")
+</source>
+          <p>
+            These arguments are as follows:
+          </p>
+          <table>
+            <tr>
+              <th>Argument</th>
+              <th>Description</th>
+            </tr>
+            <tr>
+              <td><code>parent</code></td>
+              <td>A window to parent the dialog</td>
+            </tr>
+            <tr>
+              <td><code>title</code></td>
+              <td>The dialog title</td>
+            </tr>
+            <tr>
+              <td><code>table</code></td>
+              <td>The <code>gTable</code> to display any choices</td>
+            </tr>
+            <tr>
+              <td><code>at</code></td>
+              <td>A <code>path</code> specifying where in the node space the
+                Item Chooser will be placed.</td>
+            </tr>
+            <tr>
+              <td><code>ok</code></td>
+              <td>Text for the dialg's OK button</td>
+            </tr>
+            <tr>
+              <td><code>cancel</code></td>
+              <td>Text for the dialg's cancel button</td>
+            </tr>
+            <tr>
+              <td><code>items</code></td>
+              <td>Text used for the table's caption border</td>
+            </tr>
+          </table>
+          <p>
+            Calling <code>createItemChooser()</code> creates and lays out its GUI,
+            part of which is the table to display any item choices. The application
+            is opaque to the Item Chooser so setting up the table columns, any
+            rendering and so on is the application's responsibility. This is done
+            by the remainder of <code>setupPetChooser()</code> - the source code
+            refers.
+          </p>
+        </section>
+        <section id="iccomp">
+          <title>Registering An Input Component</title>
+          <p>
+            Setting up an Item Chooser is a two-stage process, the second being
+            registering a text field to provide its input. The search algorithm
+            can use any number of data items, such as the flags discussed
+            in <a href="#using">Using the New Order Window</a> but the Item
+            Chooser initiates it using a single text field.
+          </p>
+          <p>
+            The text field, any other input components and the data they are
+            rendering are the application's responsibility. In our example these
+            are created in <code>setupLookupComponent()</code>. This
+            function creates the text field (called <code>tfLookup</code>) and
+            attaches a popup menu to it containing a number of check button menu
+            items. These are bound to the various fields of an instance of the
+            key <code>Item.Search</code>.
+          </p>
+          <p>
+            The only other global function
+            in <code>cp://inq/gui/itemChooser.inq</code> is:
+          </p>
+          <source>
+function registerItemChooserComponent(any component,
+                                      any itemChooser,
+                                      any validateF,
+                                      any searchF,
+                                      any foundF,
+                                      any notFoundF,
+                                      any valuePath)
+</source>
+          <p>
+            These are its arguments:
+          </p>
+          <table>
+            <tr>
+              <th>Argument</th>
+              <th>Description</th>
+            </tr>
+            <tr>
+              <td><code>component</code></td>
+              <td>The component to be registered. Item Chooser assumes this
+                will be a <code>gTextField</code>.</td>
+            </tr>
+            <tr>
+              <td><code>itemChooser</code></td>
+              <td>The item chooser (previously created
+                with <code>createItemChooser()</code>) to register the
+                component with.</td>
+            </tr>
+            <tr>
+              <td><code>validateF</code></td>
+              <td>A <code>func</code> the Item Chooser calls to validate
+                the value entered to <code>component</code>.</td>
+            </tr>
+            <tr>
+              <td><code>searchF</code></td>
+              <td>A <code>cfunc</code> the Item Chooser calls to
+                invoke the application's search.</td>
+            </tr>
+            <tr>
+              <td><code>foundF</code></td>
+              <td>A <code>func</code> the Item Chooser calls when a
+                valid item has been found. This occurs either when
+                the application search returns only one result or
+                the user chooses from those presented.</td>
+            </tr>
+            <tr>
+              <td><code>notFoundF</code></td>
+              <td>A <code>func</code> the Item Chooser calls when
+                the search returns no results. Optional argument.</td>
+            </tr>
+            <tr>
+              <td><code>valuePath</code></td>
+              <td>A <code>path</code> applied the node returned as the result,
+                  that resolves to the value to set as the component's rendered
+                  value. See further discussion below.</td>
+            </tr>
+          </table>
+          <p>
+            In <code>gui/newOrder.inq:contextEstablished()</code> petstore
+            registers <code>tfLookup</code> with the Item Chooser like this
+          </p>
+          <source>
+// Register tfLookup with the pet chooser
+call inq.gui.util:registerItemChooserComponent(component   = $this.tfLookup,
+                                               itemChooser = $root.psChooser,
+                                               validateF,
+                                               searchF,
+                                               foundF,
+                                               notFoundF,
+                                               valuePath = path($this.Item.Item));
+</source>
+          <p>
+            The various function arguments are Inq statements (typically block
+            statements) that the Item Chooser executes at various times. They
+            are passed as arguments, having been defined as function variables.
+            Even though they are not formally defined,
+            these <em>closure</em> style functions can still themselves have
+            arguments passed to them when they are executed. Therefore, as
+            well as the interface defined by the two formal global functions
+            in <code>cp://inq/gui/itemChooser.inq</code>, client code of Item
+            Chooser needs to know the interface supplied and expected of these
+            arguments.
+          </p>
+        </section>
+        <section id="icvalidate">
+          <title>The validateF Argument</title>
+          <p>
+            The purpose of this function is to validate the user-entered value.
+            Item Chooser passes the following arguments:
+          </p>
+          <ul>
+            <li><code>value</code> - this is whatever the text
+              field (<code>tfLookup</code> in this example) is rendering.</li>
+            <li><code>vars</code> - a map that the client can use as it wishes
+              to store any data. This map is later passed to <code>searchF</code>.
+              The purpose of this is to limit dependency on the client context
+              to <code>validateF</code>.
+              <br/>
+              <br/>
+              In our example <code>$this.vars.Search</code> is
+              returned via this route. Note that <code>tfLookup</code> is
+              rendering <code>$this.vars.Search.SearchValue</code> but this
+              is something the function arguments do not need to be aware of.
+              <br/>
+              <br/>
+              The function returns <code>true</code> if <code>value</code>
+              passes validation, <code>false</code> otherwise. For New
+              Order's <code>Item</code> search, <code>value</code> is valid if
+              it is at least three characters long.  
+            </li> 
+          </ul>
+        </section>
+        <section id="icsearch">
+          <title>The searchF Argument</title>
+          <p>
+            If <code>validateF</code> returns <code>true</code> then Item Chooser
+            immediately calls <code>searchF</code> with the following arguments:
+          </p>
+          <ul>
+            <li><code>id</code> - a token for use in the client/server
+              interface, see below.</li>
+            <li><code>value</code> - the argument as for <code>validateF</code>.</li>
+            <li><code>vars</code> - the argument as for <code>validateF</code>.
+              Whatever was placed into <code>vars</code> by <code>validateF</code>
+              can be accessed.</li>
+          </ul>
+        </section>
+        <section id="icsrvr">
+          <title>Client/Server Interface</title>
+          <p>
+            Petstore's <code>searchF</code> function invokes the server-side
+            service <code>searchPet()</code> passing <code>vars.Search</code>
+            as discussed above and <code>id</code>.
+          </p>
+          <source>
+send searchPet(vars.Search, id);
+</source>
+          <p>
+            The search service is the client's responsibility but its
+            contract with Item Chooser is to respond by invoking
+            its <code>chooserResult()</code> service. Looking
+            at <code>psOrders.inq</code>, the <code>searchPet()</code>
+            service is as shown:
+          </p>
+          <source>
+service searchPet(any Search, any id)
+{
+  hmap m;
+
+  read(Item, Search, target=m, setname="list");
+  aggregate(Product, m.list[@first].Item);
+
+  // Whatever we've got send it back to the chooserResult service
+  // passing back the id we were given as well.
+  send inq.gui.util:chooserResult(value = Search.SearchValue,
+                                  id,
+                                  m.list);
+}
+</source>
+          <p>
+            The <code>id</code> argument is a token the Item Chooser provides
+            and with which the client's invocation of <code>chooserResult()</code>
+            must respond. If the Item Chooser is registered with more than
+            one client component the token allows it to discard stale
+            responses. The <code>chooserResult()</code> service defines the
+            following arguments:
+          </p>
+          <table>
+            <tr>
+              <th>Argument</th>
+              <th>Description</th>
+            </tr>
+            <tr>
+              <td><code>id</code></td>
+              <td>The token exchanged across the client/server interface (see above></td>
+            </tr>
+            <tr>
+              <td><code>value</code></td>
+              <td>The user's original input value</td>
+            </tr>
+            <tr>
+              <td><code>list</code></td>
+              <td>The results as
+                a <a href="../../primer/structures.html#nodeset">node set</a>
+                Must be an empty list for no results or containing one or more
+                children.</td>
+            </tr>
+          </table>
+        </section>
+        <section id="icfound">
+          <title>The foundF Argument</title>
+          <p>
+            If the client's search service returns a single result Item Chooser
+            calls <code>foundF</code> with the following arguments:
+          </p>
+          <ul>
+            <li><code>component</code> - the component originally registered</li>
+            <li><code>value</code> - the value used in the search</li>
+            <li><code>result</code> - the node-set child</li>
+          </ul>
+          <p>
+            When multiple results are returned and the user chooses one
+            using the Item Chooser GUI <code>foundF</code> is called
+            in the same way.
+          </p>
+        </section>
+        <section id="icnotfound">
+          <title>The notFoundF Argument</title>
+          <p>
+            When no results are returned <code>notFoundF</code> is called. The
+            only argument is the original search <code>value</code>.
+          </p>
+        </section>
+        <section id="icfunccfunc">
+          <title>func and cfunc - What's The Difference?</title>
+          <p>
+            When registering with an Item Chooser some of the function
+            arguments are declared as <code>func</code> while others
+            are <code>cfunc</code>. In <code>gui/newOrder.inq</code>
+            these functions are set up thus: 
+          </p>
+          <source>
+func validateF = {
+                   // On the stack we have the smap "vars" and the search
+                   // value as "value". Pass back $this.vars.Search via "vars"
+                   // so it will be given back to us when searchF is called
+                   any vars.Search = $this.vars.Search;
+                   
+                   // Do the validation and return true/false
+                   length(value) &gt;= 3;
+                 };
+
+// The search function's contract is to invoke a service that, in
+// turn, invokes back on chooserResult (see cp://inq/gui/itemChooser.inq)
+// A cfunc does not encapsulate a context, so when it is invoked the
+// context remains unchanged, and is that of the item chooser.
+cfunc searchF  = {
+                   // At vars.Search we have the Search key whose
+                   // fields are being rendered by the tfLookup
+                   // component and the various popup menu check
+                   // items. Its all ready to go so just invoke it
+                   send searchPet(vars.Search, id);
+                 };
+                 
+func foundF    = {
+                   // Put the designated value within the result
+                   // into the component.
+                   component.renderedValue = result.{component.ic.valuePath};
+                   
+                   // Copy the instances within the result to those
+                   // our components are rendering
+                   $this.vars.Product = result.Product;
+                   $this.vars.Item    = result.Item;
+                   
+                   // Copy over the unit cost and Item fields from
+                   // the chosen Item to the LineItem
+                   $this.vars.LineItem.UnitPrice = result.Item.ListPrice;
+                   $this.vars.LineItem.Item      = result.Item.Item;
+                 };
+
+func notFoundF = {
+                   writeln($catalog.system.out, "Not found");
+                 };
+</source>
+          <p>
+            <code>validateF</code>, <code>foundF</code> and <code>notFoundF</code>
+            are all <code>func</code>s. This ensures their body is
+            executed in the context <code>newOrder</code> (the New Order window)
+            making its permanent variables accessible.
+          </p>
+          <p>
+            <code>searchF</code> is a <code>cfunc</code>. This means that
+            it executes in the caller's context, that of the Item Chooser.
+            The client/server exchange takes place in this context so
+            that Item Chooser likewise has access to its state. 
+          </p>
+        </section>
+        <section id="valuepath">
+          <title>Use of valuePath</title>
+          <p>
+            One of the arguments passed to <code>registerItemChooserComponent()</code>
+            is <code>valuePath</code>. When using Item Chooser, the search
+            value entered by the user is generally some sort of free text. If
+            the search yields a result, part of user feedback is likely to
+            be replacing the input text with a formal result value. This happens
+            with this line in <code>foundF</code>:
+          </p>
+          <source>
+component.renderedValue = result.{component.ic.valuePath};
+</source>
+          <p>
+            In the petstore example the formal result value is the selected
+            Item's item code.
+          </p>
+          <p>
+            Item Chooser also uses <code>valuePath</code> to keep track of the
+            current successful search.
+          </p>
+        </section>
+        <section id="icend">
+          <title>Conclusion</title>
+          <p>
+            Item Chooser is a useful, complex and generally applicable GUI
+            component that can be configured by setting up suitable table
+            for rendering the choices, supplying function variables according
+            to the required interface and supplying an input component. 
+          </p>
+          <p>
+            We look at its implementation elsewhere [TODO] or refer to
+            the source within the Inq distrubition Jar file
+            at <code>inq/gui/itemChooser.inq</code>.  
+          </p>
+        </section>
+      </section>
+      <section id="popupmenus">
+        <title>Creating Popup Menus</title>
+        <p>
+          As stated earlier, New Order uses a popup menu, in its case containing
+          check items to control the various <em>Active</em> flags used by
+          the Item search. Created along with <code>tfLookup</code>
+          in <code>setupLookupComponent()</code>, the first thing to do
+          is create the components:
+        </p>
+        <source>
+// Create some menu check components to make the popup menu for the
+// lookup component.
+gMenuCheck mcSearchOnName;
+gMenuCheck mcSearchOnDescr;
+gMenuCheck mcSearchOnAttr1;
+gMenuCheck mcSearchOnItem;
+</source>
+        <p>
+          A menu may contain <code>gMenuCheck</code>, <code>gMenuButton</code>,
+          or <code>gMenuRadio</code> items. The components are then bound to
+          the data node they are rendering: 
+        </p>
+        <source>
+// Bind the check items to their data
+mcSearchOnName.properties.renderInfo  = renderinfo($this.vars.Search.NameActive,  label = {i18n}.ps.button.NAME);
+mcSearchOnDescr.properties.renderInfo = renderinfo($this.vars.Search.DescrActive, label = {i18n}.ps.button.DESCR);
+mcSearchOnAttr1.properties.renderInfo = renderinfo($this.vars.Search.Attr1Active, label = {i18n}.ps.button.MISC);
+mcSearchOnItem.properties.renderInfo  = renderinfo($this.vars.Search.ItemActive,  label = {i18n}.ps.button.ITEM);
+</source>
+        <p>
+          The <code>gMenuCheck</code> component (like its <code>gCheck</code>
+          equivalent) supports properties to specify the value it represents when
+          checked or unchecked. These default respectively to <code>true</code>
+          and <code>false</code> but can be set to values suited to the
+          application. When toggled by the user these values are copied
+          to the rendered data. For the petstore search we want them to
+          set the flags to <code>Y</code> or <code>N</code>: 
+        </p>
+        <source>
+mcSearchOnName.properties.checkedValue =
+  mcSearchOnDescr.properties.checkedValue =
+  mcSearchOnAttr1.properties.checkedValue =
+  mcSearchOnItem.properties.checkedValue = enum(Flag, Y);
+
+mcSearchOnName.properties.uncheckedValue =
+  mcSearchOnDescr.properties.uncheckedValue =
+  mcSearchOnAttr1.properties.uncheckedValue =
+  mcSearchOnItem.properties.uncheckedValue = enum(Flag, N);
+</source>
+        <p>
+          Creating the popup menu and laying out the items within it is
+          then accomplished as follows:
+        </p>
+        <source>
+// Create a popup on the component which allows the user to select
+// the field(s) the search should extend to
+gPopupMenu popupMenu;
+
+// Layout the menu items
+layout(., popupMenu, "mcSearchOnName
+                      mcSearchOnDescr
+                      mcSearchOnAttr1
+                      mcSearchOnItem");
+</source>
+        <p>
+          A popup menu can be placed on any (and more than one) component.
+          Here we add it to <code>tfLookup</code>:
+        </p>
+        <source>
+// Put the popup menu on the text field
+gPopup(tfLookup, popupMenu);
+</source>
+      </section>
+    </section>
+    <section id="clientserver">
+      <title>Client/Server</title>
+      <p>
+        The server-side code for placing new orders can be found
+        in <code>psOrders.inq</code>. When the user confirms an order from
+        the <a href="#placing">Place Order</a> dialog the following flow
+        takes place:
+      </p>
+      <figure src="images/neworderflow.png" alt="neworderflow"/>
+      <p>
+        The <code>Order</code> and its constituent <code>LineItem</code>s
+        are passed to the
+        server's <code>placeOrder(any Order, any items, any ack)</code> service.
+      </p>
+      <section id="ackexc">
+        <title>The ack and @exception Arguments</title>
+        <p>
+          In the client, the invocation looks like
+          this (see <code>gui/placeOrder.inq</code>):
+        </p>
+        <source>
+$this.properties.disabledText = "Processing order, please wait...";
+
+send placeOrder(Order,
+                items = xfunc($this.svars.parent.funcs.getItems),
+                ack = func f =
+                {
+                  // Unglass the GUI
+                  $this.properties.disabledText = null;
+                  
+                  // Dispose the dialog
+                  call dialogCancel();
+                  
+                  // Confirm to the user
+                  call inq.gui.util:messageDialog(dialog       = $root.dialogs.ps.message,
+                                                  messageText  = renderf($catalog.{$root.i18n}.ps.message.ORDER_CONFIRMED,
+                                                                         item.Order)
+                                                 );
+                },
+                @exception = func f =
+                {
+                  // Unglass the GUI
+                  $this.properties.disabledText = null;
+
+                  // Leave the dialog showing                    
+
+                  // Alert the user something has gone wrong.
+                  call inq.gui.util:messageDialog(dialog       = $root.dialogs.ps.message,
+                                                  messageText  = msg + "\n" + stackTrace
+                                                 );
+                }
+                );
+</source>
+        <p>
+          The <code>placeOrder</code> service uses
+          the <a href="../../primer/txn.html#nested">pattern</a> of a nested
+          transaction with an acknowledgement. If the order is placed successfully
+          the server replies with this line in <code>psOrders.inq</code>:
+        </p>
+        <source>
+send updateOk(item = Order, ack);
+</source>
+        <note>
+          The <code>updateOk</code> service is found
+          in <code>gui/userMain.inq</code> and is simply: 
+        <br/>
+        <br/>
+<code>service updateOk(any item, any ack)</code><br/>
+<code>{</code><br/>
+<code>&nbsp;&nbsp;xfunc(ack, item);</code><br/>
+<code>}</code>
+        <br/>
+        <br/>
+          The context of the <code>func</code> argument <em>ack</em> is preserved
+          across the client/server exchange and <em>item</em> is an
+          opaque pass-through argument for use in the target function.
+        </note>
+        <p>
+          The <code>@exception</code> argument gives the option to specify
+          exception handling for this particular service invocation.
+          If an exception occurs in the server the <code>func</code> is
+          executed to provide some graceful control. In this example it is
+          important to re-enable the GUI whether the order is placed
+          successfully or something goes wrong. If no <code>@exception</code> is
+          specified the exception is dumped to a window (supplied by the Inq
+          client and outside the application).  
+        </p>
+        <p>
+          An exception handler function has the following arguments passed to it:
+        </p>
+        <table>
+          <caption>Exception Handler Arguments</caption>
+          <tr>
+            <th>Argument</th>
+            <th>Notes</th>
+          </tr>
+          <tr>
+            <td>msg</td>
+            <td>The exception message</td>
+          </tr>
+          <tr>
+            <td>stackTrace</td>
+            <td>The stack trace, whose top-most line identifies the
+              source URL, function (or service) and line number where the
+              exception occurred</td>
+          </tr>
+          <tr>
+            <td>isUser</td>
+            <td><code>true</code> if the exception was thrown by
+              script, <code>false</code> if the exception was incurred</td>
+          </tr>
+          <tr>
+            <td>exInfo</td>
+            <td>Any user-supplied data that was supplied in the <code>throw</code>
+              statement (<code>isUser</code> exceptions only)</td>
+          </tr>
+          <tr>
+            <td>isCommit</td>
+            <td><code>true</code> if the exception occurred during the
+              transaction's commit phase, <code>false</code> otherwise</td>
+          </tr>
+          <tr>
+            <td>exTime</td>
+            <td>The time the exception was thrown or incurred</td>
+          </tr>
+        </table>
+        <p>
+          In <code>psOrders.inq:newOrder()</code> (called by
+          the <code>placeOrder</code> service) this line is commented out:
+        </p>
+        <source>
+// Croak test. Try uncommenting this and see that the GUI is
+// still un-glassed even if an exception occurs.
+// a = b;
+</source>
+        <p>
+          You can try uncommenting this line, re-parsing the file into the
+          server and placing an order. As well, restart the client with and
+          without the <code>@exception</code> argument.
+        </p>
+        <figure src="images/neworderex.png" alt="neworderexception"/>
+        <p>
+          Without <code>@exception</code> the exception is displayed in
+          the Inq client's log window, instead of being caught by the
+          application.
+        </p>
+      </section>
+      <section id="crevent">
+        <title>Create Event Data</title>
+        <p>
+          When a new typedef instance is created by the committing transaction,
+          Inq raises an <a href="../../primer/txn.html#createevent">event</a>.
+          In petstore this event is listened for by the My Orders part of the
+          application, so that as new orders are raised the My Orders window
+          updates with them automatically. 
+        </p>
+        <p>
+          Listening for and processing the event is covered
+          in <a href="myorders.html#serverlisten">My Orders</a>.
+          There is an implicit contract between sender and
+          receiver defined by the <em>event data</em>. When
+          the <code>Order</code> instance is created the optional
+          second argument is specified - this is a data item (usually a map)
+          that acts as a discriminator to allow a listener to receive only
+          those orders it is interested in. The
+          function <code>makeCreateRaiseData()</code> creates this data:
+        </p>
+        <source>
+any createData = call makeCreateRaiseData(Order);
+create(Order, createData);
+  .
+  .
+/**
+ * Create a map to characterise events raised on Order creation.
+ */
+local function makeCreateRaiseData(any Order)
+{
+  any createData = new(Order.Filter);
+  createData.Account  = Order.Account;
+  createData.Status   = Order.Status;
+  createData.FromDate = Order.OrderDate;
+  createData.ToDate   = Order.OrderDate;
+  
+  // returns
+  createData;
+}
+</source>
+        <p>
+          An instance of <code>Order.Filter</code> conveniently acts as
+          a definition for all the things the event contract requires, although
+          any map however created is suitable.
+        </p>
+      </section>
+      <p>
+        <a href="myorders.html"><icon src="../images/nextpage.gif" alt="nextpage"/></a>
+      </p>
+    </section>
+  </body>
+</document>

@@ -122,7 +122,7 @@ public class AnyCControl extends AnyObject
     super(c);
   }
 
-  public CControl getCControl()
+  private CControl getCControl()
   {
     return (CControl) getValue();
   }

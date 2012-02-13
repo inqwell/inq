@@ -1,0 +1,184 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright 2006 Inqwell Ltd.
+-->
+<!DOCTYPE document PUBLIC "-//APACHE//DTD Documentation V2.0//EN" "http://forrest.apache.org/dtd/document-v20.dtd">
+<document>
+  <header>
+    <title>I/O Configuration</title>
+  </header>
+  <body>
+    <section id="intro">
+      <title>Introduction</title>
+      <p>
+        If a typedef is not in-memory only then part of its declaration is to
+        bind it to an i/o mechanism. Inq supports a syntax to define
+        a <code>resource</code> that can be referred to symbolically in
+        a typedef's i/o binding.
+      </p>
+      <p>
+        A <code>resource</code> definition creates a symbol in the current
+        package name space and takes the following form:
+      </p>
+      <source>
+&lt;resource-definition&gt; =
+  resource &lt;identifier&gt;
+  "(" &lt;resource-type&gt; ","
+      &lt;resource-limit&gt; ","
+      &lt;resource-info&gt;
+  ")" ";"
+
+  &lt;resource-limit&gt; = &lt;integer-literal&gt;
+</source>
+      <p>
+        where <code>resource-type</code> is a key word
+        and <code>resource-info</code> is specific to the <code>resource-type</code>.
+      </p>
+    </section>
+    <section id="sqlresource">
+      <title>Configuring SQL Servers</title>
+      <p>
+        Inq presently supports only SQL servers for typedef persistence. In this
+        case, the <code>resource-type</code> is the
+        keyword <code>sqlserver</code>, <code>resource-limit</code> is the maximum
+        number of connections
+        Inq will keep open to the SQL server and <code>resource-info</code> is a
+        map of well-known keys to configure the connection parameters, string formatting
+        requirements and any idiosyncrasies of the SQL server itself. These keys
+        are as follows:
+      </p>
+      <dl>
+        <dt><strong>user</strong></dt>
+        <dd>the user name that Inq will use when connecting to the SQL server;</dd>
+        <dt><strong>password</strong></dt>
+        <dd>the password for the given user;</dd>
+        <dt><strong>url</strong></dt>
+        <dd>the JDBC URL to connect to;</dd>
+        <dt><strong>null</strong></dt>
+        <dd>a map of data types specifying how a null value should be rendered when
+          using parameterised textual SQL;</dd>
+        <dt><strong>delim</strong></dt>
+        <dd>a map of data types specifying how a non-null value should be
+          delimited when using parameterised textual SQL;</dd>
+        <dt><strong>cardinality</strong></dt>
+        <dd>a boolean value to handle a row count idiosyncrasy when writing
+          typedef instances.</dd>
+      </dl>
+      <p>
+        These map elements are discussed further in the examples below.
+      </p>
+      <p>
+        When performing i/o to read or write typedef instances, Inq will allocate
+        a handle to the resource specified in that typedef's i/o binding. If all
+        the available handles up to the <code>resource-limit</code> are presently
+        in use then the executing transaction will wait for one to be released
+        before proceeding.
+      </p>
+      <section id="mysql">
+        <title>A MySql Example</title>
+        <p>
+          Here is an example of a resource definition for a MySql server running
+          on localhost.
+        </p>
+        <source>
+resource xy ( sqlserver, 50,
+              map(  "user", "xy1",
+                    "password", "xy1",
+                    "url", "jdbc:mysql://localhost/xydev",
+                    "null", map(date.class, "NULL",
+                                string.class, "NULL",
+                                decimal.class, "NULL",
+                                double.class, "NULL",
+                                float.class, "NULL",
+                                int.class, "NULL"
+                                ),
+                    "delim", map(date.class, "'",
+                                 string.class, "'"),
+                    "cardinality", false
+              )
+            );
+</source>
+        <section id="delims">
+          <title>Delimiters and Null Mappings</title>
+          <p>
+            When discussing the use of plain text SQL statements in key configurations
+            we saw how formatting the parameterised string sometimes required the
+            use of format patterns. In fact, the requirements extend beyond this
+            since it is also necessary to cater for <code>NULL</code>. Inq supports
+            a mapping between its value types and a string value that will be
+            used when the Inq variable has the value <code>null</code>. In this
+            case, no formatting takes place and the string value is used verbatim.
+          </p>
+          <p>
+            To express strings and when formatting dates as strings, SQL implementations
+            require the value to be quoted. While this can be expressed in the
+            format pattern it would mean that strings (and not just date and floating
+            point values) would require their own pattern, repeated everywhere in the
+            plain text SQL. Instead, the i/o configuration allows these to be expressed
+            by data type. They are only used when parameterising a plain text SQL
+            statement.
+          </p>
+        </section>
+        <section id="cardinality">
+          <title>Cardinality</title>
+          <p>
+            Standard SQL defines the separate statements <code>insert</code>
+            and <code>update</code> to respectively create and modify table rows.
+            As we saw in the <a href="keys.html#expkey">primary key examples</a>, many SQL
+            implementations support their own way of combining these two
+            possibilities into a single statement. The Inq primary key of an
+            instance must be unique so Inq performs a check when reading
+            and writing to SQL repositories that this is so.
+          </p>
+          <p>
+            Unfortunately, the
+            MySql <code>replace</code> returns a row count of 2 when the
+            row already exists. If <code>cardinality</code> is set
+            to <code>false</code> then Inq ingores the row count on writing.
+            The cardinality check is always enforced when reading.
+          </p>
+        </section>
+      </section>
+      <section id="oracle">
+        <title>An Oracle Example</title>
+        <p>
+          Here is an Oracle example:
+        </p>
+          <source>
+resource xy  (  sqlserver, 50,
+                map( "user", "xyuser",
+                     "password", "xyuser05",
+                     "url", "jdbc:oracle:thin:@host.in.domain.com:1521:myServer",
+                     "null", map(date.class, "NULL",
+                                string.class, "NULL",
+                                decimal.class, "NULL",
+                                double.class, "NULL",
+                                float.class, "NULL",
+                                int.class, "NULL"
+                                ),
+                     "delim", map(date.class, "'",
+                                  string.class, "'")
+              )
+            );
+</source>
+        <p>
+          As we see, there is little difference between this and the MySql version.
+        </p>
+      </section>
+      <section id="parsing">
+        <title>Parsing The Resource Definition</title>
+        <p>
+          A resource must be defined before it is referenced in any
+          typedef <code>iobind</code> clause. It is common to
+          place resource definitions in separate files referenced using
+          a parameterised <code>#include&lt;...&gt;</code>, so that they
+          can be selected using command line arguments on server invovation.
+        </p>
+        <p>
+          Any number of SQL resources can be defined in this way, allowing
+          an Inq server application to easily integrate disparate data sources.
+        </p>
+      </section>
+    </section>
+  </body>
+</document>

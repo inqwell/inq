@@ -1,0 +1,15 @@
+writeln($catalog.system.out, "string
+on
+several
+lines");
+
+writeln($catalog.system.out, "");
+
+writeln($catalog.system.out, "string on\ntwo lines");
+
+writeln($catalog.system.out, "");
+
+writeln($catalog.system.out, "string \
+on \
+one \
+line");

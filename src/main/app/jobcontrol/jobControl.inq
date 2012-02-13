@@ -1,0 +1,2529 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ *
+ * http://www.inqwell.com
+ */
+
+/**
+ * Inqwell Job Control Package
+ *
+ * Server-side code for
+ *   1) Timer handling and job dispatching
+ *   2) Client support
+ *   3) API support
+ *
+ * TODO:
+    1) Handle expiry/catalog events to close down stale timers/tree
+ */
+package inq.jobcontrol;
+
+/**
+ * Start the job control system if not already running.
+ * See also the service "startup" below.
+ */
+local function startup()
+{
+  // Is JobControl already running?
+  // Make sure two processes cannot collide
+  // while starting the job control system.
+  // Locks are automatically removed
+  // when their enclosing transaction commits.
+  // This lock achieves mutual exclusion with the "initialse" service run
+  // by the jobdispatcher process also.
+  if (!call isRunning())
+  {
+    // Create a smap for the job control globals as there are no event
+    // considerations. In particular, we hold the dispatcher process
+    // here and processes cannot he held in hmaps because they are
+    // constrained to an internally managed process tree structure.
+    smap jobcontrol;
+
+    // Set up the logger. The Inq distribution
+    // includes etc/server.log.properties which defines
+    // a logger called inq.jobcontrol
+    any jobcontrol.logger = getlogger("inq.jobcontrol");
+    
+    // Use FINE for debugging.
+    jobcontrol.logger.properties.logLevel = LOG_FINE;
+    
+    loginfo(jobcontrol.logger, "JobControl is starting up");
+
+    // Create the state flag for synchronisation between user processes
+    // and the dispatcher process. User processes cannot modify,
+    // create or delete Job instances while the dispatcher is manipulating
+    // the job tree.
+    // Note - default initial value is "S"tartup
+    any jobcontrol.jobTreeState = new(JobTreeState);
+    
+    any jobcontrol.properties = call readProperties(jobcontrol.logger);
+    
+    call getLogDir(jobcontrol);
+
+    // Create the dispatcher process. We can't specify initialise() as
+    // the "start" function because that is run in the caller's thread
+    // and initialisation includes establishing event listeners in the
+    // dispatcher process
+    any jobcontrol.process = spawn("jobdispatcher",
+                                   type = PROCESS_DETACHED,
+                                   end  = call shutdown());
+
+    any $catalog.jobcontrol = jobcontrol;
+
+    send initialise(@channel = jobcontrol.process.ichannel);    
+  }
+}
+
+
+/**
+ * Define a service to call startup(). Allows job control to be started
+ * from a connected Inq environment if required.
+ * @param ack if supplied then the client's notifyItem service is
+ * invoked. It is only appropriate to supply this argument when
+ * invoking this service from the GUI client.
+ */
+service startup(any ack)
+{
+  call startJobControl();
+  
+  if (ack)
+    send system.client:notifyItem(ack);
+}
+
+service initialise()
+{
+  // Check the state variable here to ensure that we're
+  // not being started by some rogue invocation.
+  if ($catalog.jobcontrol.jobTreeState != enum(JobTreeState, STARTUP))
+  {
+    logsevere($catalog.jobcontrol.logger, "Illegal state {0}", enumext(JobTreeState, $catalog.jobcontrol.jobTreeState));
+    
+    // Can't proceed
+    exit(1);
+  }
+  call initialise();
+}
+
+/**
+ * Job Control Initialisation.
+ *
+ * 1) Set up listeners that fire when user processes create or update
+ *    Job instances so that the job tree can be maintained.
+ * 2) Build the job tree. This process reads the complete job tree
+ *    into a nested node set structure. At this point we have the
+ *    hierarchy of boxes and their contained jobs, but no timer
+ *    or function expressions have been parsed.
+ * 3) Traverse the job tree from the leaves to the root. Jobs that define
+ *    a TimerExpr have the expression compiled and called and the resulting
+ *    timer propagated upwards to containing boxes if they themselves do
+ *    not define one.
+ * 4) Each job under the root of the tree (which may be a task or a box)
+ *    that is active and has a non-null timer has its timer started.
+ */
+local function initialise()
+{
+  // Required by Job.<mtor> and Job.<join>
+  any $process.loginName = "jobdispatcher";
+
+  loginfo($catalog.jobcontrol.logger, "Dispatcher initialising...");
+
+  try
+  {
+
+    // Mutually exclusive with startup - see comment there
+    call awaitTreeState(requiredState = enum(JobTreeState, STARTUP),
+                        newState      = enum(JobTreeState, DISPATCHER));
+
+    // Create in-memory data
+    call createVolatile();
+    loginfo($catalog.jobcontrol.logger, "Volatile data created");
+
+    // Listen for new Job instances.
+    any $this.listeners.newJobListener = listen ($catalog,
+                                       func f = call newJobCreated(Job = @eventData),
+                                       event = (create),
+                                       typedef = Job);
+
+    // Listen to the function used to modify Job instances.
+    // The client may modify several instances at a time and we want one
+    // event to handle all such processing, as opposed to the several update
+    // events we could get.
+    any $this.listeners.modJobListener1 = listen ($catalog,
+                                        func f = {
+                                                   loginfo($catalog.jobcontrol.logger, .);
+    
+                                                   call jobsModified(jobEvents = @eventData);
+                                                 },
+                                        event  = (complete),
+                                        exec   = modifyJobs);
+
+    any $this.listeners.modJobListener2 = listen ($catalog,
+                                        func f = {
+                                                   loginfo($catalog.jobcontrol.logger, .);
+    
+                                                   call jobsModified(jobEvents = @eventData);
+                                                 },
+                                        event  = (complete),
+                                        exec   = modifyJob);
+
+
+    loginfo($catalog.jobcontrol.logger, "Job listeners created");
+    
+    // Build the job tree
+    hmap  m;  // Seed map
+    any jobTree = call buildJobTree(root = m);
+    loginfo($catalog.jobcontrol.logger, "Job tree created");
+
+    // Place the job tree in the context
+    any $this.jobTree = jobTree;
+
+    // Listen to the root of the job tree for deletion events from within
+    // By specifying the typedef we will only get events that relate to
+    // automatic pruning of the node-set structure when Job instances are
+    // deleted.
+    any $this.listeners.deleteJobListener = listen (jobTree,
+                                          func f = { call jobDeleted(@eventId, @eventData); },
+                                          event = (remove),
+                                          typedef = Job);
+
+    // Evaluate the timers underneath each top-level job.
+    call evaluateChildTimers(root = jobTree);
+    loginfo($catalog.jobcontrol.logger, "Timers evaluated, starting any timers");
+
+    // Start the timer of the root jobs that have defined (or inherited) one.
+    // Even if the job is inactive, we'll fire the timer so that the NextRuns
+    // field is always updated.
+    foreach(jobTree)
+    {
+      if ($loop.Job.Active == enum(Active, Y) && !isnull($loop.aux.jobTimer))
+        call startTimer($loop.Job, $loop.aux.jobTimer, userInfo = $loop);
+    }
+    loginfo($catalog.jobcontrol.logger, "Root timers started");
+  }
+  catch
+  {
+    logsevere($catalog.jobcontrol.logger, "Exception {0}\n{1}\n...JobControl started with errors",
+                                          @exception,
+                                          @stackTrace);
+    // rethrow for logging by the default exception handler
+    throw();
+  }
+  finally
+  {
+    // Allow user processes to manipulate Job instances. May be
+    // we got an exception on startup. Not good but we must put
+    // the monitor into the correct state regardless.
+    loginfo($catalog.jobcontrol.logger, "Job tree state going to idle");
+    call notifyTreeState(newState = enum(JobTreeState, IDLE));
+  }
+
+  loginfo($catalog.jobcontrol.logger, "...JobControl startup complete");
+}
+
+/**
+ * The "end" function of the jobdispatcher process.
+ * Perform shutdown operations.
+ */
+local function shutdown()
+{
+  // This function runs when jobdispatcher terminates for any reason.
+  // It runs in the process's outermost transaction, which is
+  // initially empty.
+  
+  // Reacquire the jobtree monitor. For a normal shutdown the lock
+  // acquired in stopJobControl() would have been released as the
+  // transaction was committed. This means there is a window for
+  // api clients to incur an exception.
+  lock("__jobtree");
+  
+  try
+  {
+    loginfo($catalog.jobcontrol.logger, "JobControl is shutting down...");
+  
+    // Remove listeners. Note this is not actually required. When a process
+    // terminates any listeners it established become defunct and die off.
+    // This is shown just to demonstrate the unlisten function.
+    foreach($this.listeners)
+    {
+      unlisten($loop);
+    }
+    
+    // Note also that timers are associated with their process
+    // and these die automatically too.
+    
+    loginfo($catalog.jobcontrol.logger, "JobControl terminated.");
+  
+    // Tidy catalog. The catalog entry indicates whether JC is running.
+    remove($catalog.jobcontrol);
+  }
+  finally
+  {
+    notifyall("__jobtree");
+  }
+}
+
+/**
+ * Job Control Dispatcher.
+ *
+ * Called when a job's timer fires. This function is set as the "func"
+ * property of the timers started by initialise().
+ *
+ * Note: A timer is an invocation of a process's implicit event loop.
+ *
+ */
+local function jobDispatcher(any fromTimer)
+{
+  try
+  {
+    // The userInfo property carried in the timer is the container of
+    // the Job (and timer) that was set inside the timer when the job tree
+    // structure was built.
+    any m = fromTimer.properties.userInfo;
+
+    // Note - the map "m" is a member of the job tree structure built
+    // in this (the jobdispatcher) process. Containers of any sort are
+    // not thread-safe and we don't share them between processes.
+    // Create a simple map to hold the Job and JobVolatile we send
+    // to the new process running the job.
+    // TODO - Could do this when the userInfo is established?
+    //        Would that be clearer?
+    any jobInfo.Job = m.Job;
+    any jobInfo.JobVolatile = m.JobVolatile;
+    logfine($catalog.jobcontrol.logger, "Timer has fired for job {0}", jobInfo.Job.ShortName);
+
+
+    // If this (top-level) job or child are currently running (because
+    // a job has been run manually) then we can't start the job.
+    // In this case, throw an exception. The catch block will try
+    // to perform job completion (to restart the timer) and log the event.
+    if (call parentNotIdle(m.Job) ||
+        call childNotIdle(jobInfo = m))
+      throw("Dispatcher - Tree Not Idle");
+
+    // Start a process to run the job. Note that if the spawn function
+    // throws then the process was not started (though its start expression
+    // may have been run).
+    logfine($catalog.jobcontrol.logger, "Starting process to run job {0}", jobInfo.Job.ShortName);
+  	any process = spawn(jobInfo.Job.ShortName, type  = PROCESS_CHILD,
+        	                                     start = call onJobStart(jobInfo,
+        	                                                             immediate=false),
+        	                                     end   = call onJobExit());
+  }
+  catch
+  {
+    loginfo($catalog.jobcontrol.logger, "Caught exception while starting job {0}\n{1}\n{2}",
+                                        jobInfo.Job.ShortName,
+                                        @exception,
+                                        @stackTrace);
+
+    // If process was not started perform job completion here
+    call jobComplete(jobInfo.Job, exitStatus = 1, immediate=false);
+
+    // rethrow for logging purposes
+    throw();
+  }
+}
+
+/**
+ * This function is called when the process to run the timer's FunctionExpr
+ * is started.
+ * 
+ * The "spawn" primitive (see above) executes the "start" expression
+ * in the caller's process (thread) but with $this returning the root of
+ * the new process's node space. All other paths (in particular $process)
+ * refer to the calling process's environment.
+ *
+ * The new process starts in its own thread after the start expression
+ * completes however its input channel is already established, so we can
+ * send it the service request to run the job proper.
+ *
+ * Whether it is formally declared or not, a "start" expression
+ * can access $stack.ichannel. Similarly, the process node space can also be
+ * accessed via $stack.process.
+ */
+local function onJobStart(any process, any ichannel, any jobInfo, boolean immediate)
+{
+  // Put the job dispatcher's (that is our) process's input channel in the
+  // new process's node space so it can send the jobComplete service request
+  // back to the job dispatcher when the process exits.
+  any process.jobDispatcher = $process.ichannel;
+
+  // This is required by Job:<mutator>
+  any process.loginName = "jobdispatcher";
+
+  // Send the runJob service request through to the new process
+  send runJob(@channel = ichannel, jobInfo, immediate);
+}
+
+/**
+ * When a job's timer goes off a process is created on which this
+ * service is invoked to run the job's FunctionExpr
+ */
+service runJob(any jobInfo, boolean immediate)
+{
+  try
+  {
+    loginfo($catalog.jobcontrol.logger, "Process for job {0} running...", jobInfo.Job.ShortName);
+    
+    // Place the Job[Volatile] instances at $process.Job[Volatile],
+    // so that onJobExit can pick them up.
+    any $process.Job         = jobInfo.Job;
+    any $process.JobVolatile = jobInfo.JobVolatile;
+    
+    // Note down the process running this job. Then we can kill it
+    // later.
+    call setProcessId($process.id, jobInfo.JobVolatile);
+    
+    // Remember whether this was a timer or manual invocation
+    any $process.immediate = immediate;
+
+    // Process the given box or task.
+    any exitStatus = call runJob(jobInfo, immediate);
+
+  }
+  catch
+  {
+    // Ensure an exit status. If an exception occurred inside
+    // runJob then we won't have one
+    logsevere($catalog.jobcontrol.logger, "Exception {0}\n{1}",
+                                          @exception,
+                                          @stackTrace);
+    int exitStatus = 1;
+  }
+  finally
+  {
+    // A process has an event loop and will return to wait at its
+    // input channel unless it is killed by another process or volunteers
+    // to exit, as here. The exit status is placed at $process.status
+    // and any "end" function specified when the process was spawned
+    // is called just prior to termination.
+    // If we don't use a "finally" block then if an exception occurs
+    // while executing the job the process would not terminate.
+    exit(exitStatus);
+  }
+}
+
+/**
+ * Invoked on the dispatcher process by a job process as it terminates.
+ */
+service jobComplete(any Job, any exitStatus, any immediate)
+{
+  loginfo($catalog.jobcontrol.logger, "Job {0} completed exit status {1}",
+                                      Job.ShortName, exitStatus);
+  call jobComplete(Job, exitStatus, immediate);
+}
+
+service killJob(any Job)
+{
+  call killJob(Job);
+}
+
+local function jobComplete(any Job, any exitStatus, any immediate)
+{
+
+  // If this was a manual execution then don't do anything to reschedule
+  // the job
+  if (!immediate)
+  {
+    // Lock the job tree.
+    //lock("__jobtree");
+
+    // Work out what subtree we are working with, taking into account
+    // that the job could have been top-level one (timer or manual
+    // top-level) or a child job (manual child).
+    if (!call isTopLevel(Job))
+    {
+      int subtreeIndex = null;
+  
+      call findTreeLevel(root = $this.jobTree,
+  	                     Job,
+  	                     ParentJob = null,
+  	                     subtreeIndex);
+  
+      // TODO Hmmm, as currently coded, findTreeLevel throws if it cannot find
+      // the job anywhere in the job tree. This could happen if the job
+      // was deleted during its execution. That's OK, if a little brutal. May be
+      // think about this, but if no exception is thrown it's safe to replace the
+      // given job with its top-level one.
+      any Job = $this.jobTree[subtreeIndex].Job;
+    }
+  
+    // The Job will be one of those at the top level of the
+    // jobTree (see the initialise() function). Use its primary key
+    // to find it.
+    any k = getprimarykey(Job);
+  
+  
+    // Alias the node set child for convenience
+    any subtree.job = $this.jobTree.{k};
+  
+    // Check the node-set child hasn't been removed because the Job had
+    // been deleted while last running
+    if (subtree.job)
+    {
+      // Note - the exitStatus is already in Job.ExitStatus
+      // We can check the exit status to decide whether to restart
+      // the timer.
+  
+      // Re-evaluate the timer from the child job tree.
+      call evaluateChildTimers(root = subtree);
+  
+  
+      // If the job is still active and if it should be rescheduled after
+      // any error then start its timer again
+      if (Job.Active == enum(Active, Y) &&
+          !isnull(subtree.job.aux.jobTimer) &&
+          (!exitStatus ||
+           Job.ContinueOnError == enum(ContinueOnError, CONTINUE)))
+      {
+        loginfo($catalog.jobcontrol.logger, "Restarting timer for job {0} : runs {1}",
+                                            subtree.job.Job.ShortName,
+                                            subtree.job.aux.jobTimer.properties.nextRuns);
+                                            
+        call startTimer(subtree.job.Job, subtree.job.aux.jobTimer, userInfo = subtree.job);
+      }
+      else
+        Job.NextRuns = null; // Show that the job will not run after an error
+    }
+  }
+}
+
+/**
+ * Run the specified job. If the job is a box then each child is executed
+ * in order of its nextRuns property where it defines a timer, or ordinal
+ * number otherwise.
+ *
+ * If a box is of type <code>BoxType.TIMED</code> and <code>immediate</code>
+ * is false then any timers the child jobs define are evaluated and checked
+ * against the system time. If the child is not yet due to run the process
+ * waits the appropriate amount of time.
+ *
+ * @param jobInfo the Job and JobVolatile instances being run.
+ *
+ * @param immediate true when the job is being run manually; false if
+ * this is a timer execution 
+ */
+local function runJob(any jobInfo, boolean immediate)
+{
+  // If all we ever have is nested boxes we may never hit on a task
+  // so set up the default exit status.
+  any exitStatus = new(Job.ExitStatus, 0);
+
+	if (jobInfo.Job.Active == enum(Active, Y) || immediate)
+	{
+	  // By starting a transaction we ensure that updates of each child task or
+	  // box (that is exit status, last run time & duration) are committed, and
+	  // therefore events emitted, as the job completes. Otherwise these events
+	  // would not be issued until the top-level job completed.
+	  // Note: the transaction only contains the Job argument. If this job
+	  // is a box then the function recurses for each child and we only
+	  // assign to Job fields outside the loop.
+	  transaction
+	  {
+	    // Set the LastRan time of the job now. If an exception is thrown
+	    // then the update of LastRan will be abandoned.
+	    jobInfo.Job.LastRan = getdate();
+	    
+	    call setStartTime(jobInfo.JobVolatile, Started=jobInfo.Job.LastRan);
+
+	    // If this job is a box then process each child job
+	    if (call isBox(jobInfo.Job))
+	    {
+	      logfine($catalog.jobcontrol.logger, "Entering Box {0}", jobInfo.Job.ShortName);
+	      
+	      any childJobs = call getChildJobsInOrder(jobInfo.Job);
+	      foreach(childJobs)
+	      {
+	        // If we are checking the schedule time (for second and subsequent
+	        // box children) and this job actually defines a timer then may be wait
+	        // for the child job's execution time.
+	        // Logic: 1. Boxes can be of type TIMED or SEQUENCE. A TIMED box obeys
+	        //           any timers the children define; a SEQUENCE box executes
+	        //           each child in succession regardless of any timer it may
+	        //           define.
+	        //        2. For the first child job, determine whether the box and
+	        //           the child both define a timer. If they do then the box
+	        //           is not inheriting the child's timer and the child's timer
+	        //           is honoured. Otherwise the timer that is driving us has
+	        //           been inherited from this or a deeper child so there is
+	        //           no need to wait for it.
+	        //        3. For second and subsequent children, if the child defines
+	        //           a timer (and the box is of type TIMED again) then wait for
+	        //           its scheduled time to arrive.
+	        if ((jobInfo.Job.BoxType == enum(BoxType, TIMED)) &&
+	            !immediate &&
+	            ((@first  && $loop.Job.NextRuns > jobInfo.Job.NextRuns) ||
+	             (!@first && $loop.Job.NextRuns > prev.Job.NextRuns)))
+	          call waitSchedule($loop.Job, jobInfo.JobVolatile);
+
+	        // Recurse to process the box child.
+	        any childExitStatus = call runJob(jobInfo = $loop);
+	        
+	        // When processing box children, the exit status of this box
+	        // is the first non-zero child exit status.
+	        if (childExitStatus && !exitStatus)
+	          exitStatus = childExitStatus;
+
+	        // If we received a non-zero (that is error) exit status and this
+	        // box is set to abort on error then stop processing this box.
+	        if (jobInfo.Job.ContinueOnError == enum(ContinueOnError, ABORT) &&
+	            childExitStatus)
+	        {
+            logfine($catalog.jobcontrol.logger,
+                    "Box {0} will not continue past child {1} whose exit status was {2}",
+                    jobInfo.Job.ShortName,
+                    $loop.Job.ShortName,
+                    childExitStatus);
+	          break();
+	        }
+	        any prev = $loop;
+	      } // foreach
+	    }
+	    else
+	    {
+	      exitStatus = call processTask(jobInfo.Job);
+	    }
+	  } // transaction
+	  catch
+	  {
+	    // Tasks are executed in their own transaction (see processTask())
+	    // so any exception here means an error occurred prior to running
+	    // the task. Just set an error status for the job and rethrow.
+	    exitStatus = 1;
+	    throw();
+	  }
+	  finally
+	  {
+	    // Clean up
+
+      // If the process is killed then finally blocks at and above the kill
+      // point will be executed immediately. If a finally block is associated
+      // with a transaction then it is aborted at the end of the finally block.
+      
+      if (childExitStatus && childExitStatus == 255)
+      {
+        exitStatus = childExitStatus;
+        
+        logfine($catalog.jobcontrol.logger,
+                "Stopping at {0} because process has been killed",
+                jobInfo.Job.ShortName);
+      }
+
+	    call setStartTime(jobInfo.JobVolatile, Started=null);
+
+	    jobInfo.Job.ExitStatus = exitStatus;
+	    call calcDuration(jobInfo.Job);
+	    
+	    // Explicit commit in case we were killed. We want the ExitStatus
+	    // and LastRan fields saved regardless.
+	    commit();
+	    
+	    // Return the exit status. This statement must be inside the finally
+	    // block or (if the process is being killed) it will not execute.
+	    // When a process is being killed execution passes immediately to
+	    // the next finally block up the stack.
+      exitStatus;
+	  }
+	}
+}
+
+/**
+ * Create a non-live node set of the given job's children in order of
+ * their next run time. When a job does not define a run time, ordering
+ * is by explicit ordinal number.
+ */
+local function getChildJobsInOrder(any Job)
+{
+  // Read the child jobs
+  any childJobs = call getChildJobs(Job);
+
+  // Sort the node set.  Specifying the optional "null" argument with
+  // the predefined constant NULL_HIGH means when Job.NextRuns
+  // is null then it is sorted higher than a non-null value. This ensures
+  // jobs with timers run before ones without. The second sort expression
+  // sorts jobs without timers by their JobOrder field.
+  // Note: the return value of sort() is the sorted node, childJobs.
+  sort(childJobs, $loop.Job.NextRuns,
+                  $loop.Job.JobOrder,
+       null = NULL_HIGH);
+
+  logfine($catalog.jobcontrol.logger, "Child jobs are: {0}", childJobs);
+  
+  // Returns
+  childJobs;
+}
+
+local function getChildJobs(any Job)
+{
+  // Read the child jobs.
+
+  // To allow for possible sorting of the returned structure, seed an ordered map
+  omap m;
+
+  any k = new(Job.ByParent);
+  k.ParentJob = Job.Job;
+  read(Job, k, setname="childJobs", target=m);
+  aggregate(JobVolatile, m.childJobs.[@first].Job);
+
+  // return value
+  m.childJobs;
+}
+
+/**
+ * Check if the current system time is prior to the given job's next
+ * execution time. If so, flag the executing process as being in the
+ * "waiting" state and synchronously wait for the until the timer's start
+ * time.
+ */
+local function waitSchedule(any Job, any JobVolatile)
+{
+  any duration = Job.NextRuns - getdate();
+
+  // If the time is in the future then just wait for however long. It
+  // doesn't matter what we wait for - no one is going to notify us anyway
+  // but we have to wait for something
+  if (duration > 0)
+  {
+    call setJobState(JobVolatile, JobState=enum(JobState, WAITING));
+    logfine($catalog.jobcontrol.logger, "Waiting to run {0}", Job.ShortName);
+    wait("__jobcontrol", duration);
+    call setJobState(JobVolatile, JobState=enum(JobState, RUNNING));
+  }
+}
+
+/**
+ * Sets the LastDuration field of the given Job as the difference between
+ * the current system time and the LastRan field in milliseconds.
+ */
+local function calcDuration(any Job)
+{
+  // Job.LastRan is already set
+  Job.LastDuration = getdate() - Job.LastRan;
+}
+
+/**
+ * Create the given job's timer by calling its timer expression
+ */
+local function createJobTimer(any Job)
+{
+  try
+  {
+    any url = "string://Job.TimerExpr";
+    any timerExpr = compile(url);
+  
+    // Create the timer. When running the timer expression, it can assume
+    // the Job instance has been passed to it. In particular, the timer
+    // expression may want to know when (if) the job last ran (Job.LastRan)
+    // so that a run is not missed if the job is delayed.
+    any jobTimer = xfunc(timerExpr, Job);
+    
+    // The expression must return a timer. If there was a mistake and it
+    // does not then this will cause an exception
+    any i = jobTimer.properties.fixedOrDelay;
+    
+    // Return the timer
+    jobTimer;
+  }
+  catch
+  {
+    // If something goes wrong then log it. We must always return a timer 
+    // or the job tree is not viable (it cannot be sorted)
+    logsevere($catalog.jobcontrol.logger,
+              "Exception while executing timer expression\n{0}\n{1}\n{2}\n{3}",
+              Job.TimerExpr,
+              @exception,
+              @stackTrace,
+              "Check your expression is correct and returns a timer");
+              
+    // Return a null timer
+    timer jobTimer;
+  }
+}
+
+/**
+ * A Job that is a task (as opposed to a box) is one that defines
+ * a FuncionExpr. Run the expression.
+ */
+local function processTask(any Job)
+{
+  if (!call isTask(Job))
+    throw("Instance is not a task", Job);
+    
+  // Remember any current output stream there may be because
+  // of tasks further up the tree
+  any curStrm = $process.system.out;
+
+  // Parse the function expression. This URL represents the
+  // string representation of the blob at $stack.Job.FunctionExpr
+  any url = "string://Job.FunctionExpr";
+
+  loginfo($catalog.jobcontrol.logger, "Running Task {0}", Job.ShortName);
+
+  any funcExpr = compile(url);
+
+  // Call the parsed expression, passing the Job instance.
+  // Just to restate the Inq function return semantics - the return value
+  // of the funcExpr becomes the return value of this function. This is taken
+  // as the exit status of this task where zero indicates success and non-zero
+  // means error.
+  // Execute the job function in its own transaction, so that all work it
+  // performs is committed separately from the job control updates. Further,
+  // if the job function throws that is not really any concern of ours.
+  // Exceptions are thus handled here.
+  
+  int exitStatus = 0;
+  transaction
+  {
+    // Set up the output stream
+    any outStream = call openLogFile(Job);
+    any $process.system.out = outStream;
+
+    exitStatus = xfunc(funcExpr, Job);
+  }
+  catch
+  {
+    logsevere($catalog.jobcontrol.logger, "Exception {0}\n{1}",
+                                          @exception,
+                                          @stackTrace);
+    exitStatus = 1;
+  }
+  finally
+  {
+    // Were we killed? If so signal with a special exit status
+    // Note - if a process is killed then catch blocks
+    // are not executed, but finally blocks are. Other than
+    // that no code is executed apart from a spawned process's
+    // "end" expression.
+    
+    // Note - although finally {} blocks do execute when a
+    // process is killed (catch {} blocks do not) the
+    // transaction is *not* committed implicitly.
+    // This transaction is for the job itself (that is
+    // external to jobcontrol). It is allowed to abort. 
+
+    if ($process.properties.killed)
+      exitStatus = 255;
+
+    call closeLogFile();
+    call pruneLogfiles(Job);
+    
+    if (curStrm)
+      any $process.system.out = curStrm;
+    
+    exitStatus;
+  }
+}
+
+local function onJobExit()
+{
+  call setProcessId(id = null, $process.JobVolatile);
+
+  // Notify the job dispatcher process so that it can schedule the timer
+  // for the next execution of this job. If the jobdispatcher has terminated
+  // this will throw but the process will still terminate.
+  send jobComplete(@channel = $process.jobDispatcher, $process.Job,
+                                                      exitStatus = $process.status,
+                                                      $process.immediate);
+}
+
+local function buildJobTree(any root)
+{
+  // Read the top-level jobs, those with a ParentJob of null
+  any k = new(Job.ByParent);
+  read(Job, k, setname="topLevelJobs", target=root);
+  aggregate(JobVolatile, root.topLevelJobs[@first].Job);
+
+  // Start recursion to add successive child job levels
+  call addNextLevel(root = root.topLevelJobs);
+
+  // Unencumber the result from the seed root parameter while returning it
+  remove(root.topLevelJobs);
+}
+
+local function addNextLevel(any root)
+{
+  any k = new(Job.ByParent);
+	aggregate(Job,
+	          root[@first].Job,
+	          setname = "childJobs",
+	          key = cfunc f0 = {
+                               // Set the key for each parent job,
+                               // because we are joining self to ParentJob
+                               k.ParentJob    = $loop.Job.Job;
+
+	          	                 k;
+	                           }
+	         );
+
+  // Recurse for each child node set
+  foreach(root)
+  {
+    aggregate(JobVolatile, $loop.childJobs[@first].Job);
+    call addNextLevel(root = $loop.childJobs);
+  }
+}
+
+/**
+ * Create the volatile data for all the Job instances
+ */
+local function createVolatile()
+{
+  // Read the jobs
+  any all = new(Job.All);
+  read(Job, all, setname="allJobs");
+
+  transaction
+  {
+    foreach(allJobs)
+    {
+    	// Create associated JobVolatile. If we are being restarted then
+    	// volatile data instances will already exist, so check for
+    	// this.
+    	if (!read(JobVolatile, $loop.Job))
+        create(new(JobVolatile, $loop.Job));
+    }
+  }
+}
+
+/**
+ * Set the start time of the Job and the job state to "running"
+ * This data is held in its JobVolatile instance.
+ *
+ * A transaction is used so that an event is raised immediately, rather
+ * than whenever the current transaction completes.
+ */
+local function setStartTime(any JobVolatile, JobVolatile.Started)
+{
+  transaction
+  {
+    JobVolatile.Started  = Started;
+    JobVolatile.JobState = isnull(Started) ? enum(JobState, IDLE)
+                                           : enum(JobState, RUNNING);
+  }
+}
+
+/**
+ * Set the state of the Job, which is held in its JobVolatile instance.
+ * A transaction is used so that an event is raised immediately, rather
+ * than whenever the current transaction completes.
+ */
+local function setJobState(any JobVolatile, JobVolatile.JobState)
+{
+  transaction
+  {
+    JobVolatile.JobState = JobState;
+  }
+}
+
+local function setProcessId(any id, any JobVolatile)
+{
+  transaction
+  {
+    JobVolatile.ProcId = id;
+  }
+}
+
+/**
+ * Traverse the job tree depth-upwards evaluating any timers
+ * active jobs define as we go. Sort each job level by
+ * the start time of its jobs - any that don't define
+ * a start time will be run according to their JobOrder.
+ * <p/>
+ * The earliest timer (recursively defined from the bottom
+ * up) becomes the one that drives that particular job
+ * hierarchy and is left at <node-set-child>.aux.jobTimer
+ * <p/>
+ * This function only evaluates the timer, it does not
+ * start it. 
+ */
+local function evaluateChildTimers(any root)
+{
+  foreach(root)
+  {
+    // Recurse if there are child jobs
+    if ($loop.childJobs)
+    {
+      call evaluateChildTimers(root = $loop.childJobs);
+    }
+
+    if ($loop.Job.TimerExpr && ($loop.Job.Active == enum(Active, Y) ||
+                                call isTopLevel($loop.Job)))
+    {
+      // Create the timer
+      any jobTimer = call createJobTimer($loop.Job);
+
+      // Place the timer in a sibling container to the Job. We
+      // may propagate the timer up the tree.
+      any $loop.aux.jobTimer = jobTimer;
+
+      // Set the NextRuns field to whatever the timer's nextRuns property is.
+      // The jobs at this level can then be sorted by their run time (if
+      // they define one) 
+      $loop.Job.NextRuns = jobTimer.properties.nextRuns;
+
+    }
+    else
+    {
+      // This job does not define a timer or is inactive. If there are
+      // child jobs then inherit any timer of first job. Otherwise clear
+      // its NextRuns field
+      if ($loop.childJobs[@first].aux.jobTimer)
+      {
+        // We don't want the add/remove to raise any events, even though
+        // no one is listening for these.
+        add(remove($loop.childJobs[@first].aux, false),
+            path($loop.aux), false);
+        
+        // Copy the NextRuns up as well
+        $loop.Job.NextRuns = $loop.childJobs[@first].Job.NextRuns;
+      }
+      else
+      {
+        $loop.Job.NextRuns = null;
+      }
+    }
+  }
+
+  // Sort the jobs at this level.  They are sorted by their
+  // timer's nextRuns property and then the JobOrder. Jobs whose
+  // timer is null appear after those that define a start time.
+  // Note this function can be called with a single subtree
+  // aliased into a smap root. In this case no sort is possible.
+  if (count(root) > 1)
+  {
+    sort(root, $loop.Job.NextRuns,
+               $loop.Job.JobOrder,
+         null = NULL_HIGH);
+  
+    // Affirm job order by reassigning the ordinal position. Then, if
+    // later all the child job's timers are removed the job order
+    // stays as it was.
+    foreach(root)
+    {
+      $loop.Job.JobOrder = @count;
+      
+      // When not at the top level, bin any timers apart from the
+      // earliest. We've noted their maturity in NextRuns.
+      if (!@first && !call isTopLevel($loop.Job))
+        remove($loop.aux);
+    }
+  }
+}
+
+local function newJobCreated(any Job)
+{
+  // Lock the job tree in the default transaction
+  call awaitTreeState(requiredState = enum(JobTreeState, USER_END),
+                      newState      = enum(JobTreeState, DISPATCHER));
+
+  try
+  {
+    // A reference parameter to findTreeLevel. The index of the
+    // subtree the Job resides in is returned in this variable.
+    int subtreeIndex = null;
+
+    any treeLevel = call findTreeLevel(root = $this.jobTree,
+                                       Job,
+                                       ParentJob = null,
+                                       subtreeIndex);
+
+    // A node-set child for the new Job:
+    hmap m;
+
+    // Place the new Job instance in it
+    any m.Job = Job;
+    
+    // Include its volatile data
+    aggregate(JobVolatile, m.Job);
+    
+    // Put the new job into the treeLevel node. Note we use
+    // the primary key of the Job as the node set map key in the same way as
+    // the Inq built-in functions like read() and aggregate() do.
+    any k = getprimarykey(Job);
+    any treeLevel.{k} = m;
+
+
+    if (call isTopLevel(Job))
+    {
+      // A top-level job.
+
+      // findTreeLevel will not have set subtreeIndex.
+      subtreeIndex = indexof(treeLevel, k);
+    }
+
+    // If the new job has a timer expression then
+    // re-evaluate the timer for its subtree.
+    if (!isnull(Job.TimerExpr))
+      call restartSubtreeTimer(subtreeIndex);
+  }
+  finally
+  {
+    // Ensure the tree state is returned to idle even if we incur a
+    // system exception.
+    call notifyTreeState(newState = enum(JobTreeState, IDLE));
+  }
+}
+
+/**
+ * Maintain the job tree after mutation events arising from job modification.
+ * This function is a handler for the "complete" event raised when functions
+ * that modify Jobs are executed and their transaction commits.
+ *
+ * @param jobEvents the event bundle - there will be one event
+ * per instance modified.
+ */
+local function jobsModified(any jobEvents)
+{
+  // Await hand-off from the process doing the modification
+  call awaitTreeState(requiredState = enum(JobTreeState, USER_END),
+                      newState      = enum(JobTreeState, DISPATCHER));
+
+  try
+  {
+		// Jobs may have been modified in different subtrees. Make a note
+		// of them as we only re-evaluate at the end
+		set treeLevels;
+
+		foreach(jobEvents)
+		{
+			// A new variable each time through the loop. Important as we will be
+			// placing it in the treeLevels set if not previously seen
+			int subtreeIndex = null;
+
+	    // Get the Job instance out of the event...
+	    any Job = $loop.@eventData;
+
+	    // ...find the sub tree index it resides in
+	    call findTreeLevel(root = $this.jobTree,
+                         Job,
+                         ParentJob = null,
+                         subtreeIndex);
+
+	    // Check if the TimerExpr, JobOrder or Active fields have changed. If so,
+	    // re-evaluate the timer for this tree.
+	    if (contains($loop.@eventId.fields, "TimerExpr") ||
+	        contains($loop.@eventId.fields, "JobOrder")  ||
+	        contains($loop.@eventId.fields, "Active"))
+	    {
+        // Note down the subtree. The "set" type remains distinct and does
+        // not raise an exception if a duplicate is added.
+        treeLevels += subtreeIndex;
+	    }
+		}
+
+		// Re-evaluate all affected subtrees
+		foreach(treeLevels)
+    {
+	    call restartSubtreeTimer(subtreeIndex = $loop);
+	  }
+	}
+  finally
+  {
+    // Ensure the tree state is returned to idle even if we incur a
+    // system exception.
+    call notifyTreeState(newState = enum(JobTreeState, IDLE));
+  }
+}
+
+/**
+ * Process events arising from deleting Job instances. While the client-support
+ * function "deleteJobs" allows multiple instances to be specified, processing
+ * there means that only one event will be received per subtree level because
+ * jobs are deleted in order of their depth within the tree, least first.
+ *
+ * There are two types of event relating to instance deletion. The "delete"
+ * event is raised on the instance and carries the instance as its event data.
+ * The "remove" event is raised on a hmap container when it is removed from
+ * its parent. The instance's container is a node-set child and the instance's
+ * type of "Job" is the primary structure element. When such an instance in a
+ * node-set is deleted, Inq prunes the node-set child as well and it is this
+ * event we have listened for.
+ *
+ * Processing:
+ * 1) Find out what subtree the deleted job was in and cancel its timer.
+ * 2) Re-evaluate the timer for the affected subtree and start it.
+ * In fact, it may not be necessary to cancel and re-evaluate the timer but
+ * when the deleted job was at vector position zero we can only know this if
+ * it (or any of its children) do not define a timer and that
+ * even if they did that one at a higher level did not override it. Just
+ * settle for not re-evaluating.
+ */
+local function jobDeleted(any @eventId, any @eventData)
+{
+  logfine($catalog.jobcontrol.logger, "{0}", @eventId);
+  
+  call awaitTreeState(requiredState = enum(JobTreeState, USER_END),
+                      newState      = enum(JobTreeState, DISPATCHER));
+  try
+  {
+    // If a top-level job was deleted the only thing we have to do is cancel
+    // any timer.
+    if (call isTopLevel(@eventData.Job))
+    {
+      logfine($catalog.jobcontrol.logger, "Checking timer: {0}", @eventData.aux.jobTimer);
+      if (@eventData.aux.jobTimer)
+      {
+        logfine($catalog.jobcontrol.logger, "Canceling timer: {0}", @eventData.aux.jobTimer);
+        canceltimer(@eventData.aux.jobTimer);
+      }
+    }
+    else
+    {
+      // For child jobs we only need to re-evaluate the timer driving the
+      // subtree the job is in if (at whatever level) the deleted job
+      // was at vector position zero. Otherwise there is nothing to do.
+      if (@eventId.vector == 0)
+      {
+        // We don't know what subtree it is in. We cannot use
+        // call findTreeLevel() because the job has been removed from
+        // the structure. Instead, use the path to the parent available
+        // in the event and convert it to indices.
+        any indices = indicesof($this.jobTree, @eventId.parent);
+
+        // re-evaluate and start the timer for this subtree
+        call restartSubtreeTimer(subtreeIndex = indices[0]);
+      }
+    }
+	}
+  finally
+  {
+    // Ensure the tree state is returned to idle even if we incur a
+    // system exception.
+    call notifyTreeState(newState = enum(JobTreeState, IDLE));
+  }
+}
+
+/**
+ * Search the job tree for the level at which the given job is or
+ * would be residing, returning the node set container.
+ *
+ * @param root the starting point of the search
+ * @param Job the Job we are looking for (or where it
+ * would reside if not yet in the tree)
+ * @param ParentJob the parent job id at the point
+ * we are currently searching.
+ * @param subtreeIndex a reference parameter whose
+ * value is set to the index at the top level below
+ * which the given Job is (or will) reside.
+ * @return the node-set root where the given Job
+ * is (or will) reside.
+ */
+local function findTreeLevel(any root,
+                             any Job,
+                             Job.ParentJob,
+                             any subtreeIndex)
+{
+  // Check if the given parent job is that of the current level. If so
+  // the correct level has been found. Note that if the job is at the
+  // top level then this test is still true because null == null
+  if (Job.ParentJob == ParentJob)
+  {
+    any ret = root;
+    
+    // Set the subtreeIndex when passed a top-level job. If the
+    
+    if (call isTopLevel(Job))
+      subtreeIndex = indexof(root, getprimarykey(Job));
+      
+  }
+  else
+  {
+    // Job does not reside at this level. Check each job to see if the
+    // given job would be a child of it.
+    foreach(root)
+    {
+      // Make sure there is a place to put the job if this would be the
+      // first child at this level
+      if(!$loop.childJobs)
+      {
+        // Make the node on the stack first
+        hmap childJobs;
+
+        // Explicitly set the node-set flag. This ensures we get vector number
+        // in the event when new children are added.
+        setnodeset(childJobs, getnodeset(root));
+
+        // Put the node in the node space, generating an event. This ensures
+        // the client's job tree has a proper node-set root when this function
+        // is called by a User Process. See clientNewJobCreated()
+        add(childJobs, path($loop.childJobs));
+      }
+
+      // It is OK to assume there is a Job instance at the current level because
+      // we can only create new Jobs against an existing parent and the tree lock
+      // ensures that the job tree is stable during manipulation by any
+      // given process.
+      any ret = call findTreeLevel(root = $loop.childJobs,
+		                               Job,
+		                               ParentJob = $loop.Job.Job,
+		                               subtreeIndex);
+
+      // If we found the tree level then stop recursing and return it.
+      // On the way back out, note down the vector number of the top-level
+      // job so if the box timer requires re-evaluating we know which
+      // subtree it is.
+      if (ret)
+      {
+        // The correct vector number is given by the loop counter at
+        // the top level. If the new job *is* a top-level job then we
+        // don't execute.
+        if (isnull(ParentJob))
+          subtreeIndex = @count;
+        break();
+      }
+    }
+  }
+
+  // Exhausted all possibilities and could not find the appropriate tree
+  // level as we return back through the root. Should not happen.
+  if (isnull(ParentJob) && !ret)
+    throw ("Could not determine tree level", Job); // Should not happen
+
+  ret;
+}
+
+/**
+ * Cancels any existing timer for the given subtree, re-evaluates it
+ * and starts it again.
+ *
+ * @param subtreeIndex the index position of the subtree we are
+ * processing.
+ */
+local function restartSubtreeTimer(any subtreeIndex)
+{
+
+	// Alias the node set child for convenience. Note we
+	// call it "subtree.job" so the structure form is
+	// like a node set.
+	any subtree.job = $this.jobTree[subtreeIndex];
+
+	// Cancel any existing timer
+  logfine($catalog.jobcontrol.logger, "Checking timer: {0}", subtree.job.aux.jobTimer);
+	if (!isnull(subtree.job.aux.jobTimer))
+	{
+    logfine($catalog.jobcontrol.logger, "Canceling timer: {0}", subtree.job.aux.jobTimer);
+	  canceltimer(subtree.job.aux.jobTimer);
+	}
+
+	// Re-evaluate the timer from the child job tree.
+	any url = "string://$this.Job.TimerExpr";
+	call evaluateChildTimers(root = subtree, url);
+
+	// Start the new timer if the top-level job is active
+	if (subtree.job.Job.Active == enum(Active, Y) && !isnull(subtree.job.aux.jobTimer))
+	  call startTimer(subtree.job.Job, subtree.job.aux.jobTimer, userInfo = subtree.job);
+}
+
+local function startTimer(any Job, any jobTimer, any userInfo)
+{
+  // Run all timers at FIXED_DELAY and with no repeat period.
+  // This means that the timer will run at its nextRuns time
+  // once only. The job dispatcher process calls the timer
+  // expression to set up each new run.
+  jobTimer.properties.fixedOrDelay = FIXED_DELAY;
+  jobTimer.properties.period       = null;
+  
+  jobTimer.properties.userInfo     = userInfo; 
+  
+  // All timers call the job dispatcher function when they go off
+  jobTimer.properties.func = func f = call jobDispatcher(fromTimer);
+    
+  loginfo($catalog.jobcontrol.logger, "Starting timer for job {0} : runs at {1}",
+                                      Job.ShortName, jobTimer.properties.nextRuns);
+  starttimer(jobTimer);
+}
+
+/**
+ * Obtain a lock on the mutex when (if not already) the jobtree state variable
+ * attains <code>requiredState</code>. Then set it to <code>newState</code>.
+ * @param requiredState the desired state
+ * @param newState the new state
+ * @param timeout the length of time in milliseconds the process is
+ * willing to wait for the state to prevail
+ */
+local function awaitTreeState(JobTreeState requiredState,
+                              JobTreeState newState,
+                              long         timeout = -1)
+{
+  if (call isRunning())
+  {
+    if (lock("__jobtree",   // the mutex we are syncing on
+             timeout,       // default timeout is indefinite
+             func f = $catalog.jobcontrol.jobTreeState == requiredState))
+    {
+      // The lock() returns true if the lock is acquired and the expression
+      // evaluates to true within the specified timeout. If the process is
+      // willing to wait indefinitely then lock() will never return false.
+      // It may be aborted with a system exception if deadlock is detected
+      // and this process is chosen as the deadlock victim.
+  
+      $catalog.jobcontrol.jobTreeState = newState;
+  
+      // Once the new state is set unlock the mutex
+      unlock("__jobtree");
+    }
+    else
+      throw("Timeout while waiting for job tree state",
+            enumext(JobTreeState, $stack.newState));
+  }
+}
+
+/**
+ * Obtain a lock on the mutex and then check the jobtree state variable
+ * is <code>requiredState</code>.
+ * @return Undefined. Returns if the state is requiredState, otherwise
+ * throws. 
+ */
+function isTreeState(JobTreeState requiredState,
+                     long         timeout = -1)
+{
+  if (call isRunning())
+  {
+    if (lock("__jobtree",    // the mutex we are syncing on
+             timeout))       // default timeoout is indefinite
+    {
+      any ret = $catalog.jobcontrol.jobTreeState == requiredState;
+      unlock("__jobtree");
+      if (!ret)
+      {
+        throw("Illegal tree state " +
+              enumext(JobTreeState, $catalog.jobcontrol.jobTreeState) +
+              " wanted " +
+              enumext(JobTreeState, $stack.requiredState));
+      }
+    }
+    else
+      throw("Timeout while waiting for job tree lock");
+  }
+}
+
+/**
+ * Find the depth within the job tree of the specified job.
+ *
+ * @return 0 if the job is at the top level, 1, 2 and so forth
+ * for successive levels.
+ */
+local function findDepth(any Job)
+{
+  int depth;
+  while (any Job = call getParentJob(Job))
+    ++depth;
+
+  depth;
+}
+
+/**
+ * Fetch the given job's parent.
+ *
+ * @return the parent job or null if the given job is at the top level.
+ */
+local function getParentJob(any Job)
+{
+  // Read the parent job
+  any k = new(Job.pkey);
+  k.Job = Job.ParentJob;
+  read(Job, k);
+}
+
+/**
+ * Delete the specified job and all its descendants. Deletion occurs from the
+ * specified job downwards, and events are raised in the order instances
+ * are deleted. This means any structures that are automatically pruned by Inq
+ * as deletion events are propagated from the node will only result in a single
+ * event emanating from the root.
+ */
+local function deleteJobTree(any Job)
+{
+  transaction
+  {
+	  // Lock the job tree in the child transaction
+	  call awaitTreeState(requiredState = enum(JobTreeState, IDLE),
+	                      newState      = enum(JobTreeState, USER_START));
+
+    // Delete the given root Job
+    delete(Job);
+
+    // Delete its children
+    call deleteChildJobs(Job);
+  }
+  catch
+  {
+    // If something went wrong then the job dispatcher will not be
+    // woken by the remove event emerging from the job tree.
+    // Return the tree state to idle....
+    call notifyTreeState(newState = enum(JobTreeState, IDLE));
+    throw();
+  }
+
+  // ...On the other hand if deletion was successful tell the job
+  // dispatcher we have finished and allow it to re-evaluate the
+  // job tree.
+  call notifyTreeState(newState = enum(JobTreeState, USER_END));
+}
+
+local function deleteChildJobs(any Job)
+{
+  any childJobs = call getChildJobs(Job);
+  foreach(childJobs)
+  {
+    delete($loop.Job);
+    call deleteChildJobs($loop.Job);
+  }
+}
+
+/**
+ * Obtain a lock on the mutex and set the jobtree state variable
+ * to a new state value.
+ * @param newState the new state
+ * @param timeout the length of time in milliseconds the process is
+ * willing to wait for the state to prevail
+ */
+local function notifyTreeState(JobTreeState newState, long timeout = -1)
+{
+  if (call isRunning())
+  {
+    if (lock("__jobtree",   // the mutex we are syncing on
+             timeout))      // default timeout is indefinite
+    {
+      // Notify any process waiting on the jobtree mutex. The expression
+      // is executed before the notification.
+      notify("__jobtree", func f = $catalog.jobcontrol.jobTreeState = newState);
+  
+      // Having performed a notify() any waiting process performing a wait()
+      // or a lock() with a condition as above is awakened. For conditional
+      // locks the condition is rechecked then.
+      unlock("__jobtree");
+    }
+    else
+      throw("Timeout while waiting to lock job tree",
+            enumext(JobTreeState, $stack.newState));
+  }
+}
+
+/**
+ * Traverse the job tree from the (node-set child) jobInfo argument
+ * downwards checking that all Job instances are idle.
+ * Note that an idle parent job can only have non-idle children
+ * when that child was run manually. When invoked from the subtree timer,
+ * the path of Jobs from the top-level to the currently executing will
+ * be active.
+ */
+local function childNotIdle(any jobInfo)
+{
+  foreach (jobInfo.childJobs)
+  {
+    // Check from the top down and stop as soon as a non-idle job is
+    // found.
+    if ($loop.JobVolatile.JobState != enum(JobState, IDLE))
+      break(true);
+
+    if (call childNotIdle(jobInfo = $loop))
+      break(true);
+
+    // foreach returns true if it completes normally
+    if (@last)
+      break(false);
+  }
+}
+
+/**
+ * Check if the given job or any of its ancestors are not idle.
+ */
+local function parentNotIdle(any Job)
+{
+  if (Job)
+  {
+    read (JobVolatile, Job);
+    if (JobVolatile.JobState != enum(JobState, IDLE))
+      true;
+    else
+    {
+      call parentNotIdle(Job = call getParentJob(Job));
+    }
+  }
+  else
+    false;
+}
+
+local function getTopLevelJob(any Job)
+{
+  while (any parent = call getParentJob(Job))
+    any Job = parent;
+
+  // Returns
+  Job;
+}
+
+local function createJob(any Job, any parent)
+{
+  if (parent && call isTask(Job=parent))
+    throw("parent must be a box", parent);
+    
+  if (parent)
+    Job.ParentJob = parent.Job;
+
+  transaction
+  {
+	  // Acquire the appropriate job tree state - user activity starting
+	  call awaitTreeState(requiredState = enum(JobTreeState, IDLE),
+	                      newState      = enum(JobTreeState, USER_START));
+
+    // Submit the instance to the transaction for creation
+    create(Job);
+  }
+  catch
+  {
+    // If something went wrong then the job dispatcher will not be
+    // woken by a create event.  Return the tree state to idle....
+    call notifyTreeState(newState = enum(JobTreeState, IDLE));
+    throw();
+  }
+
+  // ...On the other hand if creation is successful tell the job
+  // dispatcher we have finished and allow it to re-evaluate the
+  // job tree.
+  call notifyTreeState(newState = enum(JobTreeState, USER_END));
+  
+  // Return the (managed instance) created Job
+  read(Job, Job);
+}
+
+/**
+ * Delete the given set of jobs. If a job is a box then its children are
+ * deleted also.
+ */
+local function deleteJobs(any jobs)
+{
+
+  // Deleting a job causes any child jobs to be deleted also. In
+  // case any of the set are descendants of one another take some trouble
+  // to sort them by their depth.
+
+  omap m;  // map must be orderable for sort, below.
+  foreach(jobs)
+  {
+    any k = getprimarykey($loop.Job);
+    any m.{k}.Job = $loop.Job;
+    int m.{k}.aux.depth = call findDepth($loop.Job);
+  }
+
+  sort(m, $loop.aux.depth);
+
+  foreach(m)
+  {
+    // If the current job is a descendant of one deleted earlier it will
+    // already have been deleted within the transaction. This means read()
+    // will not return it.
+    if (read(Job, $loop.Job))
+      call deleteJobTree(Job);
+  }
+
+  // TODO: success callback?
+}
+
+/**
+ * Determine if the jobDispatcher process is running and whether we are it.
+ * Used to execute the service if we are the jobDispatcher or forward it
+ * thus if we are not.
+ * @return true if we are the jobDispatcher, false otherwise
+ * @throws if the jobDispatcher is not running.
+ */
+local function checkDispatcher()
+{
+  // Look for the jobDispatcher at the well-known path
+  lock("__jobtree");
+  
+  any p = $catalog.jobcontrol.process;
+
+  if (!p)
+    throw ("Job Control is not running");
+
+  unlock("__jobtree");
+  
+  $process == p;
+}
+
+local function clientNewJobCreated(any Job)
+{
+  // When a new job is created plug it into the client's job tree.
+
+  int subtreeIndex = -1;
+
+  // Find the appropriate tree level for the job
+  any treeLevel = call findTreeLevel(root = $this.{$this.listeners.treePath},
+                                     Job,
+                                     ParentJob = null,
+                                     subtreeIndex);
+
+  // We use the primary key of the new instance when adding the node-set child
+  any k = getprimarykey(Job);
+
+  // Make a node-set child. We could just add the new instance to the tree
+  // level with the statement add(Job, path(treeLevel.{k}.Job)); however
+  // that would raise the event on the instance and not the node set child.
+  //
+  hmap .child;
+  any .child.Job = Job;
+
+  // Include its volatile data
+  aggregate(JobVolatile, .child.Job);
+
+  add(.child, path(treeLevel.{k}));
+
+}
+
+/**
+ * Opens a log file for the given job.
+ * Returns an open print stream.
+ */
+local function openLogFile(any Job)
+{
+  any filename = call generateLogfileName(Job);
+
+  file logFile = $catalog.jobcontrol.properties.logroot + filename;
+
+  ioPrint p;
+
+  open(p, logFile, OPEN_WRITE);
+
+  p;
+}
+
+local function closeLogFile()
+{
+  if ($process.system.out)
+  {
+    try
+    {
+      // Remove and close the output stream
+      any strm = remove($process.system.out);
+      close(strm);
+  
+      // If nothing was written to the output then delete the log file.
+      // The URL that was opened is available in the Inq stream. Convert
+      // it to a file.
+      file logFile = strm.properties.URL;
+      if (logFile.properties.length == 0)
+        deletefile(logFile);
+    }
+    catch
+    {
+      logsevere($catalog.jobcontrol.logger, "Exception {0}\n{1}",
+                                            @exception,
+                                            @stackTrace);
+    }
+  }
+
+}
+
+/**
+ * Create a name for the Job's log file.
+ *
+ * If a top-level job defines logging then a file name is generated
+ * of the form:
+ *    SomeJob_20081218_050000.log
+ */
+local function generateLogfileName(any Job)
+{
+  // File name is composed from the job's short name (spaces are
+  // removed) and the start time to the granularity of 1 second.
+
+  any filename = call rootLogfileName(Job);
+
+  // Pattern is Java MessageFormat
+  renderf("{0}_{1,date,yyyyMMdd_HHmmss}.log", filename, getdate());
+}
+
+local function rootLogfileName(any Job)
+{
+  // Create root string by stripping space characters from Job.ShortName
+  // After all, who really wants spaces in file names?
+  any filename = gsub("", " ", Job.ShortName);
+}
+
+/**
+ * Ensure there are only Job.MaxLogFiles present by deleting any
+ * that are older.
+ */
+local function pruneLogfiles(any Job)
+{
+  try
+  {
+    filefilter logFilter  = call rootLogfileName(Job) +
+                            "_" + "[0-9]{8}" +
+                            "_" + "[0-9]{6}" +
+                            "\\.log";
+  
+    file logdir = $catalog.jobcontrol.properties.logroot;
+    logdir.properties.fileFilter = logFilter;
+  
+    // List the files matched by the filter lodged in logdir
+    any fileList = logdir.properties.listFiles;
+  
+    // Sort the list by the lastModified file property
+    sort(fileList, $loop.properties.lastModified);
+    logfine($catalog.jobcontrol.logger, "Found {0} files for Job: {1}", count(fileList), Job.ShortName);
+    logfine($catalog.jobcontrol.logger, "Properties are {0}", $catalog.jobcontrol.properties);
+  
+    int maxlogfiles = $catalog.jobcontrol.properties.maxlogfiles;
+    logfine($catalog.jobcontrol.logger, "Keeping {0} files for Job: {1}", $catalog.jobcontrol.properties.maxlogfiles, Job.ShortName);
+    
+    // Check if there is a specific property for this job
+    // (Note Inq substitutes "_" for "." in property names
+    // when reading them in from property files)
+    any s = Job.ShortName + "_" + "maxlogfiles";
+    if ($catalog.jobcontrol.properties.{s})
+      maxlogfiles = $catalog.jobcontrol.properties.{s};
+    
+    logfine($catalog.jobcontrol.logger, "Keeping {0} files for Job: {1}", maxlogfiles, Job.ShortName);
+    
+    if ((int delCount = (count(fileList) - maxlogfiles - 1)) >= 0)
+    {
+      do
+      {
+        logfine($catalog.jobcontrol.logger, "Deleting {0}", fileList[delCount]);
+        deletefile(fileList[delCount]);
+      } while(--delCount >= 0);
+    }
+  }
+  catch
+  {
+    logsevere($catalog.jobcontrol.logger, "Exception {0}\n{1}",
+                                          @exception,
+                                          @stackTrace);
+  }
+}
+
+/**
+ * Returns a file representing the log directory, creating it if necessary
+ */
+local function getLogDir(any jobcontrol)
+{
+  file logdir = jobcontrol.properties.logroot;
+  if (!logdir.properties.exists)
+    loginfo(jobcontrol.logger, "Creating log directory {0} : {1}", logdir, mkdirs(logdir));
+  
+  // Returns
+  logdir;
+}
+
+local function readProperties(any logger)
+{
+  // Read jobcontrol.properties which we expect to find at inq_home/etc
+  
+  // inq_home is a system property, available at $properties
+  string s = $properties.inq_home + 
+               $properties.file_separator +
+               "etc" +
+               $properties.file_separator +
+               "jobcontrol.properties";
+
+  ioProps p;
+
+  if (open(p, s, OPEN_READ))
+  {
+    any props = readstream(p);
+    close(p);
+  }
+  
+  // Establish default values for our properties
+  if (!props.logroot)
+    any props.logroot = $properties.inq_home +
+                                 $properties.file_separator +
+                                 "tmp";
+
+  // Canonicalise logroot in case its path is ugly
+  file f = props.logroot;
+  any props.logroot = f.properties.canonicalPath;
+  
+  if (!props.maxlogfiles)
+    any props.maxlogfiles = 5;
+  
+  // Make sure the log root ends with the path separator
+  if (!endswith(props.logroot, $properties.file_separator))
+    any props.logroot  = props.logroot + $properties.file_separator;
+
+  logconfig(logger, "Properties are {0}", props);
+
+  props;
+}
+
+service createJob(any Job, any parent)
+{
+  call createJob(Job, parent);
+}
+
+// ***********************************************************************
+// Client Support Services
+// ***********************************************************************
+
+
+service fetchJobTree(string treeName = "vars.jobTree")
+{
+  hmap nodeSet;
+
+  // Build the job tree for placement in the user process node space.
+  // The event so raised returns the tree to the client and places
+  // it in the node space there also.
+  hmap  m;  // Seed map
+  any jobTree = call buildJobTree(root = m);
+
+  // plug it in under the path specified and remember the path for the create
+  // listener function
+  add(jobTree, path($this.{treeName}));
+  any $this.listeners.treePath = treeName;
+
+  // We have used functions also employed by the job dispatcher, however
+  // we have not ordered the tree in this case. Ordering is not preserved
+  // across the interface to the client and the client defines its own sorting
+  // anyway.
+}
+
+service initClient()
+{
+  // Perform initialisation required by the client.
+  any $this.listeners.newJobListener = listen (unlisten($catalog, $this.listeners.newJobListener),
+                                               func f = call clientNewJobCreated(Job = @eventData),
+                                               event = (create),
+                                               typedef = Job);
+
+  // Gather the images for the client
+  any images.script      = image("gui/images/script.gif");
+  any images.stopOnError = image("gui/images/stop_on_error.gif");
+  any images.contOnError = image("gui/images/continue_on_error.gif");
+  any images.boxConsec   = image("gui/images/box_closed_consec.gif");
+  any images.boxTimed    = image("gui/images/box_closed_timed.gif");
+  any images.magPlain    = image("gui/images/mag_glass.gif");
+  any images.magBold     = image("gui/images/mag_glass_bold.gif");
+  any images.active      = image("gui/images/active.gif");
+  any images.inactive    = image("gui/images/inactive.gif");
+  any images.restart     = image("gui/images/restart_job.png");
+  any images.runnow      = image("gui/images/run_now.png");
+  any images.killJob     = image("gui/images/kill.png");
+
+  any treeImages.task                    = image("gui/images/task.gif");
+  any treeImages.task_error              = image("gui/images/task_error.gif");
+  any treeImages.box_closed_consec_error = image("gui/images/box_closed_consec_error.gif");
+  any treeImages.box_open_consec         = image("gui/images/box_open_consec.gif");
+  any treeImages.box_open_consec_error   = image("gui/images/box_open_consec_error.gif");
+  any treeImages.box_closed_timed_error  = image("gui/images/box_closed_timed_error.gif");
+  any treeImages.box_open_timed          = image("gui/images/box_open_timed.gif");
+  any treeImages.box_open_timed_error    = image("gui/images/box_open_timed_error.gif");
+
+  send initResponse(images, treeImages);
+}
+
+service deleteJobs(any jobs)
+{
+  call deleteJobs(jobs);
+}
+
+service modifyJob(any Job)
+{
+  call modifyJob(Job);
+}
+
+service modifyJobs(any jobs)
+{
+  call modifyJobs(jobs);
+}
+
+local function modifyJobs(any jobs) raises (update)
+{
+  logfine($catalog.jobcontrol.logger, "Updating with {0}", jobs);
+  transaction
+  {
+    // The client could choose to send us jobs that are not, in fact,
+    // modified at all. In this case there will be no update events
+    // and no event raised on the execution of this function. This means
+    // there will be no hand-off to the job dispatcher
+    boolean modified;
+
+	  // Lock the job tree in the child transaction
+	  call awaitTreeState(requiredState = enum(JobTreeState, IDLE),
+	                      newState      = enum(JobTreeState, USER_START));
+    foreach(jobs)
+    {
+      if (read(Job, $loop.Job))
+      {
+        Job = $loop.Job;
+        modified ||= ismodifying(Job);
+      }
+    }
+  }
+  catch
+  {
+    // If something went wrong then the job dispatcher will not be
+    // woken by the raises(update) event.  Return the tree state to idle
+    // before rethrowing....
+    call notifyTreeState(newState = enum(JobTreeState, IDLE));
+    throw();
+  }
+
+  // Modification was successful. If anything was actually changed tell
+  // the job dispatcher we have finished and allow it to re-evaluate the
+  // job tree.
+  if (modified)
+    call notifyTreeState(newState = enum(JobTreeState, USER_END));
+  else
+    call notifyTreeState(newState = enum(JobTreeState, IDLE));
+}
+
+/**
+ * Update a Job instance. This function updates a Job
+ * instance from the supplied argument. It is illegal
+ * for a server process other than jobdispatcher to update
+ * instances directly and this is enforced by Job.<join>.
+ * Instead this function must be used so that an event is
+ * raised to hand off to jobdispatcher, where any necessary
+ * rescheduling is performed.
+ * <p/>
+ * If called from a connected client the instance will not
+ * be the server managed one. This is retrieved and assigned
+ * in its entirety.
+ * <p/>
+ * If called passing a specific field just that field
+ * is updated.
+ * 
+ */
+local function modifyJob(any Job, any field, any value) raises (update)
+{
+  logfine($catalog.jobcontrol.logger, "Updating with {0}, field {1}, value {2}", Job, field, value);
+  transaction
+  {
+
+    // Lock the job tree in the child transaction
+    call awaitTreeState(requiredState = enum(JobTreeState, IDLE),
+                        newState      = enum(JobTreeState, USER_START));
+                        
+    if (field)
+    {
+      if (field == "FunctionExpr" ||
+          field == "TimerExpr")
+        setblob(Job.{field}, value);
+      else
+        Job.{field} = value;
+    }
+    else
+    {
+  
+      // Alias the argument as we are about to replace it with the
+      // managed instance. 
+      any job = Job;
+  
+      if (read(Job, job))
+        Job = job;
+    }
+
+    // Check if the Job was modified at all. If not there will be
+    // no update events and no event raised on the execution of
+    // this service. This means there will be no hand-off to the
+    // job dispatcher.
+    any modified = ismodifying(Job);
+  }
+  catch
+  {
+    // If something went wrong then the job dispatcher will not be
+    // woken by the raises(update) event.  Return the tree state to idle....
+    call notifyTreeState(newState = enum(JobTreeState, IDLE));
+    throw();
+  }
+
+  // Modification was successful. If anything was actually changed tell
+  // the job dispatcher we have finished and allow it to re-evaluate the
+  // job tree.
+  if (modified == true)
+    call notifyTreeState(newState = enum(JobTreeState, USER_END));
+  else
+    call notifyTreeState(newState = enum(JobTreeState, IDLE));
+}
+
+/**
+ * Restart a top-level job.
+ */
+service restartJob(any Job)
+{
+  call restartJob(Job);
+}
+
+/**
+ * Run the given job immediately. The job can be any member in the jobTree, not
+ * just a top-level one.
+ * @throws if Job Control is not running
+ */
+service runJobNow(any Job)
+{
+  call runJobNow(Job);
+}
+
+/**
+ * Shutdown job control. The calling and jobdispatcher processes
+ * handshake with each other as shutdown takes place and this
+ * function does not return until the jobdispatcher process
+ * has terminated.
+ *
+ * @param ack if supplied then the client's notifyItem service is
+ * invoked. It is only appropriate to supply this argument when
+ * invoking this service from the GUI client.
+ */
+service shutdownJobControl(boolean closeGui, any ack)
+{
+  call stopJobControl(closeGui, ack);
+}
+
+service setLogLevel(any logLevel)
+{
+  call setLogLevel(logLevel);
+}
+
+
+// ***********************************************************************
+// Global Entry Points. Routines that form the api to JobControl.
+//   TODO: This highlights the need for a package level access: We can
+//         have global functions in here and they can use local ones,
+//         seeing as they are in the same file. However we could not
+//         put these global functions into a separate parse module (just
+//         for easy browsing and reparsing) because those local
+//         functions would then not be accessible. Package access would
+//         solve that. Not difficult to implement but TODO at this time.
+// ***********************************************************************
+
+/**
+ * Set Job Control's logging level
+ * @param logLevel the new logging level. Must be
+ * one of the predefined constants
+ * LOG_CONFIG, LOG_FINE, LOG_FINER, LOG_FINEST
+ * LOG_INFO, LOG_SEVERE or LOG_WARNING
+ */
+function setLogLevel(any logLevel)
+{
+  if ($catalog.jobcontrol.logger)
+    $catalog.jobcontrol.logger.properties.logLevel = logLevel;
+  else
+    throw("Job Control is not running");
+}
+
+/**
+ * Find a job by its ShortName
+ * @param ShortName the job's ShortName
+ * @return the Job or null if 
+ */
+function getJob(any ShortName)
+{
+  any k = new(Job.ByShortName);
+  k.ShortName = ShortName;
+  read(Job, k);
+}
+
+/**
+ * Create a job tree whose root is the given Job.
+ * The structure built as
+ * root.Job; root.childJobs.[].Job and so on.
+ * @param Job the desired root of the job tree. Does not have
+ * to be a top-level job.
+ * @param root optional seed in which the structure is built. If
+ * not supplied an omap is assumed.
+ * @return root (if supplied) or the created root otherwise
+ */
+function getJobsBelow(any Job, any root)
+{
+  // If no seed map was supplied assume an omap
+  if (!root)
+    omap root.tree;
+  
+  any root.tree.Job = Job;
+  call addNextLevel(root);
+  
+  // Returns
+  root;
+}
+
+/**
+ * Create a new job.
+ * @param Job the candidate instance
+ * @param parent If supplied, the job's parent box; if not supplied the new
+ * job will reside at the top level
+ */
+function createJob(any Job, any parent)
+{
+  call createJob(Job, parent);
+}
+
+/**
+ * Delete a single Job. If the job is a box any children
+ * it has are deleted also
+ */
+function deleteJob(any Job)
+{
+  // Local support function expects a list of jobs
+  any jobs.Job = Job;
+  
+  // Call the local support function
+  call deleteJobs(jobs);
+}
+
+/**
+ * Delete a list of Jobs. If any job is a box any children
+ * it has are deleted also
+ */
+function deleteJobs(any jobs)
+{
+  // Call the local support function
+  call deleteJobs(jobs);
+}
+
+/**
+ * If the specified job is running then kill it. If the job is not
+ * running calling this function has no effect.
+ * <p/>
+ * A single Inq process is responsible for running a job tree. The
+ * tree root could be a top-level job (manual or timer) or any
+ * child job (manual). This function looks upwards in the job tree
+ * for the Job whose JobVolatile has a process id.
+ */
+function killJob(any Job)
+{
+  do
+  {
+    read (JobVolatile, Job);
+    if (!isnull(JobVolatile.ProcId))
+    {
+      logfine($catalog.jobcontrol.logger,
+              "Killing process {0} for {1}", JobVolatile.ProcId,
+                                             Job.ShortName);
+      
+      kill(getprocess(JobVolatile.ProcId));
+    }
+  }
+  while(isnull(JobVolatile.ProcId) &&  (any Job = call getParentJob(Job)));
+}
+
+/**
+ * Set the FunctionExpr of the specified job.
+ * The Job must already be a Task.
+ */
+function setJobExpression(any Job, any FunctionExpr)
+{
+  // Parse the expression - if it does not parse
+  // this will throw
+  compile("string://FunctionExpr");
+  
+  call modifyJob(Job, field = "FunctionExpr", value = FunctionExpr);  
+}
+
+/**
+ * Set the TimerExpr of the specified job.
+ */
+function setJobTimer(any Job, any TimerExpr)
+{
+  // Parse the expression - if it does not parse
+  // this will throw
+  compile("string://TimerExpr");
+  
+  call modifyJob(Job, field = "TimerExpr", value = TimerExpr);  
+}
+
+/**
+ * Set the ShortName of the specified job.
+ */
+function setJobShortName(any Job, any ShortName)
+{
+  call modifyJob(Job, field = "ShortName", value = ShortName);  
+}
+
+/**
+ * Set the JobOrder of the specified job.
+ */
+function setJobOrder(any Job, any JobOrder)
+{
+  call modifyJob(Job, field = "JobOrder", value = JobOrder);  
+}
+
+/**
+ * Restart a top-level job. If a top-level job has ContinueOnError
+ * set to ABORT then it will not be restarted automatically should
+ * it (or a child job if it is a box) return error status.
+ * This function reevaluates the timer for the given subtree
+ * and schedules it for execution.
+ */
+function restartJob(any Job)
+{
+  if (call checkDispatcher())
+  {
+    transaction
+    {
+      if (read(Job, Job))
+      {
+        int subtreeIndex = indexof($this.jobTree, getprimarykey(Job));
+        any m = $this.jobTree[subtreeIndex];
+
+        // Stop any timer that could fire and execute this job. The timer
+        // is held with the top-level job.
+        logfine($catalog.jobcontrol.logger, "Checking timer: {0}", m.aux.jobTimer);
+        if (!isnull(m.aux.jobTimer))
+        {
+          logfine($catalog.jobcontrol.logger, "Canceling timer: {0}", m.aux.jobTimer);
+          canceltimer(m.aux.jobTimer);
+          m.Job.NextRuns = null;
+        }
+        
+        // If this (top-level) job or any child are currently running (either
+        // because the subtree timer has already fired or a job has been run
+        // manually) then we can't restart the timer.
+        if (call parentNotIdle(Job) ||
+            call childNotIdle(jobInfo = m))
+          throw("Tree Not Idle");
+
+        call jobComplete(Job, exitStatus = 0, immediate=false);
+      }
+    }
+  }
+  else
+  {
+    // Check if it's a top-level job. It only makes sense to restart these.
+    // Child jobs that abort on error are suspended by their last exit status,
+    // though any timer they have will still contribute to timer evaluation.
+    if (!isnull(Job.ParentJob))
+      throw ("Not a top-level job");
+
+    // Run the service in the jobDispatcher process and with its
+    // context as $root
+    send restartJob(@channel = $catalog.jobcontrol.process.ichannel,
+                    @context = "$root",
+                    Job);
+  }
+}
+
+/**
+ * Run the given job immediately. The job can be any member in the jobTree, not
+ * just a top-level one.
+ * @throws if Job Control is not running
+ */
+function runJobNow(any Job)
+{
+  if (call checkDispatcher())
+  {
+    transaction
+    {
+      if (read(Job, Job))
+      {
+        // Determine the subtree so we can stop any existing timer
+
+        int subtreeIndex = null;
+        if (call isTopLevel(Job))
+        {
+          subtreeIndex = indexof($this.jobTree, getprimarykey(Job));
+          any m = $this.jobTree[subtreeIndex];
+        }
+        else
+        {
+          any m = call findTreeLevel(root = $this.jobTree,
+                             Job,
+                             ParentJob = null,
+                             subtreeIndex);
+
+          // Locate the appropriate node-set child
+          any k = getprimarykey(Job);
+          any m = m.{k};
+        }
+
+        // If any parent or child are currently running (either because
+        // the subtree timer has already fired or a job has been run
+        // manually) then we can't start the given job.
+        if (call parentNotIdle(Job) ||
+            call childNotIdle(jobInfo = m))
+          throw("Tree Not Idle");
+
+        // Note - the map "m" is a member of the job tree structure built
+        // in this (the jobdispatcher) process. Containers of any sort are
+        // not thread-safe and we don't share them between processes.
+        // Create a simple map to hold the Job and JobVolatile we send
+        // to the new process running the job.
+        any jobInfo.Job = m.Job;
+        any jobInfo.JobVolatile = m.JobVolatile;
+
+
+        // Stop any timer that could fire and execute this job. The timer
+        // is held with the top-level job. Make a new alias in case we
+        // are trying to run a child job.
+        any m = $this.jobTree[subtreeIndex];
+        logfine($catalog.jobcontrol.logger, "Checking timer: {0}", m.aux.jobTimer);
+        if (!isnull(m.aux.jobTimer))
+        {
+          logfine($catalog.jobcontrol.logger, "Canceling timer: {0}", m.aux.jobTimer);
+          canceltimer(m.aux.jobTimer);
+          m.Job.NextRuns = null;
+        }
+        
+        // Start a process to run the job. We are not driven by a
+        // timer so it does not make sense to run any timed box
+        // children according to any timers they may have. Pass
+        // immediate=true to accomplish this.
+        any process = spawn(Job.ShortName, type  = PROCESS_CHILD,
+                                           start = call onJobStart(jobInfo,
+                                                                   immediate=true),
+                                           end   = call onJobExit());
+      }
+    }
+    catch
+    {
+      // If process was not started perform job completion here
+      call jobComplete(jobInfo.Job, exitStatus = 1, immediate=true);
+
+      // rethrow for logging purposes
+      throw();
+    }
+  }
+  else
+  {
+    loginfo($catalog.jobcontrol.logger, "Manual execution of Job {0} by {1}",
+                                        Job.ShortName, $process.loginName);
+
+    // Send through to the jobdispatcher process but if
+    // an exception occurs there handle it here (thus returning
+    // it to the client).
+    send runJobNow(@channel = $catalog.jobcontrol.process.ichannel,
+                   @context = "$root",
+                   Job,
+                   @exception=$process.id);
+  }
+}
+
+/**
+ * Determine whether Job Control is running.
+ * This function locks the jobtree monitor
+ * and tests the jobcontrol catalog entry.
+ * If absent (Job Control not running) the lock
+ * is retained thus preventing startup during
+ * the course of the enclosing transaction.
+ * Otherwise the lock is released.
+ * 
+ * @return true Job Control is running, false
+ * if it is not.
+ */
+function isRunning()
+{
+  lock("__jobtree");
+  
+  any ret = $catalog.jobcontrol ? true : false;
+  
+  if (ret)
+    unlock("__jobtree");
+  
+  ret;
+}
+
+function startJobControl()
+{
+  if (call isRunning())
+    throw ("Job Control is already running");
+    
+  call startup();
+}
+
+function stopJobControl(any closeGui, any ack)
+{
+  if (call checkDispatcher())
+  {
+    lock("__jobtree");
+
+    try
+    {
+      // If there is a job running then prevent shutdown.
+      foreach($this.jobTree)
+      {
+        if (call parentNotIdle($loop.Job) ||
+            call childNotIdle(jobInfo = $loop))
+          throw("Dispatcher - Tree Not Idle");
+      }
+      
+      // All ok, just exit. jobdispatcher's end function is shutdown() so this
+      // does the tidying up.
+      exit(0);
+  
+      // There is quite a lot going on here regarding locks, notifications
+      // and execution flow. To explain:
+      // 1. At this point the executing process is jobdispatcher
+      //    and it has a lock on "__jobTree". The invoking process is in
+      //    the else{} block below and waiting for a notification that
+      //    shutdown is complete.
+      // 2. The exit(0) call above initiates the termination of
+      //    jobdispatcher. It continues to execute its current
+      //    event (in this case a service request) so statements
+      //    that appear afterwards would still be executed. Such
+      //    statements would be unusual since any tidy-up should
+      //    be put in the process's "end" statement.
+      // 3. If an exception occurs the catch block notifies the invoking
+      //    process so it wakes up. The invoking process is
+      //    where such an exception will be handled, because
+      //    the service request included the argument
+      //      @exception=$process.id
+      // 4. If exit(0) was successfully executed then jobdispatcher
+      //    cannot process any more events - its input channel
+      //    has been closed.
+      // 5. jobdispatcher's "end" statement is then executed. This
+      //    is a call to shutdown(), where under normal circumstances
+      //    the "__jobtree" monitor is notified. Note that Inq
+      //    releases all locks at the end of the transaction that
+      //    took them out. A process's default transaction is committed
+      //    after each event is processed and the "end" statement
+      //    runs in a new transaction. 
+    }
+    catch
+    {
+      // If tree was not idle (or some environmental error
+      // occurs) we must notify the invoking thread.
+      notifyall("__jobtree");
+      
+      // Rethrow
+      throw();
+    }
+  }
+  else
+  {
+    lock("__jobtree");
+    if ($catalog.jobcontrol.process)
+    {
+      loginfo($catalog.jobcontrol.logger, "JobControl shutdown request");
+  
+      // Send through to the jobdispatcher process but if
+      // an exception occurs there handle it here (in the calling
+      // proces). Synchronise with the exiting process
+  
+      send shutdownJobControl(@channel = $catalog.jobcontrol.process.ichannel,
+                              @context = "$root",
+                              @exception=$process.id);
+     
+      wait("__jobtree");
+    }
+
+    // A request sent from a gui context can set this argument and
+    // have it removed. Or if there was an ack function then pass
+    // it back to the client for execution.
+    if (closeGui)
+      remove($this);
+    else if (ack)
+      send system.client:notifyItem(ack); 
+  }
+}
+
+// ***********************************************************************
+// * End of api routines
+// ***********************************************************************
+
+
+// ***********************************************************************
+// Job Dispatcher Startup
+// ***********************************************************************
+// Just parsing this file in attempts JC startup
+call startup();
+
+
+// Declare ourself to the package meta data
+call inq.meta:createPackage(Package = "\p",
+                            ClientURL = absurl("gui/jcAdmin.inq", "\i"),
+                            InitStmt = "call jobMain();",
+                            LongName  = "Job Control");
+

@@ -178,6 +178,15 @@ public interface Transaction extends Any
 	 */
 	public void interrupt() throws AnyException;
   
+	/**
+	 * Returns <code>true</code> if this transaction is in any way active.
+	 * In general, a transaction is active if it has any instances
+	 * pending creation, modification or deletion, or is managing
+	 * any locks, but it can mean any state that the implementation
+	 * deems other than idle.
+	 * @return <code>true</code> if this transaction is active,
+	 * <code>false</code> otherwise.
+	 */
   public boolean isActive();
   
 	/**
@@ -240,6 +249,11 @@ public interface Transaction extends Any
    */
   public Map isCreateMarked(Map m) throws AnyException;
 
+  /**
+   * Is this object joined in the transaction for modify?
+   */
+  public boolean isModifying(Map m) throws AnyException;
+  
   /**
    * Returns a list of instances that are currently within the transaction
    * pending formal creation. If there are no such

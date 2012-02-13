@@ -31,6 +31,7 @@ import com.inqwell.any.AnyException;
 import com.inqwell.any.AnyFormat;
 import com.inqwell.any.AnyFuncHolder;
 import com.inqwell.any.AnyNull;
+import com.inqwell.any.AnyTimeZone;
 import com.inqwell.any.Array;
 import com.inqwell.any.BooleanI;
 import com.inqwell.any.Call;
@@ -225,7 +226,7 @@ public class AnyDateChooser extends AnyDocView
       {
         AnyFormat f = r.getFormat(dataItem);
         
-        d_.getDateFormat().setTimeZone(f.getTimeZone().getTimeZone());
+        d_.getDateFormat().setTimeZone(((AnyTimeZone)f.getTimeZone()).getTimeZone());
         date_.setValue(d_.getDate());
         if (!date_.isNull())
         {

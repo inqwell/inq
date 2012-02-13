@@ -292,7 +292,7 @@ public class Clone extends    AbstractFunc
     public void visitSet(Set s)
     {
       // Make a new Set like the one given
-      Array sC = (Array)s.buildNew(null);
+      Set sC = (Set)s.buildNew(null);
       
       // Iterate over the current set adding cloned values
       Iter i = s.createIterator();

@@ -31,11 +31,11 @@ public abstract class TwoPhaseTransaction  extends    AbstractTransaction
   public static Map CREATE_NO   = null;
   public static Map CREATE_NOID = AbstractComposite.simpleMap();
 
-  // Similar to above but for the objects abortable after phase 1
+  // Instances abortable after phase 1
 	private Map toBeAborted_;
 	
-	// The first phase commit action for a given object.  Every object in
-	// the above maps should have a commit action.  This Map relates the
+	// The first phase commit action for a given object.  Every instance in
+	// the transaction should have a commit action.  This Map relates the
 	// object to its commit (phase 1) function.
 	private Map commitFuncPhase1_;
 	
@@ -260,6 +260,40 @@ public abstract class TwoPhaseTransaction  extends    AbstractTransaction
     return null;
   }
   
+  public boolean isModifying(Map m) throws AnyException
+  {
+    boolean ret = false;
+    
+    if (m.isTransactional())
+    {
+      if (commitFuncPhase1_.getIfContains(m) == updatePhase1_)
+      {
+        // Instance is in this txn for modification 
+        ret = true;
+        
+        // Check if the public instance is actually different to its private copy
+        Map m1;
+        if ((m1 = getTransInstance(m)) != m)
+        {
+          ret = !m.valueEquals(m1);
+        }
+        else
+          throw new AnyException("Bad state");
+      }
+      else
+      {
+        // Not here, try any parent
+      
+        Transaction parent = getParent();
+        if (parent != null)
+          ret = parent.isModifying(m);
+      }
+    }
+    
+    return ret;
+  }
+  
+  
   public Map getCreateList(Descriptor d)
   {
     // Note - doesn't consider any additions to the transaction context
@@ -472,10 +506,6 @@ public abstract class TwoPhaseTransaction  extends    AbstractTransaction
 	{
     doAbort();
 
-		// If this method throws then we're in big trouble.  Maybe we should
-		// throw a different exception if the abort functions fail, since
-		// this invalidates the external storage.  
-		// *** process abort funcs
 		try
 		{
 			runFuncs (toBeAborted_, abortFunc_, true);

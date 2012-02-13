@@ -39,6 +39,8 @@ public class ListenerFactory extends AbstractAny
     factoryMap__.add(javax.swing.JSpinner.class, new JSpinnerListener());
     factoryMap__.add(javax.swing.JMenu.class, new JMenuListener());
     factoryMap__.add(javax.swing.ButtonGroup.class, new AbstractButtonListener());
+    factoryMap__.add(bibliothek.gui.dock.common.action.CRadioGroup.class, new AbstractButtonListener());
+    factoryMap__.add(bibliothek.gui.dock.common.action.CCheckBox.class, new AbstractButtonListener());
   }
 
 
@@ -65,9 +67,7 @@ public class ListenerFactory extends AbstractAny
 	{
 	  public Any getDefaultEventType()
 	  {
-	    //System.out.println("DegenerateListener: degenerate getDefaultListenerType() called");
 	    throw new AnyRuntimeException("No default event type available");
-	    //return ListenerConstants.DEGENERATE;
 	  }
 	  
 	  public boolean hasDefaultEventType()

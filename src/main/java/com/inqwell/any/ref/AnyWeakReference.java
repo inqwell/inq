@@ -24,7 +24,7 @@ import com.inqwell.any.Visitor;
  * a collectable Any and to form a base for other classes
  * wishing to store extra data with the reference.
  */
-public class AnyWeakReference extends    java.lang.ref.WeakReference
+public class AnyWeakReference extends    java.lang.ref.WeakReference<Any>
                               implements WeakReference
 {
   public AnyWeakReference (Any referent)
@@ -42,7 +42,7 @@ public class AnyWeakReference extends    java.lang.ref.WeakReference
    */
   public Any getAny()
   {
-    return (Any)super.get();
+    return super.get();
   }
   
   public void clearAny()

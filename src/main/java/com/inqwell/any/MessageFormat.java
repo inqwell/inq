@@ -482,7 +482,7 @@ public class MessageFormat extends Format {
      * @param result where text is appended.
      * @param ignore no useful status is returned.
      */
-    public final StringBuffer format(Map source, StringBuffer result,
+    public final StringBuffer format(com.inqwell.any.Map source, StringBuffer result,
                                      FieldPosition ignore)
     {
         return format(source,result,ignore, 0);
@@ -502,7 +502,7 @@ public class MessageFormat extends Format {
     public StringBuffer format(Object source, StringBuffer result,
                                      FieldPosition ignore)
     {
-        return format((Map)source,result,ignore, 0);
+        return format((com.inqwell.any.Map)source,result,ignore, 0);
     }
 
     /**
@@ -701,7 +701,7 @@ public class MessageFormat extends Format {
      * unused.
      */
 
-    private StringBuffer format(Map arguments, StringBuffer result,
+    private StringBuffer format(com.inqwell.any.Map arguments, StringBuffer result,
                                 FieldPosition status, int recursionProtection) {
         // note: this implementation assumes a fast substring & index.
         // if this is not true, would be better to append chars one by one.
@@ -710,7 +710,7 @@ public class MessageFormat extends Format {
             result.append(pattern.substring(lastOffset, intAt (argPositions, i)));
             lastOffset = intAt (argPositions, i);
             StringI argumentToken = stringAt (argumentTokens, i);
-            if (arguments == null || !arguments.containsKey(argumentToken)) {
+            if (arguments == null || !arguments.contains(argumentToken)) {
                 result.append("{" + argumentToken + "}");
                 continue;
             }

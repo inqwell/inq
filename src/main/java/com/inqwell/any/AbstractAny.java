@@ -63,9 +63,6 @@ public abstract class AbstractAny implements Any
     if (t.getResolving() == Transaction.R_MAP)
     {
       a = t.getLastTMap();
-      
-      //System.out.println("1 Declare " + System.identityHashCode(this) + " var is " + var);
-      //System.out.println("1 Declare " + t.getExecURL() + " at line " + t.getLineNumber());
     }
     else
     // And check if we are field ripping. We definitely don't want to do
@@ -77,8 +74,6 @@ public abstract class AbstractAny implements Any
       a = t.getLastTField();
       if (a != null)
         a = a.bestowConstness();
-      //System.out.println("2 Declare " + System.identityHashCode(this) + " var is " + var);
-      //System.out.println("2 Declare " + t.getExecURL() + " at line " + t.getLineNumber());
     }
     
     return a;

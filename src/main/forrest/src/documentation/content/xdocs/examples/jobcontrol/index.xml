@@ -1,0 +1,245 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright 2011 Inqwell Ltd.
+-->
+<!DOCTYPE document PUBLIC "-//APACHE//DTD Documentation V2.0//EN" "http://forrest.apache.org/dtd/document-v20.dtd">
+<document>
+  <header>
+    <title>Batch Processing With Job Control</title>
+  </header>
+  <body>
+    <section id="intro">
+      <title>Introduction</title>
+      <p>
+        The Inq distribution includes an application
+        called <em>Job Control</em>. It runs in an Inq
+        server to schedule batch jobs, for example to
+        run an end-of-day process. Job Control supports
+        the following features:
+      </p>
+      <dl>
+        <dt><strong>Tasks</strong></dt>
+        <dd>
+          A task is a job that performs some processing. It returns an exit status
+          where zero indicates success and non-zero an error.
+        </dd>
+        <dt><strong>Boxes</strong></dt>
+        <dd>
+          A box contains tasks or other boxes. When a box is scheduled it runs
+          its child jobs. If a child returns error status
+          the first such job to do so establishes the exit status for the box.
+        </dd>
+        <dt><strong>Box Continuation</strong></dt>
+        <dd>
+          If a child job returns an error then a box can be set to either
+          terminate at that point or continue with subsequent children.
+        </dd>
+        <dt><strong>Job Activation</strong></dt>
+        <dd>
+          If a box or task is disabled it will not be executed, however all
+          jobs can be run manually either via the admin GUI client or by
+          calling <code>runJobNow(any Job)</code> in the server.
+        </dd>
+        <dt><strong>Job Output and Logging</strong></dt>
+        <dd>
+          A task is given an output stream to which it can write (or pass
+          as standard output to system commands) to capture any output it
+          generates. The Job Control application itself (residing in
+          package <code>inq.jobcontrol</code>) defines its own
+          logger (see <code>etc/server.log.properties</code> in the
+          distribution).
+        </dd>
+        <dt><strong>Timers and Scheduling</strong></dt>
+        <dd>
+          Any job can define a timer. If several timers are defined beneath a
+          top-level box then the earliest one becomes that box's start
+          time. Within a job hierarchy a box can either run its children
+          consecutively or respect any start time they define.
+        </dd>
+        <dt><strong>The Administrative GUI</strong></dt>
+        <dd>
+          Job Control includes an administrative GUI that can be used to
+          create jobs and job hierarchies, edit timers and task actions,
+          configure box behaviour and run job subtrees manually.
+        </dd>
+      </dl>
+      <p>
+        First we discuss setting up Job Control and establishing some test
+        jobs. These are used to experiment and show where a job's
+        output goes.
+      </p>
+      <p>
+        After that we deconstruct Job Control to examine the Inq features
+        used in its implementation. These include
+      </p>
+      <ul>
+        <li>Using conditional monitors to coordinate cooperating Inq processes</li> 
+        <li>Storing <code>blob</code>s in the database</li>
+        <li>A Tree-table GUI</li>
+        <li>Parsing Inq script at runtime</li>
+        <li>Processing the events generated in a transaction as a batch, rather than individually</li>
+        <li>Managing streams and working with files</li>
+        <li>Creating non-persisted (in-memory) typedefs</li>
+        <li>Working with timers</li>
+        <li>Sorting node structures</li>
+      </ul>
+    </section>
+    <section id="setup">
+      <title>Setting Up</title>
+      <section id="db">
+        <title>Creating The Database</title>
+        <p>
+          Job Control stores the job tree in a single database table. In
+          preparation for future applications bundled into the Inq
+          distribution, the database <code>inqwell</code> is created.
+          A MySQL example is provided in the
+          file <code>app/inq/db/mysql/inq-mysql-schema.sql</code>. Run
+          the following commands: 
+        </p>
+        <source>
+cd $INQHOME/app/inq/db/mysql
+mysql -uroot -pyour-password &lt; inq-mysql-schema.sql
+</source>
+        <p>
+          This script also creates a table Inq uses to allocate
+          ID sequence numbers.
+        </p>
+      </section>
+      <section id="start">
+        <title>Starting The Server</title>
+        <p>
+          This is the same as starting the server
+          for <a href="../petstore/index.html#startsrv">petstore</a>. If you have
+          a server running already then move on to loading Job Control.
+        </p>
+      </section>
+      <section id="load">
+        <title>Loading the Job Control Script</title>
+        <p>
+          Again commands are similar to the petstore example. There are two
+          boot files, one for the bundled services in the <code>inq.boot</code>
+          and <code>inq.util</code> packages (to implement ID sequences)
+          and one for Job Control itself.
+          Issue commands similar to these: 
+        </p>
+        <source>
+inq -load -u admin -p inqwell -server speakinq://localhost -url file:/home/tom/apps/inq-1.1.1-SNAPSHOT/app/inq/inqBoot.inq
+inq -load -u admin -p inqwell -server speakinq://localhost -url file:/home/tom/apps/inq-1.1.1-SNAPSHOT/app/jobcontrol/jobBoot.inq
+</source>
+        <p>
+          We don't discuss the <code>inq</code> package files - if you have
+          investigated petstore and the other examples by now these
+          are straightforward enough. 
+        </p>
+        <p>
+          Any jobs present that are active and define a timer will be
+          scheduled at this point.
+        </p>
+      </section>
+      <section id="client">
+        <title>Starting The Client</title>
+        <p>
+          Unlike petstore, Job Control does not define
+          a <a href="../petstore/anatomy.html#client">login service</a>
+          so it is not possible to log in to the <code>inq.jobcontrol</code>
+          package. Instead its GUI can be launched from
+          the (early release) server administration client. Launch the
+          Inq client environment, for example:
+        </p>
+        <source>
+inq -client -lookandfeel none
+</source>
+        <p>
+          and fill out the screen like this, the default administrator password
+          is <code>inqwell</code>:
+        </p>
+        <figure src="images/login.png" alt="login"/>
+        <p>
+          The Job Control server is implemented in <code>app/jobcontrol/jobControl.inq</code>.
+          At the end of this file is the statement:
+        </p>
+        <source>
+// Declare ourself to the package meta data
+call inq.meta:createPackage(Package = "\p",
+                            ClientURL = absurl("gui/jcAdmin.inq", "\i"),
+                            InitStmt = "call jobMain();",
+                            LongName  = "Job Control");
+</source>
+        <p>
+          This call declares the specified package (in this case expanded
+          from the <a href="../../primer/types.html#stringconst">string constant
+          escape</a><code>\p</code> meaning the current package) to the
+          server's meta data. The arguments are: 
+        </p>
+        <table>
+          <caption>Package Meta Data</caption>
+          <tr>
+            <th>Name</th>
+            <th>Description</th>
+          </tr>
+          <tr>
+            <td><code>Package</code></td>
+            <td>The package being declared</td>
+          </tr>
+          <tr>
+            <td><code>ClientURL</code></td>
+            <td>The absolute URL for the client. The <code>absurl</code> function
+            returns the absolute url from the relative first argument based
+            on the absolute second argument.</td>
+          </tr>
+          <tr>
+            <td><code>InitStmt</code></td>
+            <td>If present, text that will be appended to the above script
+            when sent to the client. In this example <code>jobMain()</code>
+            is called, which kicks of Job Control's GUI.</td>
+          </tr>
+          <tr>
+            <td><code>LongName</code></td>
+            <td>A name for the package</td>
+          </tr>
+        </table>
+        <p>
+          Having declared the package, it appears in the list and its client can
+          be run:
+        </p>
+        <figure src="images/adminpkg.png" alt="login"/>
+        <p>
+          Selecting the package and clicking the Run Client button brings up
+          the Job Control client. In fact, when developing a client this
+          is a quick way of restarting it as the code is modified.
+        </p>
+        <p>
+          If we look at the <code>Meta</code> tab then each package's types
+          can be seen:
+        </p>
+        <figure src="images/adminmeta.png" alt="login"/>
+        <p>
+          In fact, meta data can be used by applications and is employed
+          by the <code>Attribute Editor</code>, <a href="../petstore/items.html#attreditor">
+          demonstrated</a> in petstore.
+        </p>
+      </section>
+      <section id="testjobs">
+        <title>Loading Some Test Jobs</title>
+        <p>
+          When the <code>inqwell</code> database is empty the client shows no
+          jobs of course. Running the following script sets up some test jobs:
+        </p>
+        <source>
+inq -load -u admin -p inqwell -server speakinq://localhost -url file:/home/tom/inqwell/inq/src/main/app/jobcontrol/testSetup.inq
+</source>
+        <p>
+          The jobs this script creates will popup in the client, so it should look
+          something like this:
+        </p>
+        <figure src="images/jcadmin.png" alt="Admin Client"/>
+        <p>
+          These jobs are used to experiment with Job Control.
+        </p>
+      </section>
+      <p>
+        <a href="usage.html"><icon src="../images/nextpage.gif" alt="nextpage"/></a>
+      </p>
+    </section>
+  </body>
+</document>

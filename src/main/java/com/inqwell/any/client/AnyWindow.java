@@ -211,23 +211,6 @@ public class AnyWindow extends    AnyComponent
     new EventProcessor();
   }
 
-  public AnyWindow(JInternalFrame w)
-  {
-		super(w);
-	}
-
-  public AnyWindow(Window w)
-  {
-		super(w);
-	}
-
-	/**
-	 * No-args constructor allows prototypical instances in factories
-	 */
-  public AnyWindow()
-  {
-	}
-
 	public void setObject(Object w)
 	{
 		if (!(w instanceof InqWindow))
@@ -826,9 +809,9 @@ public class AnyWindow extends    AnyComponent
                   eh.handleException(ex, t);
                   t.getCallStack().empty();
                 }
-                else if (err instanceof StackOverflowError)
+                else
                 {
-                  // Runtime exceptions from Java
+                  // Nasty things
                   AnyException ex = new ContainedException(err);
                   ex.topOfStack(t);
                   eh.handleException(ex, t);

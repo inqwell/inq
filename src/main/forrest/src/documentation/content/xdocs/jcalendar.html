@@ -1,0 +1,214 @@
+<html>
+<body>
+<h1>Contents</h1>
+<a href="#hi">Hi There</a><br/>
+<a href="#tom">Tom&#39;s Changes</a><br/>
+<a href="#other">Issues Raised in the Forums</a><br/>
+<a href="#outthere">What Is Out There</a><br/>
+<a name="hi"><h1>Hi There</h1></a>
+This is an effort to get a JCalendar community (back) together, prompted by
+enhancements I have made and then those I found from other users. My changes are
+set out below. After that I have summarised what I found in the forums.
+<p/>
+I did submit my changes, which I think others would find useful, to
+the originator of JCalendar, Kai Toedter, but even after a few prods he
+remains silent.
+<p/>
+I have an interest in JCalendar because it is the "gDateChooser" component
+in the Inq client/server scripting language. If you want to know more about
+that see <a href="http://www.inqwell.com">http://www.inqwell.com</a>.
+<p/>
+Accordingly I have combined the things I found with my own features and
+volunteer to maintain these components. Get in touch if you are
+interested: tom dot sanders at inqwell dot com or may be a
+board at <a href="http://forums.inqwell.com">forums.inqwell.com</a>.
+<p/>
+My changes, outlined below, can be found
+at <a href="https://github.com/inqwell/jcalendar">https://github.com/inqwell/jcalendar</a>.
+See also <a href="#outthere">What Is Out There</a>.
+<a name="tom"><h1>Tom&#39;s Changes</h1></a>
+I&#39;ve put a few enhancements into the JCalendar components. Here goes:
+<h2>Components</h2>
+<ul><li>The <code>nullText</code> property.<br/>
+Sometimes it is nice to display some text in JDateChooser, rather than blank,
+when the date is null. For example null might mean "Open Ended" or whatever.
+There is a new property on JDateChooser to specify this.
+</li>
+<li>
+The <code>selectOnFocus</code> property.<br/>
+When a JDateChooser (that is the underlying JTextComponent) gains the focus,
+optionally select its text. Useful for keyboard junkies.
+</li>
+<li>
+The <code>dateVerifier</code> property.<br/>
+As well as <code>min/maxSelectableDate</code>, the <code>DateVerifier</code> interface
+allows clients to specify arbitrary validation checks, for example valid
+business days. When present on JDayChooser, JCalendar or JDateChooser
+the <code>valid()</code> method is called. For JDayChooser and JCalendar (and within
+JDateChooser obviously) the calendar buttons are disabled for dates that are
+not valid. If a JDateChooser has a spinner editor then invalid dates are skipped
+in the direction of travel. The same is true for values entered as text.
+</li>
+<li>
+Keyboard interface.<br/>
+As far as I am aware, using the mnemonic is limited in that it does not require
+the component to have the focus. If you have more than one JDateChooser in
+your window Alt+C will only ever apply to the one most recently created. I
+have changed this to use the input/action map. When focused in
+the underlying JTextComponent, Ctrl-C pops up the calendar and Ctrl-N sets
+the value to <code>null</code>.
+</li>
+<li>
+Miscellaneous.<br/>
+<code>JDateChooser.lastSelectedDate</code> not used - I removed it.
+Similarly <code>isInitialized</code>.<br/><code>IDateEditor</code> exposes the
+underlying DateFormat
+<br/><code>IDateEditor</code>
+provides a method to retrieve the underlying JTextComponent.
+</li>
+</ul>
+<h2>Test Program</h2>
+I've added the new properties so they can be exercised. For a <code>DateVerifier</code>
+I have implemented one that excludes Mondays and otherwise includes only even
+numbered dates. You can set/remove it to see how JCalendar and JDayChooser react.
+<p/>
+For <code>JDateChooser</code> I have added a check box that sets the top four
+choosers to null when checked, today when not. You can set them to <code>null</code>
+individually using ctrl-n when they have the focus. Set the <code>nullText</code>
+using the text field.
+<p/>
+Apart from the keyboard behaviour everything should be backwards compatible with 1.3.3.
+<h2>TODO (Possibly)</h2>
+There are a few more things I am considering - firstly, <code>JDayChooser</code>
+colours the "today" button however this is based on a <code>Calendar</code>
+instance (JDayChooser.today) that never changes. I think this will go stale
+if the application is left open overnight....
+<p/>
+Secondly, its a question as to what "today" is. It need not be today's date
+of course. Your system may have its own idea of what the date it is.
+I'll think a bit more about that.
+<p/>
+Last, may be support a separate format for
+acceptable input, eg a short form like ddMM, again for k/b junkies.
+<a name="other"><h1>Issues Raised in the Forums</h1></a>
+I went through the (relatively) recent posts and came up with this issues list.
+You need to be logged into the forums for the links to work so whatever...
+<ul>
+<li>
+<strong>UI and JDateChooser state become inconsistent when invalid text is entered</strong>
+<br/>
+<a href="http://www.toedter.com/forum/post.php?cat=1&fid=2&pid=95&page=1">http://www.toedter.com/forum/post.php?cat=1&fid=2&pid=95&page=1</a>
+<br/>
+This is (probably) the same thing as <a href="http://www.toedter.com/forum/post.php?cat=1&fid=3&pid=48&page=1">this post</a>.
+I have not considered this issue.
+</li>
+<br/>
+<li>
+<strong>Memory Leak</strong>
+<br/>
+<a href="http://www.toedter.com/forum/post.php?cat=1&fid=3&pid=32&page=1">http://www.toedter.com/forum/post.php?cat=1&fid=3&pid=32&page=1</a>
+<br/>
+Didn't find this myself but obviously very important. The WeakReference fix would be the proposal
+together with deprecating the cleanup() method.
+<br/>
+<br/>
+</li>
+<li>
+<strong>Month Browsing</strong>
+<br/>
+<a href="http://www.toedter.com/forum/post.php?cat=1&fid=2&pid=102&page=1">http://www.toedter.com/forum/post.php?cat=1&fid=2&pid=102&page=1</a>
+<br/>
+Fixed in luuuis's github - see below.
+</li>
+<br/>
+<li>
+<strong>Time Zones</strong>
+<br/>
+<a href="http://www.toedter.com/forum/post.php?cat=1&fid=2&pid=90&page=1">http://www.toedter.com/forum/post.php?cat=1&fid=2&pid=90&page=1</a>
+<br/>
+<a href="http://www.toedter.com/forum/post.php?cat=1&fid=3&pid=36&page=1">http://www.toedter.com/forum/post.php?cat=1&fid=3&pid=36&page=1</a>
+<br/>
+Fixed in luuuis's github - see below.
+</li>
+<br/>
+<li>
+<strong>Performance (relating to construction)</strong>
+<br/>
+<a href="http://www.toedter.com/forum/post.php?cat=1&fid=3&pid=29&page=1">http://www.toedter.com/forum/post.php?cat=1&fid=3&pid=29&page=1</a>
+<br/>
+<a href="http://www.toedter.com/forum/post.php?cat=1&fid=2&pid=96&page=1">http://www.toedter.com/forum/post.php?cat=1&fid=2&pid=96&page=1</a>
+<p/>
+No code supplied. Talk about not creating the member jcalendar unless/until it is required.
+Have not looked at this myself.
+</li>
+</ul>
+
+Those forum members I have contacted via a PM are:
+<p/>
+<pre>
+scregg
+TathiWitch
+nkachr
+moradan
+slartibartfast
+Kris Kemper
+stever
+mcnalu
+jainromil
+luuuis
+vewert
+joetraff
+peterk1
+Francesca
+tuler
+</pre>
+<a name="outthere"><h1>What Is Out There</h1></a>
+Maven Repo at <a href="http://repo1.maven.org/maven2/com/toedter/jcalendar/">http://repo1.maven.org/maven2/com/toedter/jcalendar/</a>.
+Not sure who maintains this? No 1.3.3 there.
+<p/>
+JCalendar at <a href="https://github.com/luuuis/jcalendar">Github</a> maintained by
+forum member <code>luuuis</code>. His fixes as above based on version 1.3.3. This
+version is also hosted
+at <a href="https://oss.sonatype.org/index.html#nexus-search;quick~jcalendar">https://oss.sonatype.org/index.html#nexus-search;quick~jcalendar</a>
+as <code>jcalendar-tz</code>.
+<p/>
+My changes, luuuis' time zone enhancement, month browsing fix and the
+memory leak fix by Kris Kemper are all
+at <a href="https://github.com/inqwell/jcalendar">https://github.com/inqwell/jcalendar</a>.
+<p/>
+Using the ideas suggested
+at <a href="http://cemerick.com/2010/08/24/hosting-maven-repos-on-github/">http://cemerick.com/2010/08/24/hosting-maven-repos-on-github/</a>
+you can use this version as follows:
+<pre>
+
+  &lt;repositories&gt;
+    .
+    .
+    &lt;repository&gt;
+      &lt;id&gt;inqwell-repo&lt;/id&gt;
+      &lt;url&gt;https://github.com/inqwell/mvn-repo/raw/master/releases&lt;/url&gt;
+      &lt;name&gt;Inqwell JCalendar Extensions&lt;/name&gt;
+    &lt;/repository&gt;
+    .
+    .
+
+  &lt;/repositories&gt;
+  .
+  .
+  &lt;dependencies&gt;
+    .
+    .
+    &lt;dependency&gt;
+      &lt;groupId&gt;com.inqwell&lt;/groupId&gt;
+      &lt;artifactId&gt;jcalendar&lt;/artifactId&gt;
+      &lt;version&gt;1.3.3-inqwell-1.0&lt;/version&gt;
+    &lt;/dependency&gt;
+    .
+    .
+  &lt;/dependencies&gt;
+
+</pre>
+
+<i>Last Edited: 29 June 2011 16:06 UTC</i>
+<body>
+</html>

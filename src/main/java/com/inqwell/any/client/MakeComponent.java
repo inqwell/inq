@@ -1253,7 +1253,7 @@ public class MakeComponent extends AbstractAny
   {
     public Any exec(Any a) throws AnyException
     {
-      return new AnyComponent();
+      return new AnySimpleComponent();
     }
   }
 }

@@ -50,15 +50,6 @@ public class AnyInternalFrame extends    AnyWindow
     preferredListenerTypes__.add(ListenerConstants.CONTEXT);
   }
 
-  public AnyInternalFrame(JInternalFrame f)
-  {
-		super(f);
-	}
-	
-  public AnyInternalFrame()
-  {
-	}
-	
 	public void setObject(Object f)
 	{
 		if (!(f instanceof JInternalFrame))

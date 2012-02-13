@@ -1,0 +1,278 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright 2006 Inqwell Ltd.
+-->
+<!DOCTYPE document PUBLIC "-//APACHE//DTD Documentation V2.0//EN" "http://forrest.apache.org/dtd/document-v20.dtd">
+<document>
+  <header>
+    <title>Petstore Anatomy</title>
+  </header>
+  <body>
+    <section id="intro">
+      <title>Introduction</title>
+      <p>
+        This section gives a broad overview of the Inq implementation of
+        petstore. When referring to the script files, paths are relative
+        to <code>$INQHOME/app/examples/petstore</code>.
+      </p>
+      <p>
+        In the sections that follow we look at particular areas of petstore's
+        functionality and highlight the Inq features that support them.
+      </p>
+    </section>
+    <section id="database">
+      <title>Database Schema and Interfacing</title>
+      <p>
+        Petstore runs against the <code>jpetstore</code> schema with a few
+        additional columns marked as <code>-- Added for inq</code> in the schema creation
+        file <code>./db/mysql/jpetstore-mysql-schema.sql</code>
+      </p>
+      <p>
+        Here is the Entity Relationship diagram for it:
+      </p>
+      <figure src="images/schema.png" alt="schema"/>
+      <p>
+        Inq achieves a loose coupling between application logic and the
+        database thanks to
+      </p>
+      <ul>
+        <li>the proliferation of SQL is prevented by its formalised use in
+        typedef <a href="../../primer/keys.html">key definitions</a>
+        </li>
+        <li>joins are arbitrarily effected via keys
+        using the Inq function <code>aggregate</code>
+        and groupings with <code>groupby</code> (discussed
+        in <a href="../../primer/structures.html">Building Node Structures</a>).
+        </li>
+      </ul>
+      <p>
+        Inq is therefore tolerant to schema changes, however
+        the cornerstone of a well-structured application is
+        a properly designed data model.
+      </p>
+      <section id="typedef">
+        <title>Mapping Tables to Entity Typedefs</title>
+        <p>
+          The entity typedefs are named according to
+          the <a href="../../primer/typedef.html#tyname">Inq convention</a>
+          and defined in files like <code>Account.inq</code>. The primary
+          key, which is commonly SQL server implementation specific, is
+          defined in the files such as <code>./mysql/Account.pkey.sql</code>,
+          shown here:  
+        </p>
+        <source>
+/**
+ * Account primary key include file - mysql
+ */
+
+auxcfg(map(
+    // Use prepared stmt so that we can use '?' notation for column values
+    // instead of having to define all the formatting.
+    // NOTE: MAKE SURE WE KEEP KEY FIELDS IN THE SAME ORDER AS DEFINED IN THE TYPEDEF AND KEY FIELDS.
+    "prepared", true,
+    "select-stmt",
+        "
+        SELECT
+            A.userid        AS \"Account\",
+            A.email         AS \"Email\",
+            A.firstname     AS \"FirstName\",
+            A.lastname      AS \"LastName\",
+            A.status        AS \"Status\",
+            A.addr1         AS \"Addr1\",
+            A.addr2         AS \"Addr2\",
+            A.city          AS \"City\",
+            A.state         AS \"State\",
+            A.zip           AS \"ZIP\",
+            A.country       AS \"Country\",
+            A.phone         AS \"Phone\"
+        FROM account A
+        ",
+    "read-sql",
+        "
+        {select-stmt}
+        WHERE A.userid = ?
+        ",
+    "write-sql",
+        "
+        REPLACE account
+        SET
+            userid        = ?,
+            email         = ?,
+            firstname     = ?,
+            lastname      = ?,
+            status        = ?,
+            addr1         = ?,
+            addr2         = ?,
+            city          = ?,
+            state         = ?,
+            zip           = ?,
+            country       = ?,
+            phone         = ?
+        ",
+    "delete-sql",
+        "
+        DELETE FROM account
+        WHERE userid = ?
+        "
+))
+</source>
+        <p>
+          When fetching instances, Inq uses the column name meta-data
+          from the underlying SQL server to map columns to entity fields.
+          Here we are using the simple mapping technique of renaming the
+          columns using the <code>&lt;column&gt; AS &lt;name&gt;</code>
+          syntax to interface Inq entity definitions with the
+          existing <code>jpetstore</code> schema. The <code>select</code>
+          statement defined in the <code>...pkey.sql</code> files is reused
+          for all other key definitions.  
+        </p>
+        <p>
+          All the key examples use JDBC prepared statements, so writing
+          entities to the database (the <code>REPLACE</code> statement in
+          MySQL) and reading with other keys that define more than one field
+          use position arguments that relate to the order of the
+          entity and key field definitions. 
+        </p>
+      </section>
+      <section id="keys">
+        <title>Key Examples</title>
+        <p>
+          Petstore exercises the following aspects of
+          Inq's <a href="../../primer/keys.html">I/O Key</a> functionality. 
+        </p>
+        <table>
+          <caption>Key Examples</caption>
+          <tr>
+            <th>Typedef</th>
+            <th>Key Name</th>
+            <th>Where Used</th>
+            <th>Notes</th>
+          </tr>
+          <tr>
+            <td><p><code>Order</code></p></td>
+            <td><p><code>Filter</code></p></td>
+            <td>
+              <p><code>psOrders.inq</code>
+              as <a href="neworder.html#crevent"><em>create data</em></a> when a new
+              order is created.
+              </p>
+              <p><code>gui/myOrders.inq</code> as data underlying the components
+              in the <a href="myorders.html#filter">filter bar</a>.
+              </p>
+            </td>
+            <td>
+              <p>
+              This key is cached and has uses logical expressions in its SQL,
+              so has an eligibility expression to maintain cache integrity.
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td rowspan="3"><p><code>Item</code></p></td>
+            <td><p><code>Filter</code></p></td>
+            <td><p><code>gui/browseItems.inq</code> as data underlying the components
+              in the filter bar.</p></td>
+            <td>
+              <p>
+              This key is <em>not</em> cached because its eligibility expression
+              would be quite complex - see <code>mysql/Item.Filter.sql</code>.
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td><p><code>Search</code></p></td>
+            <td><p><code>gui/newOrder.inq</code> as data underlying
+              the <a href="neworder.html#using">search
+              text field and popup menu</a> check buttons.</p></td>
+            <td>
+              <p>
+              Used in conjunction with the
+              reusable <a href="neworder.html#itemChooser"><em>item chooser</em></a>
+              gui. Note that both <code>Filter</code> and <code>Search</code>
+              are only referred to in the client. A key
+              instance <a href="../../primer/structures.html#keyselect">carries
+              its name</a> so can be used in the server without knowing what it is. 
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td><p><code>ByProductCheck</code></p></td>
+            <td><p>The <code>destroy</code> function in <code>Product.inq</code>
+              checks whether there are still associated <code>Item</code>
+              instances before allowing a <code>Product</code> to be
+              deleted.</p></td>
+            <td>
+              <p>
+              This key is capped to return at most one instance, since its
+              function is only to determine whether there is at least
+              one <code>Item</code> associated with a given <code>Product</code>. 
+              </p>
+            </td>
+          </tr>
+        </table>
+      </section>
+    </section>
+    <section id="common">
+      <title>Common Typedef Aliases - defs.inq</title>
+      <p>
+      The <code>defs.inq</code> file contains
+      various <a href="../../primer/typedef.html#enum"><code>enum</code></a>s and
+      aliases for types that are used in the entity definitions. This technique
+      allows the data types (including the scale in the case of fixed
+      precision decimals), any label, width hint and formatting information to
+      be defined centrally and reused.
+      </p>
+      <p>
+        This information propagates to the client to be picked up
+        by <code>renderinfo</code>, discussed
+        in <a href="../../primer/guibasics.html">GUI Basics</a>. It is also
+        passed through to generated XML used to create reports, discussed elsewhere
+        in this example. This is an important feature of Inq - by centralising
+        this information the application is both more maintainable and concisely
+        expressed when creating GUIs and printable reports. We'll return to
+        this subject when looking more closely at those two aspects.
+      </p>
+    </section>
+    <section id="server">
+      <title>Server-Side Functionality</title>
+      <p>
+        Together with the typedefs the server-side functionality is
+        implemented in the remaining 10 files in the top-level petstore
+        directory called <code>ps&lt;Something&gt;.inq</code>. The largest
+        of these is <code>psOrders.inq</code>, containing the Order
+        processing code, at about 500 lines including comments. Most are
+        considerably smaller. This underlines Inq's conciseness of expression - there
+        is almost no "artifact" code - that is code that relates to technology
+        issues rather than the application itself. 
+      </p>
+      <section id="boot">
+        <title>Booting the Server With Petstore</title>
+        <p>
+          We saw in the <a href="index.html#startsrv">previous section</a>
+          how to load petstore into the Inq server. This process involves
+          parsing all the server-side script that goes together to make
+          up the application and a single file, <code>psBoot.inq</code>,
+          does this. Having a "boot" script that loads an application is
+          the common pattern for Inq server-side code.
+        </p>
+      </section>
+    </section>
+    <section id="client">
+      <title>The Petstore Client</title>
+      <p>
+        The gui client is implemented in 8 files, the largest of which
+        is <code>newOrder.inq</code> at a bit less than 850 lines overall.
+        In a similar way to <code>psBoot.inq</code> the server returns
+        the initial script <code>gui/userStart.inq</code> to the client
+        after login (see <code>psLogin.inq</code>). This script fetches
+        further client code from the server
+        using Inq's <code>loadclient</code> function, runs any of the
+        required utilities such as <code>messagedialog.inq</code> contained
+        in the Inq environment and shows the initial window. 
+      </p>
+      <p>
+        <a href="dashboard.html"><icon src="../images/nextpage.gif" alt="nextpage"/></a>
+      </p>
+    </section>
+  </body>
+</document>

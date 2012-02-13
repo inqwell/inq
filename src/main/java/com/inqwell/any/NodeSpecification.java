@@ -79,159 +79,159 @@ public class NodeSpecification extends AnyQueue
 
 	// some key fields for (amongst other things) complex values
 	// to build and set into components
-	public static Any atWho__ = AbstractValue.flyweightString("@who");
-	public static Any who__   = AbstractValue.flyweightString("who__");
+	public final static Any atWho__ = AbstractValue.flyweightString("@who");
+	public final static Any who__   = AbstractValue.flyweightString("who__");
 
-	public static Any atTxt__ = AbstractValue.flyweightString("@txt");
-	public static Any txt__   = AbstractValue.flyweightString("txt__");
+	public final static Any atTxt__ = AbstractValue.flyweightString("@txt");
+	public final static Any txt__   = AbstractValue.flyweightString("txt__");
 
-	public static Any atIco__ = AbstractValue.flyweightString("@ico");
-	public static Any ico__   = AbstractValue.flyweightString("ico__");
+	public final static Any atIco__ = AbstractValue.flyweightString("@ico");
+	public final static Any ico__   = AbstractValue.flyweightString("ico__");
 
-	public static Any atIcoLeaf__ = AbstractValue.flyweightString("@icoLeaf");
-	public static Any icoLeaf__   = AbstractValue.flyweightString("icoLeaf__");
+	public final static Any atIcoLeaf__ = AbstractValue.flyweightString("@icoLeaf");
+	public final static Any icoLeaf__   = AbstractValue.flyweightString("icoLeaf__");
 
-	public static Any atIcoOpen__ = AbstractValue.flyweightString("@icoOpen");
-	public static Any icoOpen__   = AbstractValue.flyweightString("icoOpen__");
+	public final static Any atIcoOpen__ = AbstractValue.flyweightString("@icoOpen");
+	public final static Any icoOpen__   = AbstractValue.flyweightString("icoOpen__");
 
-	public static Any atIcoClosed__ = AbstractValue.flyweightString("@icoClosed");
-	public static Any icoClosed__   = AbstractValue.flyweightString("icoClosed__");
+	public final static Any atIcoClosed__ = AbstractValue.flyweightString("@icoClosed");
+	public final static Any icoClosed__   = AbstractValue.flyweightString("icoClosed__");
 
-	public static Any atBg__ = AbstractValue.flyweightString("@bg");
-	public static Any bg__   = AbstractValue.flyweightString("bg__");
+	public final static Any atBg__ = AbstractValue.flyweightString("@bg");
+	public final static Any bg__   = AbstractValue.flyweightString("bg__");
 
-	public static Any atFg__ = AbstractValue.flyweightString("@fg");
-	public static Any fg__   = AbstractValue.flyweightString("fg__");
+	public final static Any atFg__ = AbstractValue.flyweightString("@fg");
+	public final static Any fg__   = AbstractValue.flyweightString("fg__");
 
-  public static Any atBold__ = AbstractValue.flyweightString("@bold");
-  public static Any bold__   = AbstractValue.flyweightString("bold__");
+  public final static Any atBold__ = AbstractValue.flyweightString("@bold");
+  public final static Any bold__   = AbstractValue.flyweightString("bold__");
 
-  public static Any atFontFamily__ = AbstractValue.flyweightString("@fontFamily");
-  public static Any fontFamily__   = AbstractValue.flyweightString("fontFamily__");
+  public final static Any atFontFamily__ = AbstractValue.flyweightString("@fontFamily");
+  public final static Any fontFamily__   = AbstractValue.flyweightString("fontFamily__");
 
-  public static Any atFormat__   = AbstractValue.flyweightString("@format");
+  public final static Any atFormat__   = AbstractValue.flyweightString("@format");
 
-  public static Any atFontSize__ = AbstractValue.flyweightString("@fontSize");
-  public static Any fontSize__   = AbstractValue.flyweightString("fontSize__");
+  public final static Any atFontSize__ = AbstractValue.flyweightString("@fontSize");
+  public final static Any fontSize__   = AbstractValue.flyweightString("fontSize__");
 
-  public static Any atItalic__ = AbstractValue.flyweightString("@italic");
-  public static Any italic__   = AbstractValue.flyweightString("italic__");
+  public final static Any atItalic__ = AbstractValue.flyweightString("@italic");
+  public final static Any italic__   = AbstractValue.flyweightString("italic__");
 
-  public static Any atStrikeThrough__ = AbstractValue.flyweightString("@strikeThrough");
-  public static Any strikeThrough__   = AbstractValue.flyweightString("strikeThrough__");
+  public final static Any atStrikeThrough__ = AbstractValue.flyweightString("@strikeThrough");
+  public final static Any strikeThrough__   = AbstractValue.flyweightString("strikeThrough__");
 
-  public static Any atUnderline__ = AbstractValue.flyweightString("@underline");
-  public static Any underline__   = AbstractValue.flyweightString("underline__");
+  public final static Any atUnderline__ = AbstractValue.flyweightString("@underline");
+  public final static Any underline__   = AbstractValue.flyweightString("underline__");
 
-  public static Any atFirstIndent__ = AbstractValue.flyweightString("@firstIndent");
-  public static Any firstIndent__   = AbstractValue.flyweightString("firstIndent__");
+  public final static Any atFirstIndent__ = AbstractValue.flyweightString("@firstIndent");
+  public final static Any firstIndent__   = AbstractValue.flyweightString("firstIndent__");
 
-  public static Any atLeftIndent__ = AbstractValue.flyweightString("@leftIndent");
-  public static Any leftIndent__   = AbstractValue.flyweightString("leftIndent__");
+  public final static Any atLeftIndent__ = AbstractValue.flyweightString("@leftIndent");
+  public final static Any leftIndent__   = AbstractValue.flyweightString("leftIndent__");
 
-  public static Any atRightIndent__ = AbstractValue.flyweightString("@rightIndent");
-  public static Any rightIndent__   = AbstractValue.flyweightString("rightIndent__");
+  public final static Any atRightIndent__ = AbstractValue.flyweightString("@rightIndent");
+  public final static Any rightIndent__   = AbstractValue.flyweightString("rightIndent__");
 
-  public static Any atAlignment__ = AbstractValue.flyweightString("@alignment");
-  public static Any alignment__   = AbstractValue.flyweightString("alignment__");
+  public final static Any atAlignment__ = AbstractValue.flyweightString("@alignment");
+  public final static Any alignment__   = AbstractValue.flyweightString("alignment__");
 
-  public static Any atLineSpacing__ = AbstractValue.flyweightString("@lineSpacing");
-  public static Any lineSpacing__   = AbstractValue.flyweightString("lineSpacing__");
+  public final static Any atLineSpacing__ = AbstractValue.flyweightString("@lineSpacing");
+  public final static Any lineSpacing__   = AbstractValue.flyweightString("lineSpacing__");
 
-  public static Any atSpaceAbove__ = AbstractValue.flyweightString("@spaceAbove");
-  public static Any spaceAbove__   = AbstractValue.flyweightString("spaceAbove__");
+  public final static Any atSpaceAbove__ = AbstractValue.flyweightString("@spaceAbove");
+  public final static Any spaceAbove__   = AbstractValue.flyweightString("spaceAbove__");
 
-  public static Any atSpaceBelow__ = AbstractValue.flyweightString("@spaceBelow");
-  public static Any spaceBelow__   = AbstractValue.flyweightString("spaceBelow__");
+  public final static Any atSpaceBelow__ = AbstractValue.flyweightString("@spaceBelow");
+  public final static Any spaceBelow__   = AbstractValue.flyweightString("spaceBelow__");
 
-  public static Any atSubscript__ = AbstractValue.flyweightString("@subscript");
-  public static Any subscript__   = AbstractValue.flyweightString("subscript__");
+  public final static Any atSubscript__ = AbstractValue.flyweightString("@subscript");
+  public final static Any subscript__   = AbstractValue.flyweightString("subscript__");
 
-  public static Any atSuperscript__ = AbstractValue.flyweightString("@superscript");
-  public static Any superscript__   = AbstractValue.flyweightString("superscript__");
+  public final static Any atSuperscript__ = AbstractValue.flyweightString("@superscript");
+  public final static Any superscript__   = AbstractValue.flyweightString("superscript__");
 
-	public static Any atTabStops__   = AbstractValue.flyweightString("@tabStops");
-	public static Any tabStops__     = AbstractValue.flyweightString("tabSops__");
+	public final static Any atTabStops__   = AbstractValue.flyweightString("@tabStops");
+	public final static Any tabStops__     = AbstractValue.flyweightString("tabSops__");
 
-	public static Any atTabPos__   = AbstractValue.flyweightString("@tabPos");
-	public static Any tabPos__     = AbstractValue.flyweightString("tabPos__");
+	public final static Any atTabPos__   = AbstractValue.flyweightString("@tabPos");
+	public final static Any tabPos__     = AbstractValue.flyweightString("tabPos__");
 
-	public static Any atTabAlign__   = AbstractValue.flyweightString("@tabAlign");
-	public static Any tabAlign__     = AbstractValue.flyweightString("tabAlign__");
+	public final static Any atTabAlign__   = AbstractValue.flyweightString("@tabAlign");
+	public final static Any tabAlign__     = AbstractValue.flyweightString("tabAlign__");
 
-	public static Any atTabLead__   = AbstractValue.flyweightString("@tabLead");
-	public static Any tabLead__     = AbstractValue.flyweightString("tabLead__");
+	public final static Any atTabLead__   = AbstractValue.flyweightString("@tabLead");
+	public final static Any tabLead__     = AbstractValue.flyweightString("tabLead__");
 
-	public static Any atUrlRef__   = AbstractValue.flyweightString("@urlRef");
-	public static Any urlRef__     = AbstractValue.flyweightString("urlRef__");
+	public final static Any atUrlRef__   = AbstractValue.flyweightString("@urlRef");
+	public final static Any urlRef__     = AbstractValue.flyweightString("urlRef__");
 
-	public static Any atUrlAction__   = AbstractValue.flyweightString("@urlAction");
-	public static Any urlAction__     = AbstractValue.flyweightString("uA__");
+	public final static Any atUrlAction__   = AbstractValue.flyweightString("@urlAction");
+	public final static Any urlAction__     = AbstractValue.flyweightString("uA__");
 
-	public static Any atUser__   = AbstractValue.flyweightString("@user");
-	public static Any user__     = AbstractValue.flyweightString("user__");
+	public final static Any atUser__   = AbstractValue.flyweightString("@user");
+	public final static Any user__     = AbstractValue.flyweightString("user__");
 
-	public static Any atStyle__   = AbstractValue.flyweightString("@style");
-	public static Any style__     = AbstractValue.flyweightString("style__");
+	public final static Any atStyle__   = AbstractValue.flyweightString("@style");
+	public final static Any style__     = AbstractValue.flyweightString("style__");
 
-	public static Any atName__    = AbstractValue.flyweightString("@name");
-	public static Any name__      = AbstractValue.flyweightString("name__");
+	public final static Any atName__    = AbstractValue.flyweightString("@name");
+	public final static Any name__      = AbstractValue.flyweightString("name__");
 
-	public static Any atBorderWidth__ = AbstractValue.flyweightString("@borderWidth");
-	public static Any borderWidth__   = AbstractValue.flyweightString("borderWidth__");
+	public final static Any atBorderWidth__ = AbstractValue.flyweightString("@borderWidth");
+	public final static Any borderWidth__   = AbstractValue.flyweightString("borderWidth__");
 
-	public static Any atCellPadding__ = AbstractValue.flyweightString("@cellPadding");
-	public static Any cellPadding__   = AbstractValue.flyweightString("cellPadding__");
+	public final static Any atCellPadding__ = AbstractValue.flyweightString("@cellPadding");
+	public final static Any cellPadding__   = AbstractValue.flyweightString("cellPadding__");
 
-	public static Any atColumnSpan__ = AbstractValue.flyweightString("@columnSpan");
-	public static Any columnSpan__   = AbstractValue.flyweightString("columnSpan__");
+	public final static Any atColumnSpan__ = AbstractValue.flyweightString("@columnSpan");
+	public final static Any columnSpan__   = AbstractValue.flyweightString("columnSpan__");
 
-	public static Any atRowSpan__ = AbstractValue.flyweightString("@rowSpan");
-	public static Any rowSpan__   = AbstractValue.flyweightString("rowSpan__");
+	public final static Any atRowSpan__ = AbstractValue.flyweightString("@rowSpan");
+	public final static Any rowSpan__   = AbstractValue.flyweightString("rowSpan__");
 
   // See UserProcess.java
-	public static Any atPasswd__   = AbstractValue.flyweightString("@passwd");
-	public static Any atPkg__      = AbstractValue.flyweightString("@package");
-	public static Any atURL__      = AbstractValue.flyweightString("@url");
-	public static Any atServer__   = AbstractValue.flyweightString("@server");
+	public final static Any atPasswd__   = AbstractValue.flyweightString("@passwd");
+	public final static Any atPkg__      = AbstractValue.flyweightString("@package");
+	public final static Any atURL__      = AbstractValue.flyweightString("@url");
+	public final static Any atServer__   = AbstractValue.flyweightString("@server");
 
-	public static Any atDomain__ = AbstractValue.flyweightString("@domain");
-	public static Any domain__   = AbstractValue.flyweightString("domain__");
+	public final static Any atDomain__ = AbstractValue.flyweightString("@domain");
+	public final static Any domain__   = AbstractValue.flyweightString("domain__");
 
-  public static Any atException__   = AbstractValue.flyweightString("@exception");
-  public static Any atExName__      = AbstractValue.flyweightString("@exname");
-	public static Any atExMsg__       = AbstractValue.flyweightString("@exmsg");
-  public static Any atExInfo__      = AbstractValue.flyweightString("@exinfo");
-  public static Any atStackTrace__  = AbstractValue.flyweightString("@stackTrace");
-  public static Any atJavaStack__   = AbstractValue.flyweightString("@javaStack");
-  public static Any atExCommit__    = AbstractValue.flyweightString("@excommit");
+  public final static Any atException__   = AbstractValue.flyweightString("@exception");
+  public final static Any atExName__      = AbstractValue.flyweightString("@exname");
+	public final static Any atExMsg__       = AbstractValue.flyweightString("@exmsg");
+  public final static Any atExInfo__      = AbstractValue.flyweightString("@exinfo");
+  public final static Any atStackTrace__  = AbstractValue.flyweightString("@stackTrace");
+  public final static Any atJavaStack__   = AbstractValue.flyweightString("@javaStack");
+  public final static Any atExCommit__    = AbstractValue.flyweightString("@excommit");
 
-  public static Any atChannel__    = AbstractValue.flyweightString("@channel");
+  public final static Any atChannel__    = AbstractValue.flyweightString("@channel");
 
   // See EventConstants.java
 	//public static Any atEvent__     = AbstractValue.flyweightString("@event");
 	//public static Any atEventData__ = AbstractValue.flyweightString("@eventData");
 	//public static Any atEventId__   = AbstractValue.flyweightString("@eventId");
 
-	public static Any atIterCount__   = AbstractValue.flyweightString("@count");
-	public static Any atIterName__    = AbstractValue.flyweightString("@name");
-	public static Any atIterFirst__   = AbstractValue.flyweightString("@first");
-  public static Any atIterLast__    = AbstractValue.flyweightString("@last");
-  public static Any atOld__         = AbstractValue.flyweightString("@old");
-  public static Any atCapped__      = AbstractValue.flyweightString("@capped");
-  public static Any atModel__       = AbstractValue.flyweightString("@model");
+	public final static Any atIterCount__   = AbstractValue.flyweightString("@count");
+	public final static Any atIterName__    = AbstractValue.flyweightString("@name");
+	public final static Any atIterFirst__   = AbstractValue.flyweightString("@first");
+  public final static Any atIterLast__    = AbstractValue.flyweightString("@last");
+  public final static Any atOld__         = AbstractValue.flyweightString("@old");
+  public final static Any atCapped__      = AbstractValue.flyweightString("@capped");
+  public final static Any atModel__       = AbstractValue.flyweightString("@model");
 
-	public static Any atCellAlign__ = AbstractValue.flyweightString("@cellAlign");
-  public static Any atCellWidth__ = AbstractValue.flyweightString("@cellWidth");
-  public static Any atCellFill__  = AbstractValue.flyweightString("@cellFill");
-  public static Any atToolTip__   = AbstractValue.flyweightString("@toolTip");
+	public final static Any atCellAlign__ = AbstractValue.flyweightString("@cellAlign");
+  public final static Any atCellWidth__ = AbstractValue.flyweightString("@cellWidth");
+  public final static Any atCellFill__  = AbstractValue.flyweightString("@cellFill");
+  public final static Any atToolTip__   = AbstractValue.flyweightString("@toolTip");
 
-  public static Any atMax__               = AbstractValue.flyweightString("@max");
-  public static Any atSyncGUI__           = AbstractValue.flyweightString("@syncgui");
+  public final static Any atMax__               = AbstractValue.flyweightString("@max");
+  public final static Any atSyncGUI__           = AbstractValue.flyweightString("@syncgui");
 
-  private static Map fixedTokens__;
-	public static Set prefices__;
-  public static Set specialTokens_;
+  private final static Map fixedTokens__;
+	public  final static Set prefices__;
+  public  final static Set specialTokens_;
 
 	// Retain the original specification if there is one
 	//private StringI pathSpec_;
@@ -1042,13 +1042,11 @@ public class NodeSpecification extends AnyQueue
   static private Any processIndirectKey(NodeSpecification  outer,
                                         AnyStringTokenizer t)
   {
-//    System.out.println("processIndirectKey start");
     NodeSpecification n = new NodeSpecification();
 
     while (t.hasMoreTokens())
     {
       String s = t.nextToken();
-//      System.out.println("processIndex token " + s);
 
       if (s.equals(indirectKeyOpen__.toString()))
       {
@@ -1076,7 +1074,6 @@ public class NodeSpecification extends AnyQueue
         };
         if (outer != null)
           outer.addToken(ret);
-//        System.out.println("processIndirectKey end");
         return ret;
       }
       else

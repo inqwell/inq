@@ -1,0 +1,21 @@
+// *************************************
+// * Top level box with a periodic timer
+// *************************************
+
+package inq.jobcontrol;
+
+any topLevelPeriodic = new(Job);
+topLevelPeriodic.ShortName = "Periodic";
+setblob(topLevelPeriodic.TimerExpr, "// Run in 10 seconds time
+timer t;
+date d = getdate();
+t.properties.nextRuns = dateadd(SECOND, 10, d);
+
+// return the timer
+t;
+");
+
+topLevelPeriodic.JobOrder = 0;
+
+call createJob(Job = topLevelPeriodic);
+

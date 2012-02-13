@@ -1,0 +1,574 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright 2006 Inqwell Ltd.
+-->
+<!DOCTYPE document PUBLIC "-//APACHE//DTD Documentation V2.0//EN" "http://forrest.apache.org/dtd/document-v20.dtd">
+<document>
+  <header>
+    <title>Services and Flows</title>
+  </header>
+  <body>
+    <section id="intro">
+      <title>Introduction</title>
+      <p>
+        Services are script entry points that
+        one <a href="../../primer/process.html">process</a> may invoke on another.
+        Often the cooperating processes are the Client and its associated User
+        process however in the <code>Chat</code> example User processes in the
+        server invoke services on each other to send chat messages and channel
+        invitations.
+      </p>
+      <p>
+        In this section we discuss the services we need to implement the chat
+        system and their invocation flows.
+      </p>
+    </section>
+    <section id="login">
+      <title>Login() - The Server Login Service</title>
+      <p>
+        It is appropriate at this point to mention Inq's package structure and
+        its relation to client login. Like other languages, Inq uses
+        the <code>package</code> directive at the head of a parse module to
+        define the package in which unqualified references to functions,
+        services and typedefs will be resolved. A module's package defines
+        the namespace in which those functions, services and typedefs
+        it defines reside.
+        For <code>Chat</code> we have no need to sub-divide the application
+        so we put everything into the package <code>examples.chat</code>.
+      </p>
+      <p>
+        In addition, when a client logs into a server it specifies
+        the package it wants to login to. Inq's login window looks like this:
+      </p>
+      <figure src="images/login.png" alt="Login Window"/>
+      <p>
+        Inq expects to find the service <code>examples.chat:Login</code>. If it
+        does not an exception is thrown and login is unsuccessful.
+        The <code>Login</code> service is passed the user name and encrypted
+        password and performs authentication of these credentials.
+      </p>
+      <note>Inq will include an authorisation and privilege package, yet to be
+      released. Full details of the login protocol will be covered there.</note>
+      <p>
+        The <code>Login</code> service must call either of the predefined
+        functions <code>system:LoginOK()</code> or <code>system:LoginDenied()</code>.
+        For <code>Chat</code> we don't do anything other than
+        call <code>system:LoginOK()</code> as shown:
+      </p>
+      <source>
+/**
+ * The Login service for the Chat package is run
+ * when the client logs in as this package.
+ * For demo purposes it doesn't do anything other
+ * than respond with the client source.
+ */
+service Login(string loginName, string passwd)
+{
+  call system:LoginOK(url="chat.inq");
+}
+</source>
+      <p>
+        The <code>url</code> argument is required and tells the Inq server
+        the source required to start the client. If relative, as here, it is
+        resolved with respect to the current module. The url is resolved
+        and read on the server, so the client does not require (and likely
+        should not have) access to this url.
+      </p>
+      <section id="clientinit">
+        <title>Inq Client Initialisation</title>
+        <p>
+          The Inq script is returned to and parsed in the client. As well as
+          defining functions and services, it will necessarily contain
+          a fragment that, being outside any such definition, is executed
+          immediately to show the initial GUI. Our example includes this script
+          at the end of <code>chat.inq</code>
+        </p>
+        <source>
+<strong>if ($process.package == "\p")</strong>
+{
+  // When running as the chat package itself, create a top-level window
+  // and create the GUI within it.
+  // Alternatively, the chatWindow function can be called by other
+  // applications providing a container for the GUI.
+  <strong>gWindow chat;
+  call chatWindow(chat);</strong>
+
+  // Load utility dialogs
+  exec("classpath:///inq/gui/questiondialog.inq");
+  exec("classpath:///inq/gui/messagedialog.inq");
+  exec("classpath:///inq/gui/textPrompt.inq");
+
+  // Create the utility dialogs for later use
+  call inq.gui.util:createMessageDialog(parent = chat);
+  call inq.gui.util:createTextPromptDialog(parent = chat);
+  call inq.gui.util:createQuestionDialog(parent = chat);
+
+  // Pop up the window
+  show (chat);
+}
+</source>
+        <p>
+          Once logged in, the login package is available at $process.package and
+          given that the string constant <code>\p</code> expands to the package
+          of the current parse module, we can make this fragment conditional
+          on having logged in as <code>examples.chat</code>. This allows the
+          chat utility to be used stand-alone or integrated into larger
+          applications having
+          their own startup fragments that can just call the public
+          function <code>examples.chat:chatWindow()</code> providing a suitable
+          GUI parent.
+        </p>
+        <p>
+          After login, the initial client script runs at
+          the context <code>$root</code> and <code>chatWindow()</code>
+          is called to build the initial GUI. It creates the menus and a tab pane
+          to hold each conversation and sets up its MVC and property bindings
+          as discussed in <a href="../../primer/guibasics.html">GUI Basics</a>.
+          In client-server applications it is common to want to invoke a service
+          at this time, for example to fetch initial model data. However, the
+          client-side context is still being built, so Inq provides a component
+          event when this part of initialisation is complete.
+          The <code>chatWindow()</code> function contains this <code>gEvent</code>
+          usage:
+        </p>
+        <source>
+// As the layout is performed and the GUI node structure added to
+// the node space, contextEstablished() is called with $this as $root.chat
+gEvent(channels, call contextEstablished(), event=(gContext));
+</source>
+        <p>
+          The event handler function for the <code>gContext</code> event
+          type conventionally has the name <code>contextEstablished()</code>
+          and is called when the component (the tab pane <code>channels</code>
+          in this example) is
+        </p>
+        <ol>
+          <li>placed into
+          the <a href="../../primer/guibasics.html#hierarchies">Inq hierarchy</a>
+          beneath  a component whose <code>contextNode</code> property is set
+          to <code>true</code>;</li>
+          <li>the GUI context is placed into the process node space.</li>
+        </ol>
+        <p>
+          In <code>chatWindow()</code> the following lines perform step 1:
+        </p>
+        <source>
+// The chat top-level GUI container is a context node. It becomes $this
+// in any component event callbacks. See gContext event handler below.
+chat.properties.contextNode = true;
+  .
+  .
+  .
+// Layout the window - only the tab to add
+layout(., chat, "channels");
+</source>
+        <p>
+          The event handler was placed on the <code>channels</code> component
+          although we could have used any of those created and laid-out
+          by <code>chatWindow()</code>, because they all end up residing as
+          children of <code>chat</code>. Accomplishing step 2,
+          the <code>chat</code> node itself
+          is placed into the process node space by the line:
+        </p>
+        <source>
+// $this is currently $root. Add the chat window to the node space
+any $this.chat = chat;
+</source>
+      </section>
+    </section>
+    <section id="init">
+      <title>initChat() - Signing into Chat</title>
+      <p>
+        Having established a context of <code>$root.chat</code> the client
+        invokes the <code>initChat</code> service in the server. Referring
+        to <code>chatserv.inq</code> this service performs the following:
+      </p>
+      <ol>
+      <li>
+        calls the local function <code>deriveChatName()</code> to create a
+        suitable value for <code>OnLine.OnLine</code>. If a user logs into
+        the chat system more than once a new presence is created by suffixing
+        the login name with <code>_1</code>, <code>_2</code> and so on.
+      </li>
+      <li>
+        calls the local function <code>register()</code> passing such arguments
+        so that the stack contains the necessary values for
+        the <code>OnLine</code> <code>construct</code> expression.
+      </li>
+      </ol>
+      <p>
+        The declaration for <code>register()</code> is:
+      </p>
+      <source>
+local function register(OnLine, OnLine.LoginName)
+</source>
+      <p>
+        The arguments are declared pass-by-value using
+        the <a href="../../primer/module.html#funcdecls">type reference</a> form,
+        including
+        the <a href="../../primer/typedef.html#resolvefields">shorthand syntax</a>
+        for <code>OnLine.OnLine</code>. The next sections
+        explain what the <code>register()</code> function is doing.
+      </p>
+      <section id="online">
+        <title>Creating the OnLine Instance</title>
+        <p>
+          The combination of <code>new()</code> and <code>create()</code>
+          respectively makes a new prototype <code>OnLine</code> instance
+          and submits it for creation as
+          a <a href="../../primer/txn.html#create"><em>managed instance</em></a>.
+        </p>
+        <source>
+transaction
+{
+  create(new(OnLine));
+}
+</source>
+        <p>
+          The construct expression (defined with the typedef
+          in <code>OnLine.inq</code>) executes to initialise the prototype.
+          This process involves copying from the stack, which for managed
+          instance prototypes means assigning the matching
+          fields <code>OnLine</code> and <code>LoginName</code>, passed as
+          arguments to <code>register()</code>.
+        </p>
+        <p>
+          We don't initialise the <code>Context</code> field in this way so
+          as things stand the constructor always sets it to the current context
+          path, returned
+          by <a href="../../primer/nodes.html#pathprefices"><code>$path</code></a>.
+          When sending service requests to another chat user's process, as we
+          see shortly we use the <code>@context</code> argument in
+          the <code>send</code> invocation. You may realise at this point that
+          everyone's context is the same and will be <code>$root.chat</code>. This
+          is certainly true if all users logged in to chat as its native
+          package <code>examples.chat</code> however this may not be the case
+          if chat has been integrated into a larger application. That application
+          may well establish a different context of,
+          say, <code>$root.myLargeApp.chat</code>. By storing the context in
+          the user's <code>OnLine</code> instance we don't need to know what it
+          is when invoking services in another's User process.
+        </p>
+        <p>
+          Lastly, the <code>ProcessId</code> field is initialised. In Inq, the
+          only way to access another process is via its <code>id</code>
+          property. The process can be obtained
+          using <code>getprocess(id)</code>.
+        </p>
+      </section>
+      <section id="evlivelist">
+        <title>Setting Up Event-Live Lists</title>
+        <p>
+          We would like to maintain lists of the users logged into chat
+          and the public chat rooms available, so we can select them in the
+          client GUI. To do this we use a technique that creates a list
+          in our server-side node space, returns it to the client and keeps
+          it up to date as items within it are created and destroyed. We
+          have two similar lists in this case, so a helper
+          function <code>readChatWithList</code> is scripted.
+        </p>
+        <source>
+// Set up two lists in our node space. The publicList is the available
+// public chat rooms, that is the instances of ChatChannel whose IsPublic
+// field is true. The privateList is all the registered users, that is
+// all the OnLine instances.
+call readChatWithList(IsPublic=true, listAt=path($this.vars.publicList));
+call readChatWithList(IsPublic=false, listAt=path($this.vars.privateList));
+</source>
+        <p>
+          This function follows the pattern for building an event-live
+          node set described
+          in <a href="../../primer/structures.html">Building Node Structures</a>.
+          Event-live structures propagate events arising within them upwards
+          through the node space to <code>$root</code>, discussed for update
+          events
+          in <a href="../../primer/process.html#eventflows">Event Flows Between
+          Processes</a>.
+          This is true also when such a structure is added to the node space.
+          In <code>readChatWithList()</code> this line is important:
+        </p>
+        <source>
+add(remove(nodeSet.list), listAt);
+</source>
+        <p>
+          This places the structure rooted at <code>list</code> and based on
+          the <a href="../../primer/structures.html#nsetseed">seeded</a> map
+          type <code>nodeSet</code> at the given path. The same result would
+          be achieved with the line
+        </p>
+        <source>
+any {listAt} = remove(nodeSet.list);
+</source>
+        <p>
+          Except that, unlike
+          an <a href="../../primer/types.html#anonymousdecl">anonymous declaration</a>,
+          the <code>add</code> function generates an event on the root of an event-live
+          structure. This event propagates to the peer client carrying the
+          node set and its path, so it can be similarly placed in the client node
+          space. In this pattern, structures are created and maintained in the
+          server while being automatically reflected in the client. There is no
+          need to return them with an explicit reverse service invocation. The
+          following diagram depicts most of what has been discussed so far
+          when Alice logs into chat:
+        </p>
+        <figure src="images/chatinit.png" alt="Initialisation"/>
+        <section id="listeners">
+          <title>Establishing Creation Listeners</title>
+          <p>
+            While a node set is placed into a process's node space will propagate
+            update and delete events to the client, creation events must be
+            explicitly solicted and processed. Inq raises create events on a
+            typedef's meta data and these emanate from the system catalog.
+            The following script arranges to receive these events for
+            the <code>OnLine</code> typedef:
+          </p>
+          <source>
+// Listen for new instances of OnLine so we can maintain the private list.
+// The listen() function returns a token that represents the listen itself.
+// We save this at $this.listeners.newOnLine so we can unlisten() later
+// if we want to.
+any $this.listeners.newOnLine = listen (unlisten($catalog, $this.listeners.newOnLine),
+                                        func f = call onLineCreated(OnLine = @eventData),
+                                        event   = (create),
+                                        typedef = OnLine);
+</source>
+          <p>
+            The opposite of <code>listen</code> is <code>unlisten</code>
+            but <code>unlisten</code> doesn't mind if the listener token
+            is unresolved.
+          </p>
+          <p>
+            The second argument is a <code>func</code> whose expression (which
+            does not have to be a <code>call</code> statement) is executed when
+            the event fires. At this point, the stack is initialised
+            with certain <a href="../../primer/events.html#evlisten">well-known</a>
+            paths. For the <code>create</code> event the path <code>@eventData</code>
+            is the instance just created. The use
+            of <a href="../../primer/controlflow.html#xfunc"><code>func</code>
+            as opposed to <code>cfunc</code></a> is important
+            because <code>func</code> encapsulates the context in which the
+            event handler expression will run.
+          </p>
+          <p>
+            The <code>typedef</code> argument ensures the listener only fires
+            when instances of <code>examples.chat.OnLine</code> are created.
+            Here is the script for <code>onLineCreated</code>:
+          </p>
+          <source>
+/**
+ * Called when a new OnLine instance is created, that is when a new user
+ * registers with Chat.
+ */
+local function onLineCreated(any OnLine)
+{
+  // Put the instance in the private list
+  any k = getuniquekey(OnLine);
+  add(OnLine, path($this.vars.privateList.{k}.OnLine));
+}
+</source>
+          <p>
+            From the discussion of
+            the <a href="../../primer/structures.html#nsetnames">node set
+            structure</a> the event handler follows the pattern of:
+          </p>
+          <ol>
+            <li>obtaining the primary key of the new instance
+            using <code>getuniquekey()</code> and</li>
+            <li>using the <code>add()</code> function to place the new
+            instance in the node space accordingly and raising an event</li>
+          </ol>
+          <p>
+            The event flow is as shown:
+          </p>
+          <figure src="images/createevent.png" alt="Create Events"/>
+          <p>
+            In a similar way, a listener is set up to fire when new ChatChannel
+            instances are created, except that in this case we are only
+            interested in those having <code>IsPublic</code> equal
+            to <code>true</code>. To support filtering of create events, Inq
+            allows an arbitrary value, known as the <em>create data</em>,
+            to be specified in the listener and at the point the instance is
+            submitted for creation. Here is the script to set up the listener:
+          </p>
+          <source>
+// Listen for new instances of ChatChannel so we can maintain the public list.
+// In this case we discriminate events of interest by specifying the "create"
+// argument. This is any value that must compare equals with the value
+// used in create() for the listener to be fired. We only have one value
+// which is boolean true. We don't have to use a map but doing so just
+// makes things a little clearer.
+any createPublic.IsPublic = true;
+any $this.listeners.newChatChannel = listen (unlisten($catalog,
+                                                      $this.listeners.newChatChannel),
+                                          func f  = call chatChannelCreated(ChatChannel = @eventData),
+                                          event   = (create),
+                                          create  = createPublic,
+                                          typedef = ChatChannel);
+</source>
+          <p>
+            The listener will fire if the data provided in the <code>create</code>
+            statement compares equals with the <code>create</code> argument in
+            the <code>listen</code> statement. At the bottom
+            of <code>chatserv.inq</code> there is some script to create a
+            public chatroom:
+          </p>
+          <source>
+// Create a test chat room
+any cc = new(ChatChannel);
+cc.ChatChannel = "TestInq";
+cc.IsPublic = true;
+cc.IsConference = false; // only relevant when IsPublic = false
+cc.PartyCount = 0;
+cc.BackChatCount = 10;
+
+// Make the create data so that this (public) channel fires the listsner
+// established in register()
+any createPublic.IsPublic = true;
+create(cc, createPublic);
+</source>
+          <p>
+            This code would fire the listener because its create data is
+            equal to the listener's. The other case where <code>ChatChannel</code>
+            instances are created, private conferences and one-to-one channels,
+            is the following
+          </p>
+          <source>
+// specify create data (cf. the "TestInq" Channel at the
+// bottom of this file). If a listener for create events is
+// established then no create data means wild-card.
+any createPublic.IsPublic = false;
+create(any c = new(ChatChannel), createPublic);
+</source>
+          <p>
+            If create data is used at all it must be used everywhere, as not
+            specifying it will fire all listeners.
+          </p>
+        </section>
+      </section>
+      <section id="initfinal">
+        <title>Initialisation Response</title>
+        <p>
+          In <code>chat</code> we choose to respond to the initial service request
+          by invoking the <code>initResponse</code> service in the client:
+        </p>
+        <source>
+// Set up the icons we will use and pass them back in initResponse
+smap icons;
+
+any icons.win       = image("images/chatinq.jpg");
+any icons.iwin      = image("images/ichatinq.jpg");
+any icons.clear     = image("images/clear16.gif");
+any icons.rxfocus   = image("images/rxfocus.gif");
+any icons.rxnofocus = image("images/rxnofocus.gif");
+
+// Send back the response
+send initResponse(icons, OnLine);
+</source>
+        <p>
+          We have chosen to return some icons to the client. In the same way
+          that source scripts are generally not directly accessible by the
+          client, so other resources need not be either. Inq applications
+          may be operating through specific firewall ports and no assumptions
+          about <code>http://</code> access need be made using this pattern.
+        </p>
+      </section>
+    </section>
+    <section id="othersvces">
+      <title>Other Services</title>
+      <p>
+        In the rest of this section we cover more briefly the other major
+        services. Reference can be made to the source files to see how these and
+        the more minor ones
+        are scripted in detail.
+      </p>
+      <section id="joinchannel">
+        <title>joinChannel() and joinChannelConfirm()</title>
+        <p>
+          The <code>joinChannel</code> service adds the caller as a new
+          participant in the given channel. In fact, because this operation
+          is also performed within the server it just calls the local
+          function <code>joinChannel</code>, which does the actual work.
+          If completed successfully, the <code>joinChannelConfirm</code>
+          service is invoked in the client.
+        </p>
+        <p>
+          The <code>joinChannelConfirm</code> service creates a GUI subtree
+          to support the client's participation in the channel. In the same
+          way as initialisation used the <code>gContext</code> event during
+          client initialisation, so the client defines the root of the
+          GUI subtree as a context and uses the same event to complete
+          its setup.
+        </p>
+        <figure src="images/joinchannel.png" alt="Join Channel"/>
+      </section>
+      <section id="sendchat">
+        <title>sendChat()</title>
+        <p>
+          The <code>sendChat</code> service dispatches a chat
+          message to all current participants. Earlier in this example
+          we discussed the <a href="index.html#nodespace">node space</a>
+          requirements. As we now see, at the second-level context we
+          have the <code>participantsList</code> established
+          in <code>setupChatContext()</code> that allows to do this
+          straight away in a loop:
+        </p>
+        <source>
+// Send the message to existing channel participants
+foreach($this.chatInsts.participantsList)
+{
+  // Protect against exceptions in case any of the users coincidentally
+  // go off line.
+  try
+  {
+    any p = getprocess($this.OnLine.ProcessId);
+    send receivedChatMsg(ChatChannel,
+                         BackChat,
+                         @channel = p.ichannel,
+                         @context = $this.OnLine.Context);
+  }
+  catch {}
+}
+</source>
+        <p>
+          Inq's built-in event handling means that this list is automatically
+          maintained when participants leave the channel, however if we are
+          unlucky enough to send to a (now) non-existent process we simply
+          ignore the exception that would arise.
+        </p>
+        <figure src="images/sendchat.png" alt="Send Chat"/>
+        <p>
+          Notice that in the <code>send</code> statement we specify the
+          well-known argument of <code>@context</code>. Recall from earlier
+          that this is the context of the chat system as a whole, not the
+          channel we are currently dealing with. In the server this does
+          not matter because its only action is to relay the message to
+          the client. The issue of switching to the correct context is
+          handled in the client-side service <code>chatReceived()</code>
+          with the following usage of <code>xfunc</code>:
+        </p>
+        <source>
+/**
+ * We have received a chat message. This service is invoked in the
+ * top-level chat context (originally established when initChat was
+ * invoked). In this context we've saved our character styles and other
+ * useful things, and the funcs for each active ChatChannel, of course.
+ */
+service chatReceived(any ChatChannel, any BackChat)
+{
+  any k = getuniquekey(ChatChannel);
+
+  xfunc($this.vars.{k}.tabFuncs.chatReceived,
+        ChatChannel,
+        BackChat,
+        $this.vars.baseStyle,
+        $this.vars.urlRE,
+        $this.properties.active);
+}
+</source>
+      </section>
+      <p>
+        <a href="gui.html"><icon src="../images/nextpage.gif" alt="nextpage"/></a>
+      </p>
+    </section>
+  </body>
+</document>

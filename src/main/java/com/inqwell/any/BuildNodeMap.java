@@ -33,7 +33,6 @@ public final class BuildNodeMap extends    AbstractFunc
   private NodeSpecification s_;
   private Any               leaf_;
   private Any               lastPath_;
-//  private boolean           strict_    = false;
 //  private boolean           replace_   = true;
   private Map               proto_     = null;
   private Map               mapParent_ = null;
@@ -147,15 +146,15 @@ public final class BuildNodeMap extends    AbstractFunc
     return leaf_;
   }
 
-  private int processPathItem(Composite current, Iter i, ResolvePathComponent res)
+  private void processPathItem(Composite current, Iter i, ResolvePathComponent res)
   {
-    int insertionPosition = -1;
-    
 	  if (i.hasNext())
 	  {
 		  // May be build a new node at the current point and
 		  // return the name we built it at
-	    Any pathItem = applyItem(current, i, res);
+      //Any pathItem = applyItem(current, i, res);
+      applyItem(current, i, res);
+	  }
 	
 		  // If its a node set then we may like to reorder after
 		  // building below the current node is complete.
@@ -163,25 +162,34 @@ public final class BuildNodeMap extends    AbstractFunc
       // determined by the path being exhausted. Otherwise, structures
       // like recursive trees would be erroneously reordered as
       // each node set was traversed on the way back up.
-		  if (current.getNodeSet() != null &&
-		      pathItem != null &&
-          insertionPosition_ == -2)
-		  {
-			  if (current instanceof Orderable)
-			  {
-				  Orderable o = (Orderable)current;
-				  insertionPosition = o.reorder(pathItem);
-				}
-		  }
-		}
-    
-    // Remember only deepest insertion position. Have to resort to this
-    // mechanism as insertionPosition is not passed up through the recursive
-    // call path. Only assign the member once as we pop back up.
-    if (insertionPosition_ == -2 && insertionPosition >= 0)
-      insertionPosition_ = insertionPosition;
-    
-    return insertionPosition;
+//		  if (current.getNodeSet() != null &&
+//		      pathItem != null &&
+//          insertionPosition_ == -2)
+//		  {
+//			  if (current instanceof Orderable)
+//			  {
+//				  Orderable o = (Orderable)current;
+//				  insertionPosition = o.reorder(pathItem);
+//				  
+//				  // When dealing with a node set and there is no comparator
+//				  // present then it is important for GUI dispatching that a
+//				  // vector number is supplied. If none is yet known
+//				  if (insertionPosition < 0 && current instanceof Vectored)
+//				  {
+//				    Vectored v = (Vectored)current;
+//				    v.initOrderBacking();
+//				    insertionPosition = v.indexOf(pathItem);
+//				  }
+//				}
+//		  }
+//		}
+//    
+//    // Remember only deepest insertion position. Have to resort to this
+//    // mechanism as insertionPosition is not passed up through the recursive
+//    // call path. Only assign the member once as we pop back up.
+//    if (insertionPosition_ == -2 && insertionPosition >= 0)
+//      insertionPosition_ = insertionPosition;
+//    
 	}
 	
   private boolean resolvePathItem(ResolvePathComponent res, Iter i)
@@ -285,8 +293,6 @@ public final class BuildNodeMap extends    AbstractFunc
 		{
 			pathItem = i.next();
       isControl = NodeSpecification.isControl(pathItem);
-//      if (isControl)
-//     	  strict_ = NodeSpecification.isStrict(pathItem);
     }
 
     path_    = pathItem;
@@ -374,9 +380,6 @@ public final class BuildNodeMap extends    AbstractFunc
 	      Composite child;
      		if (!node.contains(path_) || node.get(path_) == null)
      		{
-//					System.out.println("BuildNodemap.exec(): adding at node " + node);
-//					System.out.println("BuildNodemap.exec(): path_ is " + path_);
-
             // Check for ADD PRIVILEGE at the current node, key of path_
             getTransaction().checkPrivilege(AbstractMap.P_ADD, node, path_);
 
@@ -388,7 +391,6 @@ public final class BuildNodeMap extends    AbstractFunc
   						node.replaceItem(path_, (child = (Composite)proto_.buildNew(null)));
   					else
   						node.replaceItem(path_, (child = (Composite)node.buildNew(null)));
-  //					System.out.println("BuildNodemap.exec(): built  " + child.getClass());
   			}
       	else
       	{
@@ -410,28 +412,18 @@ public final class BuildNodeMap extends    AbstractFunc
         // Add in the leaf
 	      if (path_ != null)
 	      {
-	  //      System.out.println("BuildNodemap.exec(): adding leaf " + leaf_);
-	  //      System.out.println("BuildNodemap.exec(): whose class is " + leaf_.getClass().getName());
-	  //      System.out.println("BuildNodemap.exec(): to " + node);
-	  //      System.out.println("BuildNodemap.exec(): whose class is " + node.getClass().getName());
 	      	if (node.contains(path_))
 	      	{
-	      		//if (!strict_)
-	          //{
-              // require REMOVE and ADD PRIVILEGE on node for key path_
-              getTransaction().checkPrivilege(AbstractMap.P_ADD, node, path_);
-              getTransaction().checkPrivilege(AbstractMap.P_REMOVE, node, path_);
-	      		  node.replaceItem(path_, leaf_);
-	            eventId_      = EventConstants.NODE_REPLACED;
-	            childEventId_ = EventConstants.NODE_REPLACED_CHILD;
-              
-              // See if we can get the insertion (original) position here:
-              if (node.getNodeSet() != null && node instanceof Vectored)
-                insertionPosition_ = ((Vectored)node).indexOf(path_);
-              
-	        //  }
-	      	//	else
-	      	//	  throw (new DuplicateChildException ("while BuildNode " + s_));
+            // require REMOVE and ADD PRIVILEGE on node for key path_
+            getTransaction().checkPrivilege(AbstractMap.P_ADD, node, path_);
+            getTransaction().checkPrivilege(AbstractMap.P_REMOVE, node, path_);
+      		  node.replaceItem(path_, leaf_);
+            eventId_      = EventConstants.NODE_REPLACED;
+            childEventId_ = EventConstants.NODE_REPLACED_CHILD;
+            
+            // See if we can get the insertion (original) position here:
+//            if (node.getNodeSet() != null && node instanceof Vectored)
+//              insertionPosition_ = ((Vectored)node).indexOf(path_);
 	      	}
 	      	else
 	      	{
@@ -440,6 +432,26 @@ public final class BuildNodeMap extends    AbstractFunc
 	      		node.add(path_, leaf_);
 	          eventId_      = EventConstants.NODE_ADDED;
 	          childEventId_ = EventConstants.NODE_ADDED_CHILD;
+	          
+	          // Determine the insertion position when adding to a node set
+	          if (node.getNodeSet() != null && (node instanceof Orderable))
+	          {
+              Orderable o = (Orderable)node;
+              int insertionPosition = o.reorder(path_);
+              
+              // When dealing with a node set and there is no comparator
+              // present then it is important for GUI dispatching that a
+              // vector number is supplied. If none is yet known (because
+              // there is no order backing / comparator present) then
+              // set up the 
+              if (insertionPosition < 0 && current instanceof Vectored)
+              {
+                Vectored v = (Vectored)current;
+                v.initOrderBacking();
+                insertionPosition = v.indexOf(pathItem);
+              }
+              insertionPosition_ = insertionPosition;
+	          }
 	      	}
 	      }
 	      return retPathItem;

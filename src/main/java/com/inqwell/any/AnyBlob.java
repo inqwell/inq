@@ -157,20 +157,6 @@ public class AnyBlob extends    AnyObject
     }
   }
 
-  public Any copyFrom (Any a)
-  {
-    if (a != null && a != this)
-    {
-//      if (!(a instanceof ObjectI))
-//        throw new IllegalArgumentException("AnyBlob.copyFrom(): " + a.getClass());
-//
-//      // Apart from a friendlier exception above, we are happy to use the
-//      // super class copy semantics
-      super.copyFrom(a);
-    }
-    return this;
-  }
-
   private void setStreams(InputStream is, OutputStream os) throws AnyException
   {
     stream_.setStreams(is, os);

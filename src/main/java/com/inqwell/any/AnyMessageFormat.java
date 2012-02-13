@@ -45,8 +45,8 @@ public class AnyMessageFormat extends MessageFormat
   public StringBuffer format(Object source, StringBuffer result,
                                    FieldPosition ignore)
   {
-    java.util.Map map = ((Map)source).getMap();
-    return super.format(map,result,ignore);
+    //java.util.Map map = ((Map)source).getMap();
+    return super.format((Map)source,result,ignore);
   }
 
   public void applyPattern (String pattern)

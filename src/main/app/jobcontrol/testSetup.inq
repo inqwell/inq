@@ -1,0 +1,139 @@
+// Create some jobs for testing
+
+package inq.jobcontrol;
+
+
+// *************************************
+// * Top level box with a periodic timer
+// *************************************
+
+any topLevelPeriodic = new(Job);
+topLevelPeriodic.ShortName = "Periodic";
+setblob(topLevelPeriodic.TimerExpr, "// Run in 10 seconds time
+timer t;
+date d = getdate();
+t.properties.nextRuns = dateadd(SECOND, 10, d);
+
+// return the timer
+t;
+");
+
+topLevelPeriodic.JobOrder = 0;
+
+call createJob(Job = topLevelPeriodic);
+
+// *************************************
+// * Child box of the above. Make it
+// * abort if a child task returns
+// * error status
+// *************************************
+any boxChild = new(Job);
+boxChild.ShortName = "Box";
+boxChild.JobOrder = 0;
+boxChild.ContinueOnError = enum(ContinueOnError, ABORT);
+call createJob(Job = boxChild, parent = topLevelPeriodic);
+
+// *************************************
+// * Put two tasks in the box above
+// *************************************
+
+// * 1. This task generates an error. It tries to
+// * run gcc. May be your system does not have that
+// * or otherwise you won't have the file fred.c
+// * Note that JobControl establishes $process.system.out
+// * which is directed to a log file for this task
+
+any errorTask = new(Job);
+errorTask.ShortName = "gcc error";
+errorTask.JobOrder = 0;
+setblob(errorTask.FunctionExpr, "// generate something to stderr
+syscmd(\"gcc fred.c\",
+  stdout=$process.system.out,
+  stderr=$process.system.out);
+");
+call createJob(Job = errorTask, parent = boxChild);
+
+// * 2. A no-op that just returns success. Of course a task
+// * can be any inq script, not just an invocation of a system
+// * command. Given the preceeding task returns error status,
+// * this task will run only if the containing box
+// * has its ContinueOnError field set to CONTINUE. You
+// * can try changing it in the Job Control admin gui
+// * and looking at the job's LastRan time.
+
+any noopTask = new(Job);
+noopTask.ShortName = "no-op ok";
+noopTask.JobOrder = 1;
+setblob(noopTask.FunctionExpr, "// Just return ok
+0;
+");
+call createJob(Job = noopTask, parent = boxChild);
+
+// *************************************
+// * Top level box that inherits an
+// * absolute timer from its children
+// *************************************
+
+any topLevelAbsolute = new(Job);
+topLevelAbsolute.ShortName = "Absolute";
+topLevelAbsolute.JobOrder = 1;
+topLevelAbsolute.BoxType = enum(BoxType, TIMED);
+
+
+call createJob(Job = topLevelAbsolute);
+
+any fooTask = new(Job);
+fooTask.ShortName = "foo";
+fooTask.JobOrder = 0;
+setblob(fooTask.FunctionExpr, "// May be this generates o/p on your system
+syscmd(\"ls -l\",
+  stdout=$process.system.out,
+  stderr=$process.system.out);
+
+// Delay
+
+// wait(\"eek\", 6000);     // Using Inq
+
+syscmd(\"sleep 6\",    // Using the (*nix) shell
+  stdout=$process.system.out,
+  stderr=$process.system.out);
+");
+setblob(fooTask.TimerExpr, "// Run at a fixed time
+timer t;
+date d = getdate();
+dateset(HOUR_OF_DAY, d, 22);
+dateset(MINUTE, d, 56);
+dateset(SECOND, d, 0);
+if (d <= getdate())
+  d = dateadd(DAY_OF_YEAR, 1, d);
+
+t.properties.nextRuns = d;
+
+// return the timer
+t;
+");
+
+call createJob(Job = fooTask, parent = topLevelAbsolute);
+
+any barTask = new(Job);
+barTask.ShortName = "bar";
+barTask.JobOrder = 0;
+setblob(barTask.FunctionExpr, "// no op
+0;
+");
+setblob(barTask.TimerExpr, "// Run sometime after foo
+timer t;
+date d = getdate();
+dateset(HOUR_OF_DAY, d, 22);
+dateset(MINUTE, d, 59);
+dateset(SECOND, d, 0);
+if (d <= getdate())
+  d = dateadd(DAY_OF_YEAR, 1, d);
+
+t.properties.nextRuns = d;
+
+// return the timer
+t;
+");
+
+call createJob(Job = barTask, parent = topLevelAbsolute);

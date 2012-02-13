@@ -1,0 +1,557 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright 2011 Inqwell Ltd.
+-->
+<!DOCTYPE faqs PUBLIC "-//APACHE//DTD FAQ V2.0//EN" "http://forrest.apache.org/dtd/faq-v20.dtd">
+<faqs>
+  <title>Frequently Asked Questions</title>
+<!--    <faqsection id="howdid">
+      <title>faqs</title>-->
+      <faq id="how">
+        <question>How did you come up with Inq?</question>
+        <answer>
+        <p>
+          An interesting question with a complicated answer.   Inq is made up of
+          three things:
+        </p>
+        <ol>
+          <li>The Inq language;</li>
+          <li>The underlying Java framework;</li>
+          <li>The years of utter frustration in building/supporting complex
+            software systems, thinking that there must be a better way.</li>
+        </ol>
+        <p>
+          <strong>Frustration: The driver of Change?</strong>
+        </p>
+        <p>
+          We've worked with financial systems for many years, the majority of the
+          time in Front Office. These environments are extremely challenging:
+          loosely specified requirements, a
+          strong need to deliver systems quickly yet the ability to factor in unknown
+          future requirements which could leave you with some immensely tough
+          implementation choices. And we haven't even touched how often people
+          change their minds when it comes to the GUI. In a nutshell, we strongly
+          feel that the modern IT environment is one of constant change.
+        </p>
+        <p>
+          We wanted to be in a position where when our users asked for something,
+          we'd have the confidence - in our abilities and software tools - to
+          say "Yes, no problem!". Not being able to do this is quite frankly,
+          frustrating!
+        </p>
+        <p>
+          The vast majority of banking systems are pretty much the same in that
+          they shuffle data from one end of the organisation to another - doing
+          some creating, modifying, aggregating etc. along the way. They all
+          have some combination of: database(s), transactions, events, messaging,
+          background processes, multiple users doing lots of stuff and interactive
+          front-end GUIs with validation and work-flow. They integrate with
+          other systems both upstream and downstream. It is only the business
+          logic and GUI presentation which varies.
+        </p>
+        <p>
+          <strong>The Framework</strong>
+        </p>
+        <p>
+          We decided to create a software framework which captured these common
+          elements and lets you easily design and code up the final business
+          specific part. It's the
+          classic <a class="fork" href="ext:wikipedia/eighty20">80/20</a> rule.
+        </p>
+        <p>
+          The framework would be a tool which we wanted to use for ourselves.
+          Back in the early 1990's we were writing in C++/Motif
+          using <a href="ext:davidflanagan/home" class="fork">David Flanagan's</a> <a class="fork" href="ext:motiftools/home">xmt Toolkit</a>
+          for front-end GUIs. At the time
+          the <a class="fork" href="ext:wikipedia/designpatterns">Design Pattens</a>
+          book (by Gang of Four) and other Object-Oriented
+          methodologies were becoming mainstream. We started writing an OO
+          framework in C++ using Doug
+          Schmidt's <a class="fork" href="ext:schmidt/aceoverview">ACE toolkit</a>.
+          When Java came
+          out we saw that the JVM offered a lot of the ACE features out-of-the-box.
+          In fact there is Java ACE (JACE) which is but a small fraction of ACE.
+          Like many other developers we soon dumped C++ for
+          Java - sorry <a class="fork" href="ext:wikipedia/bjarne">Bjarne</a> ;-)
+          One problem we hit early on was that even
+          though at the time we were big fans of OO, we realised quickly that in an OO
+          framework, it is almost impossible to prevent framework classes intruding
+          into the application classes. We needed a way to specify application
+          objects in a "framework-agnostic" way. We looked into Java Beans and
+          the Java Reflection
+          API but we were rapidly coming to a conclusion that OO was giving us
+          more problems then benefits. This led us into the realms of metadata
+          and opaque objects, which is just a small step away from a typeless,
+          object-based environment. A few years later we came to realise this
+          was called
+          a <a class="fork" href="ext:wikipedia/proto"><em>prototype environment</em></a>,
+          where others had already done a
+          good deal of work, for example
+          the <a class="fork" href="ext:self">Self</a> language and runtime environment.
+        </p>
+        <p>
+          So we wrote a Java framework from the ground-up which allows you to specify
+          and build typeless, opaque prototypical application objects. The framework
+          can then manipulate these objects for it's own purposes such as
+          persistence, caching and triggering events without you having to
+          worry about it.
+        </p>
+        <p>
+          <strong>The Inq Language</strong>
+        </p>
+        <p>
+          Now that we had our framework we started using it in earnest. We
+          realised that our Java applications were simply instantiating and
+          wiring up objects. At the time IBM's
+          Alphaworks team released its <a class="fork" href="ext:bml">Bean Markup
+          Language</a>, BML. BML is an
+          XML document which when run by the BML parser, used the
+          Java Class Loader and Reflection API to instantiate objects and call
+          methods to wire them up. We liked the fact that we didn't
+          have to go through the hassle of editing, compiling, testing and
+          deploying java classes and jars. Just modify the BML and re-run.
+          Except, BML is just not attractive to developers. It is basic and lacks
+          expressiveness, so we created
+          our own richly defined Inq XML dialect,
+          used <a class="fork" href="ext:xslt">XSLT</a> to convert Inq-XML
+          to BML and then ran that through the BML parser. It worked but it was a huge
+          can of worms!
+          XSLT is nice and powerful but, like shots of Sambuca, too much too often
+          and life becomes blur. Furthermore, because the end
+          object-structure within the application was the same, the applications
+          still ran just as fast but all that
+          XSLT processing and BML parsing did not make for speedy launch
+          times.
+        </p>
+        <p>
+          It was a no-brainer to conclude we needed our own language. As fans
+          of lex and yacc, we used <a class="fork" href="ext:javacc">JavaCC</a>
+          to help create our own language where
+          the keywords and semantics map on to the underlying framework functionality
+          yet maintain a high level of expression without being terse. Doing
+          this allowed us to have a language which focuses on that
+          final 20% - the business logic and end-user GUI presentation.
+          We don't waste time (say) on how an object is kept in sync between
+          server and client process, the underlying framework does that for
+          us.
+        </p>
+        <p>
+          A very neat yet significant natural step of this effort was the
+          Inq runtime environment.  The Inq runtime can run standalone humming
+          away burning a few CPU cycles. It does nothing until you stream
+          in some Inq script, at which point it becomes "alive" with your
+          application - be it server-side or client-side GUIs. And that's
+          not all, you can change the application logic, while it is still
+          running...safely.
+        </p>
+        <p>
+          What Inq means for us is that when we write an application we can
+          spend far more time thinking about the application business logic and
+          front-end GUI design. This is because we know we can confidently
+          build it, deploy it and most importantly of all, change it
+          quickly - whenever we want.
+        </p>
+      </answer>
+    </faq>
+    <faq id="dev">
+      <question>What's The Development Environment?</question>
+      <answer>
+        <p>
+          Pretty frugal at the moment. Any decent text editor perhaps with syntax
+          highlighting (eg <a class="fork" href="ext:ultraedit">UltraEdit</a>), <a class="fork" href="ext:mysql">MySQL</a>
+          and its <a class="fork" href="ext:mysqljdbc">jdbc driver</a>
+          for the database, <a href="ext:mq.java.net/openmq/home">Glass Fish</a>
+          for the message broker
+          and source code control of your choice. And that's it!
+        </p>
+        <p>
+          Lately we've created "general" projects in Eclipse, just for
+          its file organisation, searching and so forth.
+        </p>
+      </answer>
+    </faq>
+    <faq id="nooo">
+      <question>You Don't Like OO - Why Is That?</question>
+      <answer>
+        <p>
+          The underlying java code which supports Inq makes good use of OO
+          techniques. It is very easy to spot design patterns like Composite,
+          Visitor, Prototype, Flyweight, Builder, Strategy and so forth.
+          The framework functionality is well-defined, stable and extensible.
+          It is easy to write code for this situation using any OO language
+          because we own the problem domain 100%.
+          But outside in application-land, life is not quite so simple.
+        </p>
+        <p>
+          The typical scenario is that someone (a designer) has to come up
+          with a class model which is reusable and adaptable to future need.
+          What we've noticed is that the base classes at the top of a
+          class-model are too generic and the child classes at the bottom are
+          a bit too specific - neither case brings about huge amounts of
+          re-use. The classes in the middle are reusable but only up to a point.
+          The class-model is based on the designer's OO experience and
+          their understanding of the business requirements now and the
+          foreseeable future. The quality of these requirements are dependent
+          on the end-user having a very good idea of what they want and their
+          ability to communicate these requirements to the designer. All of
+          this makes the task of Object-Oriented modelling......subjective!
+          An alternative view of the class-model is that it is just a snapshot
+          of the designer's understanding for that moment in time. If you
+          took five different designers you could end up with five different
+          class-models. If you got them all into a room you'd have some heated
+          debates but the end result would be the same. All of this means
+          that at some point (eg when requirements are miscommunicated or they
+          change in subtle ways) the class-model has to be looked at again.
+          Either some hard choices have to made to implement some awkward
+          solution or the model needs to be refactored. Adding new code is
+          low risk, deleting existing code is also fairly manageable, but
+          changing existing working tested code is a major career-breaking
+          decision. Refactoring a class-model requires extensive care.
+        </p>
+        <p>
+          Much later when we came across Object-based languages we briefly
+          dipped our toes into Philosophy. We're not experts so please take
+          the following with a pinch of salt! Object-oriented analysis and
+          design is very similar
+          to <a class="fork" href="ext:britannica/classif">Classification Theory</a> ie the
+          formation of
+          taxonomies as used by Aristotle and Plato. We were surprised
+          to read that modern day philosophers have something better than
+          Classification Theory. So what was the new
+          thinking? <a class="fork" href="ext:wikipedia/prototheory">Prototype
+          Theory</a> - see Eleanor Rosch, Lakoff and Wittgenstein. You can read
+          more
+          about <a class="fork" href="ext:wikipedia/protoprog">Prototype-based languages</a>
+          yourself.
+        </p>
+        <p>
+          In a nutshell, we feel that although OO class-models are re-usable,
+          they themselves are not resilient to change.
+        </p>
+      </answer>
+    </faq>
+    <faq id="change">
+      <question>You talk about "Constant Change" but surely you just need to nail down the user
+          requirements as early on as possible?</question>
+      <answer>
+        <p>
+          Let's be clear, of course, nailing requirements is important.
+          The key point is that requirements are subjective, open to
+          miscommunication or misunderstanding and liable to change. Imagine
+          software development is like a bunch of soldiers marching on-foot
+          across a bog-ridden moor. The Major-General barks an order giving you
+          a rough idea of your destination. Off you trudge trying to make sure
+          you have the right equipment, you avoid the mines, ditches and that
+          everyone on the team are motivated and headed in the right
+          direction (where's the map?).
+        </p>
+        <p>After you get on to this death-march,
+          imagine if your destination changes, and keeps changing. Like,
+          huh? You would be quite right to be upset. Now imagine you're
+          given an fast zippy All Terrain Vehicle. Will you now care
+          so much if your destination changes? More then likely you will welcome
+          the change, it gives you the chance to skid around, show-off and
+          kick up the dirt. Change is good but please note, Inq is not
+          silver-bullet; you can always crash that ATV if you're not careful.
+        </p>
+      </answer>
+    </faq>
+    <faq id="noejb">
+      <question>How come you didn't use well-known frameworks like Java EJB,
+        Spring or any others?</question>
+      <answer>
+        <p>
+          Well, when we started on Inq there was no EJB or Spring etc. As
+          mentioned elsewhere, these frameworks come with their own baggage.
+          If we were building something like Inq today we would still
+          probably do it all ourselves.
+        </p>
+        <p>
+          Add to that we decided to leave OO behind in the application world
+          whereas these frameworks still operate in that space. They do not
+          deliver on separation from the application, reduction of repetitive
+          code and economy of expression, all goals we think Inq achieves well.
+        </p>
+        <p>
+          Lastly, we wanted to address both client and server. Those frameworks
+          don't particularly address those two things together.
+        </p> 
+      </answer>
+    </faq>
+    <faq id="diff">
+      <question>What's the difference between Inq and typical languages like
+          Java/C++?</question>
+      <answer>
+        <p>
+          Languages like Java and C++ are all-purpose languages. They are
+          designed for wide variety of uses. Inq is both a
+          runtime environment and a language geared towards a certain type
+          of problem-domain area.
+        </p>
+        <p>
+          Inq is a script
+          which when executed at runtime instantiates and wires up your
+          application. Inq syntax is designed to look similar to Java/C/C++
+          but the number of language constructs is kept to a minimum in
+          terms of typedefs and functions.
+        </p>
+      </answer>
+    </faq>
+    <faq id="domain">
+      <question>Is Inq a Domain-Specific Language?</question>
+      <answer>
+        <p>
+          We don't see it as such. With its built-in supoprt for persistence,
+          transactions, concurrency, events and MVC it is aimed at making
+          short work of typical data-processing applications (known in
+          today's jargon as enterprise applications). However it can be
+          used as a utility scripting language too.
+        </p>
+        <p>
+          Having said that there is a lot of interest in DSLs at the moment.
+          Recently we came across
+          this <a class="fork" href="ext:www.slideshare.net/peterfriese">presentation</a> by
+          Peter Friese of Itemis,
+          whose Xtext tool is aimed at supporting DSLs in Eclipse. We thought
+          this slide and the one following it (roll the mouse over) summed
+          up our philosophy rather well:
+        </p>
+        <p class="lang1">
+        </p>
+        <p>
+        <sub>Slides (c) Peter Friese (http://www.peterfriese.de / @peterfriese)</sub>
+        </p>
+      </answer>
+    </faq>
+    <faq id="desktop">
+      <question>You seem to have concentrated on desktop clients - why is that and
+      does Inq also support web clients?</question>
+      <answer>
+        <p>
+          We have put a lot of effort into desktop applications for two reasons:
+        </p>
+        <ol>
+        <li>that's what we wanted at the time and in particular we wanted
+          the liveness desktop applications can support;</li>
+        <li>we wanted to have desktop applications centrally managed like
+          web applications already are.</li>
+        </ol>
+        <p>
+          However recently we have been working on making our applications
+          available as both desktop and web clients. We're integrating Inq's
+          ability to produce JSON with
+          the <a href="ext:qooxdoo.org" class="fork">qooxdoo</a> framework. The
+          same Inq server-side functionality can be used with both desktop and
+          web clients.
+        </p>
+        <p>
+          We touch on this in
+          the <a href="examples/petstore/myorders.html#serverstruct">petstore
+          example</a>. We will be producing the web version of petstore soon.
+        </p>
+      </answer>
+    </faq>
+    <faq id="howbig">
+      <question>How big is the Inq runtime jarfile?</question>
+      <answer>
+        <p>
+          Inq itself is something less than 3 Mbytes. Its
+          dependencies are about the same. That is all you
+          need for all server-side and client-side applications.
+        </p>
+      </answer>
+    </faq>
+    <faq id="integrate">
+      <question>How do I integrate other java libraries to Inq?</question>
+      <answer>
+        <p>
+          You can call java code from Inq scripts. There are a number
+          of cases covered in the <code>examples</code> directory on the distribution
+          that use the Inq <code>callmethod</code> statement. More info on
+          calling Inq from Java later.
+        </p>
+      </answer>
+    </faq>
+    <faq id="jms">
+      <question>How do I connect to JMS queues with XML messages?</question>
+      <answer>
+        <p>
+          The JMS integration into Inq is covered in
+          the <a href="primer/jms.pdf">JMS Mini Guide</a>. All the examples
+          from the <a href="ext:mq.java.net/openmq/home">Glass Fish Open Message
+          Queue</a> download have been written in Inq (see
+          the <code>examples/jms</code> directory).
+        </p>
+        <p>
+          Inq has built-in support for generating and parsing XML. These are
+          used and discussed in
+          the <a href="examples/petstore/index.html">petstore</a> blueprint application.
+        </p>
+      </answer>
+    </faq>
+    <faq id="speed">
+      <question>Aren't scripted languages slower then Java?</question>
+      <answer>
+        <p>
+          A broad question that can be looked at in at least the following
+          ways:
+        </p>
+        <ul>
+        <li>
+          Inq is not interpreted continuously. When you run an Inq script,
+          the Inq runtime creates (or recreates) framework objects and
+          connects (or reconnects) them to each other safely. Once this is
+          done, the objects within the Inq runtime are no different to any
+          other typical Java application. We have worked on systems that do
+          this using Java or XML for the wiring. The principle is the
+          same but all expressiveness and readability is lost. 
+        </li>
+        <li>
+          The Inq language
+          has <a class="fork" href="ext:wikipedia/reified">reified</a>
+          many of the concepts current languages compile away (or implement
+          in their VM) so that, for example, things like MVC are part of
+          its runtime. This will have a straight-line execution cost but
+          our experience is that this is only a minor factor. Much more
+          time is spent on things like persistence I/O, data marshalling, events
+          and client/server traffic. These are areas where Inq seeks to gain
+          and we've concentrated on them a great deal in its implementation.
+        </li>
+        <li>Inq is a single small jar file where all the framework classes are
+          heavily used. We're not JIT experts but we can only imagine that
+          this situation is ideal for inline compiling by
+          the <a class="fork" href="ext:hotspot">Java Hotspot</a>
+          compiler. Most applications we have seen have a many jar files with
+          a huge number of classes. We assume the Hotspot compiler may have its
+          work cut out in these cases.
+        </li>
+        </ul>
+        <p>
+          There
+          are <a class="fork" href="ext:yeggeblog/Two008/Zero5/dynamic-languages-strike-back">others</a>
+          who share our view on dynamic languages like Inq.
+        </p>
+      </answer>
+    </faq>
+    <faq id="scale">
+      <question>How do you make an Inq application scale for many users and/or
+          more data?</question>
+      <answer>
+        <p>
+          A great question. At the moment, Inq operates with many clients connecting
+          to a single server. With its concepts of transactions, locks and
+          inter-process cooperation via events this works well. As intimated
+          above, we think these ideas <em>reduce</em> the overall load on
+          a server considerably and make the most efficient use of, say,
+          available WAN bandwidth.
+        </p>
+        <p>
+          We do recognise that one size does not fit all and that there will inevitably
+          be processing-intensive tasks that would require multiple servers.
+          We have a plan (not least driven by the projects we are working
+          on) - please stay tuned.
+        </p>
+      </answer>
+    </faq>
+    <faq id="who">
+      <question>Who has used Inq so far?</question>
+      <answer>
+        <p>
+          Well, we've used Inq extensively ourselves to build a high-performance
+          real-time trading system to manage Contract for Difference and Equity
+          Swap Financial products also known as Synthetics. You can read more
+          at <a class="fork" href="ext:xylinq">www.xylinq.com</a>.
+        </p>
+      </answer>
+    </faq>
+    <faq id="why">
+      <question>Why should I use Inq instead of Spring etc?</question>
+      <answer>
+        <p>
+          Here are a few reasons...
+        </p>
+        <ul>
+          <li>An Inq application generates a fraction of the amount of code. These
+          things are difficult to quantify sensibly so we are just going to
+          suggest a (conservative) figure of 25%.</li>
+          <li>The entities you define (your typedefs) carry no infrastructure
+          baggage, nor any specific relationships amongst them. This means
+          they are immediately useable elsewhere. You will find
+          you do not repeat yourself when pushing your data into new "problem
+          domain" areas.</li>
+          <li>There is very little "boiler plate" code to write. What you do
+          produce is wholly concerned with your solution. You get there quicker.</li>
+          <li>Because of Inq's simplicity and the separation its runtime
+          provides from common services, your application is easy to extend
+          and maintain.</li>
+          <li>Your code stands a much greater chance of reuse. With Inq it is
+          possible to use existing code in applications that have not even
+          been developed yet.
+          The <a href="examples/petstore/neworder.html#itemChooser">Item Choser</a>
+          and <a href="examples/petstore/items.html#attreditor">Attribute Editor</a>
+          are examples of this. In our applications we have code that manages
+          date-ranged typedefs in a common way (ask if you want further details).</li>
+          <li>Inq leverages your typedef's meta data by making it available to
+          its GUI and reporting functionality. Just by defining your entities alone
+          you have already achieved significant progress.</li>
+        </ul> 
+      </answer>
+    </faq>
+    <faq id="extend">
+      <question>Is the Inq language extendable?</question>
+      <answer>
+        <p>
+          Preserving the semantics of Inq is important to us so we
+          don't permit commits to its source.
+          If you have an idea then feel free to get in
+          touch or post on the <a href="ext:forums/home" class="fork">forums</a>.
+        </p>
+      </answer>
+    </faq>
+    <faq id="ide">
+      <question>Do You Have an IDE or a Debugger?</question>
+      <answer>
+        <p>
+          Sadly not yet... we had a look at Xtext but haven't the time to pursue
+          that further at the moment.
+        </p>
+      </answer>
+    </faq>
+    <faq id="future">
+      <question>What are your future plans for Inq?</question>
+      <answer>
+        <p>
+          The future plans for Inq will most likely be driven by how it is used.
+          Until now, these drivers have come from Xylinq and ourselves. We hope
+          others will come from our peers.
+        </p>
+        <p>
+          On our To-Do list we have:-
+        </p>
+        <ul>
+        <li>
+          Inq server farms / peer-to-peer networks
+        </li>
+        <li>
+          Further integration with such things as Benjamin
+          Sigg's <a class="fork" href="ext:dock.javaforge.com">Docking Frames</a>.
+        </li>
+        <li>
+          Completion of the browser-fronted version
+          of <a href="examples/petstore/index.html">petstore</a> 
+        </li>
+        </ul>
+      </answer>
+    </faq>
+    <faq id="consult">
+      <question>Do you provide consultancy for Inq?</question>
+      <answer>
+        <p>
+          Yes. We'd be very happy to teach you how to use Inq, help
+          you start off an Inq project on the right footing and even code
+          it for you too. Feel free to contact us <a href="about.html">here</a>.
+        </p>
+      </answer>
+    </faq>
+ <!-- </faqsection>-->
+</faqs>

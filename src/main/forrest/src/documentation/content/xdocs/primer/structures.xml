@@ -1,0 +1,1183 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright 2006 Inqwell Ltd.
+-->
+<!DOCTYPE document PUBLIC "-//APACHE//DTD Documentation V2.0//EN" "http://forrest.apache.org/dtd/document-v20.dtd">
+<document>
+  <header>
+    <title>Building Node Structures</title>
+  </header>
+  <body>
+    <section id="intro">
+      <title>Introduction</title>
+      <p>
+        Node structures are built by server-side processes using
+        various built-in functions to retrieve, aggregate and
+        group <em>managed instances</em>. A node structure is built for an
+        application-specific purpose and its make-up reflects the
+        relationships between constituent typedef instances. Unlike
+        static languages where relationships are often bound into the code,
+        in Inq they are only loosely defined by the configuration of
+        native and foreign keys. Building a particular structure
+        at run-time establishes a set of relationships at that time and
+        for a particular purpose.
+      </p>
+      <p>
+        Managed instances were introduced in the section
+        on <a href="typedef.html">typedefs</a> and keys to retrieve them
+        in the section on <a href="keys.html">I/O keys</a>.
+      </p>
+    </section>
+    <section id="read">
+      <title>The read Function</title>
+      <p>
+        Managed instances are read from their I/O source by applying
+        a value of a particular <em>key</em> using
+        the <code>read</code> function. It has the following syntax:
+      </p>
+      <source>
+"read" "("
+        &lt;type-reference&gt; ","
+        &lt;key-value&gt;
+        ("," ( "keyname" "=" &lt;expression&gt;
+             | "target"  "=" &lt;expression&gt;
+             | "alias"   "=" &lt;expression&gt;
+             | "setname" "=" &lt;expression&gt;
+             | "merge"   "=" &lt;expression&gt;
+             | "rowname" "=" &lt;expression&gt;
+             | "child"   "=" &lt;expression&gt;
+             | "max"     "=" &lt;expression&gt;
+             )
+         ...
+        )
+       ")"
+
+&lt;type-reference&gt; = ( [ &lt;name-space&gt;":" ]&lt;identifier&gt;
+                   | "typeof" "(" &lt;expression&gt; ")"
+                   )
+
+&lt;name-space&gt; = ( &lt;package-specification&gt;
+               | &lt;package-import-alias&gt;
+               )
+
+&lt;key-value&gt; = &lt;expression&gt;
+</source>
+      <p>
+        The <code>read</code> function takes at least
+          two arguments:
+      </p>
+      <ol>
+        <li>The typedef to read - this can either be a symbolic reference
+          to the typedef name, with an explicit package if required, or the
+          typedef carried by an instance, returned by the <code>typeof</code>
+          function.</li>
+        <li>A key value - this can be any map that contains values by the same
+          names as the fields of the key being used. There are a number of
+          ways in which the desired key can be specified and these are discussed
+          further below.</li>
+      </ol>
+      <p>
+        If the key being used is unique then <code>read</code> returns
+        a single instance of the specified typedef, or <code>null</code>
+        when no instance satisfies the key value. For non-unique
+        keys, <code>read</code> creates and returns a <em>node set</em>,
+        described further <a href="#nodeset">below</a>.
+      </p>
+      <section id="keyselect">
+        <title>Specifying The Key</title>
+        <p>
+          The term <em>key</em> in the context of managed instance retrieval
+          means any one of the keys <a href="typedef.html#definingkeys">defined</a>
+          within a <code>typedef</code>. A key value is created using
+          the <a href="types.html#new"><code>new</code></a> function and specifying
+          the key name. Referring to the keys defined in the illustration from
+          the <a href="keys.html#examples">I/O Keys</a> section, here are some
+          examples:
+        </p>
+        <source>
+any k = new(Cpty.ByEntityType); // Creates an uninitialised value of key "ByEntityType"
+
+any pk = new(Cpty.pkey, ik); // Creates an instance of the primary key.
+</source>
+        <p>
+          In the second example, the instance of the primary key (which is always
+          named <code>pkey</code>) is initialised by the value
+          at <code>$stack.ik</code>. Note that key values are maps comprising the
+          fields of the key definition. Provided a key value contains the fields
+          required, any map will suffice, it does not have to have been created
+          using <code>new</code>.
+        </p>
+        <p>
+          Referring back to the definition of the <code>read</code> function,
+          the key <code>read</code> will apply is determined in one of the following
+          ways:
+        </p>
+        <ol>
+          <li>If the key was created with <a href="types.html#newkey"><code>new</code></a>
+            then the key carries its name.</li>
+          <li>The key can be specified explicitly with the <em>keyname</em>
+            argument, which must evaluate to a string. If present, the keyname
+            argument overrides any implicit name carried in the key value.</li>
+          <li>If neither of the above apply the primary key is used.</li>
+        </ol>
+        <p>
+          If the typedef <code>Cpty</code> is defined in the
+          package <code>data.static</code> and given a key value <code>k</code>, here
+          is an example of the simplest form of <code>read</code>:
+        </p>
+        <source>
+read(data.static:Cpty, k);
+</source>
+        <p>
+          The value <code>k</code> is often an instance of the typedef itself
+          received from another Inq environment. In this case, the purpose
+          of the <code>read</code> is to retrieve this
+          environment's <em>managed instance</em>. As we saw when discussing
+          a <a href="txn.html#mutateGeneric">generic mutation service</a>, <code>k</code>
+          is used as a primary key value. Not having been created as
+          an actual key, <code>read</code> defaults to using the typedef's
+          primary key in case 3, above.
+        </p>
+        <note>
+          Even though an instance carries its typedef, there is no single-argument
+          invocation of <code>read</code>. Instead, the typedef can be returned with
+          the <code>typeof</code> function, leading to the generic and fairly
+          economical <code>read(typeof(k), k)</code>.
+        </note>
+      </section>
+      <section id="target">
+        <title>The target Argument</title>
+        <p>
+          The <code>read</code> function is always the first step in
+          building a structure of managed instances, which overall is a
+          working set of data required for some application functionality.
+          As such, <code>read</code> is told where to put the node(s) it will
+          marshal - this is the purpose of the
+          optional <code>target</code> argument.
+        </p>
+        <p>
+          If absent the default target is the stack. When all we are interested
+          in is reading a single instance by its primary or other unique key
+          then <code>read</code> usage is often the simple case shown above.
+          Referring to the <a href="keys.html#examples"><code>Cpty</code></a>
+          example, assuming an appropriate key <code>k</code> the example
+          statement creates <code>$stack.Cpty</code>:
+        </p>
+        <source>
+read(data.static:Cpty, k);
+</source>
+        <p>
+          <!--
+          As well as returning the instance (unique) or node set (non-unique) result,
+          because <code>read</code> needs to know what type of map container to
+          make when
+          -->
+        </p>
+      </section>
+      <section id="alias">
+        <title>The alias Argument</title>
+        <p>
+          When Inq places an instance in the target container it does so using
+          the typedef's name
+          or <a href="typedef.html#nodenameoverride">name override</a> if one has
+          been defined.
+          The <code>alias</code> argument allows this default to be overridden.
+        </p>
+        <p>
+          If a specified alias evaluates to a string then
+          conventional path forms can be used to access it:
+        </p>
+        <source>
+smap m;
+read(data.static:Entity, k, alias="foo", target=m);
+writeln($catalog.system.out, m.foo.LongName);
+</source>
+        <p>
+          However, a path component does not have to be a string, it can be
+          any type in the Inq language. The only restriction imposed is that
+          it must be a unique value in its parent container's name set. Path
+          components that are not strings are expressed
+          as <a href="nodes.html#elementsub">element substitutions</a>:
+        </p>
+        <source>
+smap m;
+smap p;  // path component is a map
+string p.x = "foo-number";
+int    p.y = 1;
+
+read(data.static:Entity, k, alias=p, target=m);
+writeln($catalog.system.out, m.{p}.LongName);
+</source>
+        <p>
+          In this example we have used a map as the path component. A map
+          used as a map key in its parent container will violate the unique key
+          set of that container if
+          it <a href="expressions.html#containerequal">compares equal</a>
+          with any already present.
+        </p>
+        <note>
+          When the <code>alias</code> argument is a <code>string</code> it
+          is not tokenised as discussed
+          in <a href="nodes.html#complexpath">complex path usage</a>. Therefore,
+          alias strings must not contain path special characters (for example
+          period or asterisk) or they will be interpreted differently
+          afterwards and the node will be inaccessible.
+        </note>
+        <p>
+          Inq uses maps as path components when it creates structures
+          called <em>node sets</em>. In this case, the maps are the primary
+          key values of the instances themselves, discussed further below.
+        </p>
+      </section>
+      <section id="nodeset">
+        <title>The Node Set Structure</title>
+        <p>
+          When <code>read</code> applies a non-unique key it creates a <em>node
+          set</em> structure. Such a structure comprises a top-level container,
+          a number of second-level containers (also called <em>node set children</em>),
+          one for each instance being returned and the instances themselves as shown:
+        </p>
+        <table class="plain">
+          <tr><td class="centred">
+          <img src="images/nodeset.png" alt="node set structure"/>
+          </td></tr>
+        </table>
+        <p>
+          When the node set is created by <code>read</code> the top-level container
+          is tagged internally by Inq with the typedef that was used,
+          called <code>Trade</code>
+          in this example. This tag marks <code>Trade</code> as
+          the <em>primary typedef</em> within the node set structure, a topic
+          we return to when discussing how Inq processes deletion events, below.
+        </p>
+        <p>
+          The node set children  act as a container within which
+          instances (or instance sets) of other application types can be placed
+          to express the intended relationships the structure is modeling. Again,
+          this subject is covered further when discussing aggregation.
+        </p>
+        <section id="nsetseed">
+          <title>The target Argument and Seed Map Type</title>
+          <p>
+            Using a unique key can yield zero or one managed instance, so Inq
+            does not need to build any kind of structure. It simply places any
+            returned instance into the designated target with the specified or
+            default alias.
+          </p>
+          <p>
+            When <code>read</code> builds a node set structure it needs to
+            determine what type of map container to use. In the same
+            way that declarations can cause the creation
+            of <a href="types.html#containertypes">intermediate containers</a>,
+            the containers within the node set structure are of the same type
+            as the target. Application script will determine, on the basis of
+            what the structure will be used for, what type of container
+            is suitable. If the application desires an <em>event-live</em>
+            structure then a seed map of type <code>hmap</code> must be provided:
+          </p>
+          <source>
+hmap m;
+read(Trade, k, target=m, setname="list");
+</source>
+          <p>
+            This use of <code>read</code> will place the node set top level
+            container into <code>m</code> as <code>m.list</code> and build
+            the structure out of <code>hmap</code>s. Note that when non-unique
+            keys are used the <code>setname</code> argument is mandatory.
+          </p>
+          <p>
+            If a non-event-live structure is required and in the absence of any
+            specific target, the stack is a suitable seed map and
+            the <code>target</code> argument can be omitted.
+          </p>
+        </section>
+        <section id="nsetnames">
+          <title>Names Within The Structure</title>
+          <p>
+             As the structure is built, so <code>read</code> must place the
+             nodes within it with a suitable name. When the instances
+             are placed in the node set child containers the typedef's default
+             alias (or override) is used.
+             As in the unique key case, it is possible
+             to override this name using the <code>alias</code> argument
+             to <code>read</code>.
+          </p>
+          <p>
+            The node set children are placed in the top-level
+            container using the primary key value of the primary typedef instance
+            beneath (shown as <em>&lt;pk&gt;</em> in the above diagram).
+            This is a default that satisfies the requirement that
+            the name set within a given map is unique, however it can be
+            overridden using the <code>rowname</code> argument. If supplied,
+            this argument must be a function variable whose return value is
+            used as the map name. Here is an example:
+          </p>
+          <source>
+hmap tmp;
+
+cfunc rowNameF = { set k = ($loop.Security,
+                            $loop.Book,
+                            $loop.RowDate);
+                 };
+
+read(xy:CEPos, filter,
+     target  = tmp,
+     setname = "reconList",
+     rowname = rowNameF);
+</source>
+        <p>
+          A <code>rowname</code> function variable is executed with the following
+          environment:
+        </p>
+        <ul>
+        <li><code>$loop</code> refers to the instance being placed in the
+          node structure.</li>
+        <li>The current stack frame is unchanged and the statements have access
+          to anything currently on the stack.</li>
+        <li>The instance and its node set child are placed in the
+          structure after the <code>rowname</code> function completes.</li>
+        </ul>
+        <p>
+          This example returns a <code>set</code> containing
+          the <code>Security</code>, <code>Book</code> and <code>RowDate</code>
+          fields of the instance. Of course, the combination of these fields
+          must be unique across the set or the building of the node set will
+          fail.
+        </p>
+        <p>
+          A <code>rowname</code> function is useful when a number of node sets
+          are built and then processed to produce some sort of output structure.
+          When all the node sets use the same name set, iterating over any one
+          of them yields names that can be used in paths to navigate the others.
+          We will cover an example of this when looking at the <code>groupby</code>
+          function.
+        </p>
+        </section>
+        <section id="nsetmerge">
+          <title>Merging Node Set Structures</title>
+          <p>
+            When no single invocation of <code>read</code> generates the appropriate
+            set of instances subsequent uses of <code>read</code> can merge
+            their result with an existing node set, as in this fragment:
+          </p>
+          <source>
+any f = new(xy:Trade.FilterTrade);
+f = filter;
+
+hmap nodeSet;
+
+// if we haven't specified any ProductType, then just load CFDs and ES
+if (isnull(f.ProductType))
+{
+  f.ProductType = enum(xy:ProductType, CFD);
+  read (xy:Trade, f, target = nodeSet, setname = "list");
+  f.ProductType = enum(xy:ProductType, ES);
+  read (xy:Trade, f, target = nodeSet, setname = "list", merge=true);
+}
+</source>
+          <p>
+            The node sets are merged according to the map name for the second-level
+            containers, so if a <code>rowname</code> function is used it should be
+            the same one for all invocations of <code>read</code>.
+          </p>
+        </section>
+        <section id="nsetchild">
+          <title>The Node-Set Child Map Type</title>
+          <p>
+            Sometimes it is useful for the top-level and node set child containers
+            to be different map types. If the structure is made entirely
+            of <a href="types.html#smap"><code>smap</code></a>s then no
+            event is generated if the structure
+            is <a href="events.html#evaddrepl">added</a> to the context. This
+            means that the no <a href="process.html#serverevents">propagation</a>
+            will occur and no <a href="guibasics.html#mvc">model-view-controller</a>
+            dispatch will happen. This <em>completely</em> event-dead structure
+            may not be what is required.
+          </p>
+          <p>
+            If the top-level container is a <code>hmap</code> (determined by
+            the seed) and the node set children are <code>smap</code>s
+            then the result is a structure that will dispatch events from
+            its root but not anywhere beneath. This is enough to enable
+            propagation and MVC but thereafter leaving the structure
+            stable, if that is the requirement.
+          </p>
+          <p>
+            The <code>child</code> argument must evaluate to a map
+            of the chosen <a href="types.html#maptypes">type</a> and
+            is used as the prototype instance for the node set
+            children. Here is an example:
+          </p>
+          <source>
+hmap m;
+
+// Read relevant PosExposure set
+read(xy:PosExposure, filter, target=m, setname="posExposures", child = smap dummyMap);
+
+// Aggreate the Instrument
+aggregate(xy:Instrument, m.posExposures[@first].PosExposure);
+
+add(remove(m.posExposures), atPath);
+</source>
+          <p>
+            This script also introduces the <code>aggregate</code> function
+            discussed in the next section, and the <code>add</code> function,
+            which is covered in the <a href="events.html">Events</a> section.
+          </p>
+        </section>
+        <section id="readlimit">
+          <title>Setting a Maximum Node Set Size</title>
+          <p>
+            If it is possible for a key to return very large number
+            of items then a limit can be imposed to ensure the node set
+            is restricted to a given maximum. This might be applicable
+            to <a href="keys.html#exfilter">filters</a> when most or all
+            of the fields are left as <code>null</code>.
+          </p>
+          <p>
+            The <code>max</code> argument must evaluate to an integer
+            and specifies the maximum number of node set children
+            minus one the parent will be filled with. Inq has to
+            exceed this number by one to determine that there are
+            indeed more instances that would be returned.
+          </p>
+          <note>Only non-cached keys can be subjected to a read
+          cap.</note>
+          <p>
+            If the read operation is capped in this way then the
+            node set parent contains the integer <code>@capped</code>
+            whose value is the number of children. Using
+            the <code>max</code> argument overrides any value
+            set when the key was <a href="keys.html#exmax">declared</a>.
+          </p>
+        </section>
+      </section>
+    </section>
+    <section id="aggregate">
+      <title>The aggregate Function</title>
+      <p>
+        Having retrieved a single instance or constructed a node set
+        using <code>read</code>, the <code>aggregate</code> function
+        can be used to join related instances of other <code>typedef</code>s
+        into the node space. It has the following syntax:
+      </p>
+      <source>
+"aggregate" "("
+        &lt;type-reference&gt; ","
+        &lt;instance-from&gt;
+        ("," ( "keyname"  "=" &lt;expression&gt;
+             | "setname"  "=" &lt;expression&gt;
+             | "alias"    "=" &lt;expression&gt;
+             | "mustjoin" "=" &lt;expression&gt;
+             | "key"      "=" &lt;expression&gt;
+             | "foreach"  "=" &lt;expression&gt;
+             | "rowname"  "=" &lt;expression&gt;
+             | "max"      "=" &lt;expression&gt;
+             )
+         ...
+        )
+       ")"
+
+&lt;type-reference&gt; = [ &lt;name-space&gt;":" ]&lt;identifier&gt;
+
+&lt;name-space&gt; = ( &lt;package-specification&gt;
+               | &lt;package-import-alias&gt;
+               )
+
+&lt;instance-from&gt; = &lt;expression&gt;
+</source>
+      <p>
+        The <code>aggregate</code> function is similar to <code>read</code>
+        in that it requires a type reference, a key name and a key value.
+        In <code>aggregate</code>'s case, however, the key value is (or is
+        derived from) an instance in the node space. In
+        addition, <code>aggregate</code> uses information in the node space
+        to determine whether it is operating on a single instance or multiple
+        instances contained within a node set.
+      </p>
+      <section id="aggsingle">
+        <title>Aggregating From A Single Instance</title>
+        <section id="aggsingleuniq">
+          <title>Using a Unique Key</title>
+          <p>
+            If a unique key has been applied in a use of <code>read</code>
+            then <code>aggregate</code> can place a related instance
+            into the same parent container. Given an existing path
+            of <code>vars.Trade</code> the following diagram shows an example
+            of the before and after state of a node space:
+          </p>
+          <table class="plain">
+            <tr><td class="centred">
+            <img src="images/agg1.png" alt="unique aggregation"/>
+            </td></tr>
+          </table>
+          <p>
+            In this case, assuming the primary key in the <code>Security</code>
+            typedef of <code>data.static:Security.Security</code>, the following
+            statement accomplishes this:
+          </p>
+          <source>
+aggregate(data.static:Security, vars.Trade);
+</source>
+          <p>
+            Like <code>read</code>, the simplest form requires a type
+            reference and a key value, however <code>aggregate</code> differs
+            in the following ways:
+          </p>
+          <ol>
+            <li>The key value being applied (in this example
+            to <code>data.static:Security</code>) is an instance of the
+            typedef we are aggregating from.</li>
+            <li>The target node is implicitly
+            the parent container of the instance. The result is placed in
+            the same node as a sibling.</li>
+          </ol>
+          <p>
+            By default, the typedef's primary key is used and this will be
+            satisfied by the source instance if its foreign key field(s) use the
+            same name(s). Using any unique key extends the node structure in
+            the same way.
+          </p>
+          <p>
+            Alternative keys are specified with the <code>keyname</code> argument.
+            The common case is to use an existing instance to satisfy the key
+            and because such a value does not carry a key name,
+            when a key other than the primary is required
+            the the <code>keyname</code> argument must be used. The exception to
+            this is where a function is supplied using the <code>key</code>
+            argument, discussed below.
+          </p>
+          <p>
+            The result is placed in the container node with the map name of the
+            typedef's name or name override. This can be overridden with
+            the <code>alias</code> argument in the same way as <code>read</code>.
+            This can be useful when there are multiple foreign keys for the
+            same typedef, an example of which is given below.
+          </p>
+        </section>
+        <section id="aggsinglenonuniq">
+          <title>Using Non-unique Keys</title>
+          <p>
+            Specifying a non-unique key causes <code>aggregate</code> to generate
+            a node set and join it into the node space as a sibling of the
+            source instance as shown:
+          </p>
+          <table class="plain">
+            <tr><td class="centred">
+            <img src="images/agg2.png" alt="non-unique aggregation"/>
+            </td></tr>
+          </table>
+          <p>
+            Considering the earlier example 1-to-many relationship
+            between <a href="keys.html#examples">Entity and Cpty</a>, the
+            following statement does this:
+          </p>
+          <source>
+aggregate(Cpty,
+          vars.Entity,
+          keyname="ByEntity",
+          setname="cptys");
+</source>
+          <p>
+            In the non-unique case the <code>setname</code> argument must be
+            specified and is the map name of the node set in the parent
+            container. Like <code>read</code>, <code>aggregate</code> creates
+            the node set in the following way:
+          </p>
+          <ol>
+            <li>The node set's top-level container is created and is of the same
+            type as the parent of the source instance.</li>
+            <li>The top-level container is tagged with the typedef being
+            aggregated to.</li>
+            <li>The node set children are created likewise and added using the
+            primary key of the instance beneath unless overridden using
+            a <code>rowname</code> function.</li>
+            <li>The instances are placed in the node set child containers
+            with the map name of their typedef's name or name override.<!-- This
+            cannot be overridden.--></li>
+          </ol>
+        </section>
+      </section>
+      <section id="aggnodeset">
+        <title>Aggregating From A Node Set</title>
+        <p>
+          When <code>aggregate</code> resolves
+          the <code>&lt;instance-from&gt;</code> argument it notes whether
+          the path reference passes through a node set top-level container
+          by checking whether the node is tagged as such. If so, the
+          aggregation is carried out at all child containers. The
+          illustration below shows how the node space is affected by the
+          unique key aggregation:
+        </p>
+        <table class="plain">
+          <tr><td class="centred">
+          <img src="images/agg3.png" alt="node set aggregation"/>
+          </td></tr>
+        </table>
+        <p>
+          The statement performing this aggregation is:
+        </p>
+        <source>
+aggregate(Currency,
+          vars.[@first].Trade);
+</source>
+        <p>
+          Note that a path of this form, using vector access, can only be applied
+          successfully if the node set top-level container is of the
+          appropriate <a href="types.html#maptypes">map type</a>. Generally,
+          node sets are built to be displayed in graphical tables or require
+          sorting for order-specific processing. Both of these need vector
+          access support, however the exact instance
+          that is resolved by <code>aggregate</code> is not important. Inq only uses
+          the last path component, <code>Trade</code> in this example, to retrieve
+          each <code>&lt;instance-from&gt;</code> as it iterates across the
+          top-level container children. If the node set is not built with
+          types that permit vector access then the following statement can be used:
+        </p>
+        <source>
+aggregate(Currency,
+          vars*Trade);
+</source>
+        <section id="mustforeach">
+          <title>The mustjoin and foreach Arguments</title>
+          <p>
+            When aggregating from a node set the <code>mustjoin</code>
+            and <code>foreach</code> arguments are applicable.
+            The <code>mustjoin</code> argument is converted to
+            a <code>boolean</code> and defaults to <code>false</code>.
+            If the aggregation fails, that is the key, when applied to
+            the target typedef yields no instance(s), <code>aggregate</code>
+            behaves as follows:
+          </p>
+          <dl>
+            <dt><strong>mustjoin=false</strong></dt>
+            <dd>The node set child remains in the node set and no new
+            children are added to it.</dd>
+            <dt><strong>mustjoin=true</strong></dt>
+            <dd>The node set child container is removed from the node set.</dd>
+          </dl>
+          <p>
+            If a given join within the node set does not fail or the node set child
+            is not removed, <code>aggregate</code> runs any
+            function variable provided through the <code>foreach</code> argument.
+            A <code>foreach</code> function variable is executed after the
+            aggregate result, if any, has been added to the node space. It
+            runs with the following environment:
+          </p>
+          <ul>
+          <li><code>$loop</code> resolves to the current node set child</li>
+          <li>The current stack frame is unchanged and the statements have access
+            to anything currently on the stack.</li>
+          </ul>
+        </section>
+        <section id="nestednodeset">
+          <title>Nested Node Sets</title>
+          <p>
+            When aggregating from a node set using a non-unique
+            key <code>aggregate</code> creates further node sets and
+            places them in the child containers. The following diagram
+            shows a structure of this form:
+          </p>
+          <table class="plain">
+            <tr><td class="centred">
+            <img src="images/agg4.png" alt="nested node set"/>
+            </td></tr>
+          </table>
+        </section>
+      </section>
+      <section id="foreignkey">
+        <title>Foreign Key Creation</title>
+        <p>
+          In the examples presented so far the <code>&lt;instance-from&gt;</code>
+          argument has satisfied the field requirements of the specified (or
+          primary) key of the target typedef directly. Typically, foreign
+          key fields in one typedef have the same names as native fields in
+          another - this is a natural consequence if the typedef fields are
+          declared using references. However, consider the following relationship
+          example, where the two counterparties involved in a transaction are
+          modeled by an instance of <code>Parties</code>:
+        </p>
+        <table class="plain">
+          <tr><td class="centred">
+          <img src="images/party.png" alt="parties"/>
+          </td></tr>
+        </table>
+        <p>
+          The <code>Parties</code> type has the <code>Buyer</code>
+          and <code>Seller</code> fields that are foreign keys to
+          the <code>Cpty</code> type. There are two issues that need
+          to be considered:
+        </p>
+        <ol>
+          <li>A key (in this case <code>Cpty.pkey</code>) must be initialised
+          from <code>Parties.Seller</code> or <code>Parties.Buyer</code>.</li>
+          <li>If both the Buyer and Seller instances are required in the same
+          container node then they must be aliased.</li>
+        </ol>
+        <p>
+          The following script example shows how this can be achieved, assuming
+          we are aggregating from <code>m.Parties</code>:
+        </p>
+        <source>
+aggregate(data.static:Cpty,
+          m.Parties,
+          alias = "Seller"
+          key = cfunc f0 = {
+                             any k = new(data.static:Cpty.pkey);
+                             k.Cpty = $loop.Parties.Seller;
+                             k;
+                           }
+          );
+
+</source>
+        <p>
+          and similarly for the Buyer. The <code>key</code> argument requires
+          a function variable whose return value is the key value to be
+          applied. Creating a genuine key value (as opposed to a map that satisfies
+          the required key fields) has the effect of specifying the key of the
+          target typedef and the <code>keyname</code> argument is not required.
+        </p>
+        <p>
+          From the example above we can see that the function variable's
+          statement runs with <code>$loop</code> resolving to the container of
+          the <code>&lt;instance-from&gt;</code> argument (a node set child
+          in the case of a node set). Of course, unlike
+          the <code>foreach</code> argument, a <code>key</code> statement
+          runs before any node or node set is joined into the node space
+          and is executed regardless of whether aggregation is taking place
+          from a single instance or a node set. As such, it can be an appropriate
+          place to perform any other required manipulation of the node space,
+          as in this example:
+        </p>
+        <source>
+aggregate(data.static:FXConvention,
+          listRoot[@first].Trade,
+          key = cfunc f0 = {
+                             boolean $loop.Flags.Dirty;
+                             any k = new(data.static:FXConvention.unique);
+                             k.FromCurrency = $loop.Security.Currency;
+                             k.ToCurrency   = $loop.Trade.FXCurrency;
+                             k;
+                           });
+</source>
+        <p>
+          Here the statement creates <code>Flags.Dirty</code> underneath the
+          aggregate parent as a "side-effect", for some further application
+          purpose. In the Seller/Buyer example, to avoid repeating the
+          aggregate statement the following line can be added:
+        </p>
+        <source>
+aggregate(data.static:Cpty,
+          m.Parties,
+          alias = "Seller"
+          key = cfunc f0 = {
+                             any k = new(data.static:Cpty.pkey);
+                             k.Cpty = $loop.Parties.Buyer;
+                             <strong>read(data.static:Cpty, k, target=$loop, alias="Buyer");</strong>
+                             k.Cpty = $loop.Parties.Seller;
+                             k;
+                           }
+          );
+</source>
+        <p>
+          Using the function arguments in this way takes advantage of the
+          environment set up by the <code>aggregate</code> function. In
+          particular this technique takes advantage of the implicit iteration
+          allowing additional structure manipulation in a single pass.
+        </p>
+      </section>
+    </section>
+    <section id="groupby">
+      <title>The groupby Function</title>
+      <p>
+        The <code>groupby</code> function processes a node space to create
+        distinct groupings and optionally executes statements during and at
+        the end of the iteration. It has the following syntax:
+      </p>
+      <source>
+"groupby" "("
+            &lt;node-root&gt; ","
+            &lt;distinct-func&gt; ","
+            &lt;start-func&gt;
+            ("," ( "foreach"  "=" &lt;expression&gt;
+                 | "end"      "=" &lt;expression&gt;
+                 )
+             ...
+            )
+          ")"
+
+&lt;node-root&gt; = &lt;expression&gt;
+
+&lt;distinct-func&gt; = &lt;expression&gt;
+</source>
+      <p>
+        The the <code>&lt;distinct-func&gt;</code> must resolve to a function
+        variable and is executed with each child of the node
+        at <code>&lt;node-root&gt;</code> as <code>$loop</code>. Its return
+        value is used by <code>groupby</code> to determine whether the
+        sub-structure (rooted at the current child) is distinct from any other
+        yet processed. If so, the <code>&lt;start-func&gt;</code> is
+        executed, but it will not be executed again for any subsequent
+        children that return the same value
+        from <code>&lt;distinct-func&gt;</code>.
+      </p>
+      <p>
+        The <code>&lt;start-func&gt;</code> does not need to return any
+        meaningful value as such, however whatever value is returned is
+        retained against the corresponding value
+        from <code>&lt;distinct-func&gt;</code> for later use when executing
+        any <code>end</code> argument, discussed below.
+      </p>
+      <p>
+        The remaining arguments, both function variables, are optional.
+        The <code>foreach</code> argument is executed for all children of
+        the <code>&lt;node-root&gt;</code> with the child node
+        as <code>$loop</code>. The <code>end</code> argument is executed
+        for each distinct value returned by <code>&lt;distinct-func&gt;</code>
+        and with <code>$loop</code> set to the value returned
+        by the corresponding execution of <code>&lt;start-func&gt;</code>.
+      </p>
+      <p>
+        The various function variables of <code>groupby</code> run with the
+        following special paths available:
+      </p>
+        <dl>
+          <dt><strong>@name</strong></dt>
+          <dd>The value returned by <code>&lt;distinct-func&gt;</code>
+          when <code>&lt;start-func&gt;</code> and any <code>foreach</code>
+          and <code>end</code> statements are executed. </dd>
+          <dt><strong>@count</strong></dt>
+          <dd>A counter that is incremented from zero
+          as <code>&lt;distinct-func&gt;</code> and any <code>foreach</code>
+          statement are executed and while any <code>end</code> statement
+          is executed.</dd>
+        </dl>
+        <p>
+          Here is a script fragment using <code>groupby</code>:
+        </p>
+        <source>
+hmap grouped;
+
+groupby(list,
+        cfunc distinctF = { set k = ($loop.SwapPos.Security,
+                                     $loop.SwapPos.Book,
+                                     $loop.SwapPos.RowDate);
+                          },
+        cfunc startF  =
+        {
+          // Create an empty SwapPos, initialise important fields and
+          // store under the given name
+          any newSwapPos = new(xy:SwapPos);
+          newSwapPos.Security   = $loop.SwapPos.Security;
+          newSwapPos.Book       = $loop.SwapPos.Book;
+          newSwapPos.RowDate    = $loop.SwapPos.RowDate;
+          newSwapPos.TradePosn      =
+            newSwapPos.SettlePosn   =
+            newSwapPos.UnsettlePosn =
+            newSwapPos.ClosePosn    = 0;
+          any grouped.{@name}.SwapPos = newSwapPos;
+
+        },
+        foreach = cfunc foreachF =
+        {
+          // sum the quantities within the current group;
+          grouped.{@name}.SwapPos.TradePosn    += $loop.SwapPos.TradePosn;
+          grouped.{@name}.SwapPos.SettlePosn   += $loop.SwapPos.SettlePosn;
+          grouped.{@name}.SwapPos.UnsettlePosn += $loop.SwapPos.UnsettlePosn;
+          grouped.{@name}.SwapPos.ClosePosn    += $loop.SwapPos.ClosePosn;
+        });
+</source>
+      <p>
+        This example creates a new node structure under the <code>hmap</code>
+        called <code>grouped</code> that contains one child for each
+        distinct combination of the
+        fields <code>Security</code>, <code>Book</code>
+        and <code>RowDate</code>. The map key of each child node is the
+        combination of these fields, accessed using <code>@name</code>.
+        Further aping the node set structure, the child is a second-level
+        container for an unmanaged instance of the type <code>SwapPos</code>
+        in which the desired results are accumulated.
+      </p>
+      <p>
+        The <code>read</code> and <code>aggregate</code> functions only
+        appear in server-side script as they use the configured i/o
+        mechanism to retrieve managed instances. However, <code>groupby</code>
+        only iterates over and transforms a structure - it is equally valid
+        in the server and client environments.
+      </p>
+    </section>
+    <section id="sort">
+      <title>Sorting Node Structures</title>
+      <p>
+        Any node structure can be sorted below a point where the immediate
+        children are held within a container that
+        supports <a href="types.html#omap">ordering</a>. The <code>sort</code>
+        function has the following syntax:
+      </p>
+      <source>
+"sort" "("
+         &lt;node-root&gt; ","
+         &lt;expression&gt;
+         [ ( "," &lt;expression&gt; ) ... ]
+         [ ( "," "ignorecase" = &lt;expression&gt; ) ]
+         [ ( "," "descending" = &lt;expression&gt; ) ]
+        ")"
+</source>
+      <p>
+        The <code>sort</code>
+        function operates the algorithm implemented
+        by <a class="fork" href="ext:j2seapi/apidocs/sort">Collections.sort</a>.
+        Each <code>&lt;expression&gt;</code> specified is applied with
+        a <code>&lt;node-root&gt;</code> child as <code>$loop</code> to yield
+        a value for comparison as less-than, equal to or greater-than another
+        being considered by the sort. Multiple expressions are applied in
+        sequence until the first that yields other than equality. Thus, earlier
+        expressions have the effect of grouping the structure within ordering
+        specified by later ones.
+      </p>
+      <p>
+        Usually the expressions are simple node paths to values within the
+        child structures, however any statement is acceptable so long as
+        the value it yields is one of
+        the <a href="types.html#value-types">value types</a>, as
+        only these types are valid for the less-than and greater-than
+        operations.
+      </p>
+      <p>
+        Without further qualification <code>sort</code> will order the
+        structure according to the value types' natural collating sequence.
+        For the <code>string</code> value type, this means case-sensitive
+        lexicographic ordering as defined by <code>java.lang.String</code>.
+        If the optional <code>descending</code> argument converts
+        to <code>boolean</code> <code>true</code> then this ordering is
+        reversed for all expressions.
+      </p>
+      <p>
+        To effect descending collation for individual expressions the
+        unary minus operator can be applied. In the following example,
+        the node structure is sorted according to instances of a <code>Trade</code>
+        application type, by ascending currency and trade date, most recent
+        first:
+      </p>
+      <source>
+sort(tradeList, $this.Trade.Ccy, -$loop.Trade.TradeDate);
+</source>
+      <p>
+        Notice that (although meaningless in any other context) negation is
+        supported on <code>date</code> simply for reverse collation. This
+        technique can also be used for <code>string</code>s however it is
+        not recommended and cannot be combined with <code>ignorecase</code>,
+        see below.
+      </p>
+      <section id="stringsort">
+        <title>Ordering strings</title>
+        <p>
+          There are different ways in which <code>sort</code> can refine the
+          collation of <code>string</code>s. The <code>ignorecase</code>
+          argument is the simplest and crudest, providing locale-independent
+          case-insensitive ordering as defined
+          by <a class="fork" href="ext:j2seapi/apidocs/compareToIgnoreCase">String.compareToIgnoreCase</a>.
+          The <code>ignorecase</code> and <code>descending</code> arguments
+          can be combined.
+        </p>
+        <p>
+          A better way to control <code>string</code> ordering is to use
+          the <code>collator</code> data type and <code>collate</code>
+          function. A collator, <code>c</code>, for the current locale and with
+          default <em>strength</em> and <em>decomposition</em> properties
+          is created as follows:
+        </p>
+        <source>
+collator c;
+</source>
+        <p>
+          The <code>collate</code> function requires a <code>collator</code>
+          and up to two <code>string</code> arguments:
+        </p>
+        <ul>
+          <li>one string argument when used with <code>sort</code>;</li>
+          <li>two string arguments when used otherwise.</li>
+        </ul>
+        <p>
+          Creating a collator and setting its supported properties
+          of <code>rules</code>, <code>strength</code>
+          and <code>decomposition</code> allows string ordering to be finely
+          specified. To illustrate use of the <code>collate</code> function
+          with <code>sort</code> the example
+          in <a href="examples/sort.inq"><code>sort.inq</code></a> uses a simple
+          array of <code>string</code>s. Depending on the prevailing
+          locale the following output can be expected:
+        </p>
+        <source>
+inq -in sort.inq
+<strong>Unsorted array: [hello, World, again]
+Default sorting (case sensitive): [World, again, hello]
+Crude case insensitive: [again, hello, World]
+Basic descending: [hello, again, World]
+Default collation: [again, hello, World]
+Default collation, descending: [World, hello, again]
+Inq done</strong></source>
+        <p>
+          When used as an ordering expression, <code>collate</code> only
+          requires a single <code>string</code> argument
+          because <code>sort</code> is using it
+          to resolve successive items within the structure for comparison.
+          However, <code>collate</code> can be used elsewhere to compare
+          two strings, returning -1, 0 or 1 respectively when the first
+          argument is less-than, equal-to or greater-than the second
+          according to the specified collator:
+        </p>
+        <source>
+collator c;
+collate(c, "hello", "world");
+<strong>-1</strong>
+collate(c, "zhello", "world");
+<strong>1</strong>
+collate(c, "world", "world");
+<strong>0</strong>
+collate(c, "World", "world");
+<strong>1</strong>
+c.properties.strength = STRENGTH_SECONDARY;
+collate(c, "World", "world");
+<strong>0
+Inq done</strong></source>
+      </section>
+    </section>
+    <section id="aggregates">
+      <title>Aggregate Functions</title>
+      <p>
+        Inq has a number of aggregate functions for common operations which
+        offer more succinct expression than
+        using <a href="controlflow.html#lforeach"><code>foreach</code></a>.
+        These are usually applied to a node set because they expect a
+        homogeneous structure. 
+      </p>
+      <section id="sum">
+        <title>sum()</title>
+        <source>
+"sum" "(" &lt;node-root&gt; "," &lt;expression&gt; ")"
+</source>
+        <p>
+          The <code>sum()</code> function computes the sum of the values returned
+          by <code>&lt;expression&gt;</code> which is applied at each child
+          of <code>&lt;node&#x2011;root&gt;</code>. Here is an example:
+        </p>
+        <source>
+Order.TotalPrice = sum(items, $loop.LineItem.UnitPrice * $loop.LineItem.Qty);
+</source>
+        <p>
+          <code>$loop</code> resolves to the node-set child for each iteration.
+          An exception is thrown if any evaluation of <code>&lt;expression&gt;</code>
+          does not resolve.
+        </p>
+      </section>
+      <section id="avg">
+        <title>avg()</title>
+        <source>
+"avg" "(" &lt;node-root&gt; "," &lt;expression&gt; ")"
+</source>
+        <p>
+          Computes the average of the values
+          returned by <code>&lt;expression&gt;</code> which is applied at
+          each child of <code>&lt;node&#x2011;root&gt;</code>. Equivalent
+          to
+        </p>
+        <source>
+sum(&lt;node-root&gt;, &lt;expression&gt;) / count(&lt;node-root&gt;)
+</source>
+      </section>
+      <section id="wavg">
+        <title>wavg()</title>
+        <source>
+"wavg" "(" &lt;node-root&gt; "," &lt;sum-expression&gt; "," &lt;weight-expression&gt;")"
+</source>
+        <p>
+          Computes the weighted average of the values
+          returned by <code>&lt;sum&#x2011;expression&gt;</code>, weighting each
+          value by <code>&lt;weight&#x2011;expression&gt;</code>.
+        </p>
+        <p>
+          The sum of <code>&lt;sum&#x2011;expression&gt;</code> multiplied
+          by <code>&lt;weight&#x2011;expression&gt;</code> is calculated and
+          the result divided by the sum of <code>&lt;weight&#x2011;expression&gt;</code>.
+        </p>
+      </section>
+    </section>
+    <section id="eventdel">
+      <title>Node Sets and Deletion Events</title>
+      <p>
+        Event propagation through a node space was introduced in the
+        discussion of <a href="txn.html">transactions</a> and is covered
+        further in the section on <a href="events.html">events</a>.
+        Worth noting here,
+        however, is the internal handling of typedef instance delete events
+        passing through a node set.
+      </p>
+      <p>
+        When a process deletes a typedef instance and its transaction successfully
+        commits, a <a href="txn.html#deleteevent">deletion event</a> is dispatched
+        to all observers, that is event-live utility containers. As discussed
+        earlier, Inq ensures there is only one physical reference for a given
+        instance, so this event passes through any node space in which the
+        instance has been placed, irrespective of the process-owner of that
+        node space and the process deleting the instance.
+      </p>
+      <p>
+        Events pass up event-live containment hierarchies, possibly being
+        dispatched to listeners placed at any level and, in the case
+        of server-side <a href="process.html#process-intro">user processes</a>
+        and unless consumed, propagating to the peer client process.
+      </p>
+      <p>
+        When a delete event passes through a node space
+        Inq performs the following processing:
+      </p>
+      <ol>
+        <li>At a node set top-level container, Inq checks if the event originated
+        from an instance of the typedef the container is tagged with.
+        If so, the node set child is removed from the node set. Inq
+        considers that, because the <em>primary typedef</em> instance
+        has been deleted, the sub-structure is no longer viable as a "row".
+        Inq raises a <em>node removed</em> event on the node set child
+        to signal this and this event is dispatched before
+        the deletion event.</li>
+        <li>At any other container (including node set children)
+        the instance is removed from the container. Inq does not raise additional
+        events in this case as the deletion event is sufficient.</li>
+      </ol>
+      <p>
+        This processing ensures that in the most common cases there is no
+        requirement to handle deletion events in application script. Common
+        observers of node set structures such as GUI tables, for example,
+        will respond appropriately in the face of instance life-cycle deletion
+        events.
+      </p>
+    </section>
+    <section id="relation">
+      <title>Node Structures and Instance Relationships</title>
+      <p>
+        As noted above, relationships between application <em>types</em> are
+        loosely defined by foreign key dependencies. Relationships
+        between application type <em>instances</em> are defined by their
+        relative positions in a particular node space.
+      </p>
+      <p>
+        Instances contained within the same parent (referred to
+        as <em>siblings</em>) are related with a bounded cardinality, often
+        one-to-one, though not necessarily only one, as illustrated in
+        the <code>Parties</code> example above. A one-to-many relationship
+        is expressed when an instance and a node set are at the same level.
+        A node set itself represents a tabular data, whereas
+        node sets at successively deeper levels model a tree, either to
+        a bounded maximum or an arbitrary depth when the application type
+        is recursively defined.
+      </p>
+      <p>
+        Such structures are built as necessary to meet a particular
+        application requirement. Only a small number of scripted
+        steps are needed and a scripted algorithm is applicable to
+        any node space that satisfies all its references.
+      </p>
+    </section>
+  </body>
+</document>

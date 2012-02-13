@@ -29,7 +29,7 @@ import com.inqwell.any.IntI;
 import com.inqwell.any.Transaction;
 import com.inqwell.any.client.swing.JPanel;
 
-public class AnySlider extends AnyComponent
+public class AnySlider extends AnySimpleComponent
 {
   private JSlider         s_;
   private JComponent      borderee_;

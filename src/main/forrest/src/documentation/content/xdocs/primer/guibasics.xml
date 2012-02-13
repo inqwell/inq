@@ -1,0 +1,1424 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright 2006 Inqwell Ltd.
+-->
+<!DOCTYPE document PUBLIC "-//APACHE//DTD Documentation V2.0//EN" "http://forrest.apache.org/dtd/document-v20.dtd">
+<document>
+  <header>
+    <title>Building GUIs - The Basics</title>
+  </header>
+  <body>
+    <section id="intro">
+      <title>Introduction</title>
+      <p>
+        This section introduces the topic of producing GUIs in Inq. 
+        GUI code has its own complexities, if different to issues
+        raised by the demands of server-side environments. There are
+        far fewer concurrency issues, for example, but the matter
+        of large amounts of often repetitive code remains. This code
+        has little to do with the application - instead it exists
+        only to bridge the application to the GUI api. Inq's reified
+        approach eliminates much of this and, when combined with
+        the application's metadata, genuinely reusable components
+        can be written.
+      </p>
+      <p>
+        Here we outline the main concepts of the Inq GUI environment
+        and present a simple temperature converter. The petstore
+        blueprint application contains many more examples including
+        applications of the reusable components shipped with
+        Inq - the <em>Attribute Editor</em> and
+        the <em>Item Chooser</em>. 
+      </p>
+    </section>
+    <section id="context">
+      <title>The Context Node - A Recap</title>
+      <p>
+        The term <em>Context Node</em>, often abbreviated to just <em>context</em>,
+        applies in
+        both the client and server environments, and
+        its definition is <em>the node that is yielded by the path $this</em>.
+        The context node was introduced earlier, when discussing
+        Inq's <a href="nodes.html#contextnode">hierarchical data structures</a>.
+        When script is executing at a given context, the absolute path is given by the
+        expression <code>$path</code>.
+      </p>
+      <p>
+        The context has greater
+        visibility in the client because it is here that the node and its absolute node
+        path (i.e. the path from the root node to the context node) originate.
+        The context is important because it defines the relevant sub-division of the
+        application for script to run in. Anything below the context can
+        be accessed by a path of the form <code>$this.something.useful</code>. Any node reachable
+        from $root remains in the node space (unless explicitly removed), so this
+        data (and any sub-division of it) is the application's persistent state.
+      </p>
+      <p>
+        There is no path expression that navigates "up and out" of $this,
+        so the context defines the universe for a given script execution.<!--Its a bit
+        like the implicit object instance in OO languages (but only a bit).-->
+         There are ways to switch between contexts while a script runs. These require
+        the use of function pointers (defined with the data
+        type <a href="controlflow.html#xfunc"><code>func</code></a>) that
+        encapsulate the context they were defined in. A <code>func</code>
+        is used to create create an entry point between contexts, resulting in
+        a structured route, rather than the
+        unstructured use and brittle nature of any kind of path expression that
+        could do the same.
+      </p>
+      <p>
+        In terms of the underlying GUI components in a client, things of significance
+        that are created explicitly in the script become nodes beneath some parent
+        when <em>layout</em> is performed. Inq will create other components to
+        implement the layout, such as vertical and horizontal boxes or scroll panes,
+        but these do not have to become Inq nodes as well. These components
+        participate in the <em>component hierarchy</em> and exist to effect the
+        desired graphical layout and groupings.
+      </p>
+      <p>
+        A GUI component that is accessible as an
+        Inq node has all its underlying Java Bean properties, and any additional ones
+        implemented by its Inq node, accessible via the child
+        path <code>.properties.&lt;property_name&gt;</code>.
+        When script runs from a GUI event call-back, the context node is the nearest
+        parent that has the property <code>contextNode</code> set to <code>true</code>.
+        This could be the Inq node
+        of the component that fired the event itself, though typically it is an ancestor
+        node. The parent into which the Inq GUI nodes are placed during layout is often
+        the one that defines itself as the context. These are typically one of
+      </p>
+      <ul>
+        <li>a top level window;</li>
+        <li>a container that is the immediate child of a tab (and so is the GUI
+          hierarchy for that tab);</li>
+        <li>the root of any component set that has been designed for reuse
+          within the application.</li>
+      </ul>
+    </section>
+    <section id="hierarchies">
+      <title>Instance Hierarchies</title>
+      <p>
+        From the foregoing we note that there are two instance hierarchies - the
+        graphical component hierarchy and the Inq node hierarchy. The component
+        hierarchy exists to achieve the desired GUI layout, while the Inq hierarchy
+        exists to propagate a context to child nodes, as well as to simply contain
+        the GUI items for general use.
+      </p>
+      <p>
+        The component hierarchy is not of major concern other than at layout time, when
+        the component parent of a batch to be laid out is specified. The Inq
+        hierarchy is generally flat for a set of GUI nodes inheriting a particular
+        context node parent, so that paths are simple and of the (hungarian-style)
+        form $this.bOK, an OK button, for example. As we will see
+        in the section covering layout detail, the Inq and component roots for a
+        particular case can be the same or different.
+      </p>
+      <p>
+        The Inq hierarchy is important when the
+        tab or card containers are used. If an Inq GUI node has either of these
+        as its Inq parent then
+        properties relating to its tab (such as the text and icon) and/or
+        card (such as visibility) become active.
+      </p>
+    </section>
+    <section id="steps">
+      <title>Basic Steps of GUI Creation</title>
+      <p>
+        Creating GUIs in Inq involves the following steps:
+      </p>
+      <ol>
+        <li>create the components;</li>
+        <li>set any required property values;</li>
+        <li>tell the component what data it is rendering, that is attach the view to the model;</li>
+        <li>ask Inq to lay out the components according to a specification
+          for their placement, geometry constraints, bordering and other parameters;</li>
+        <li>establish handler functions for component events of interest.</li>
+      </ol>
+      <!--
+      <p>
+        The above order is the general case, however there are certain aspects
+        for particular component types that must be performed after layout
+        has taken place. More specifically, they can only be performed when
+        the component has its context node established. The context is
+        established when the component is laid out in an Inq hierarchy that
+        has a GUI node whose <code>contextNode</code> property is set
+        to <code>true</code>. The nearest such ancestor becomes the
+        context node for its children. The cases where this condition applies
+        and the reasons why it does so are covered in the more detailed examples.
+      </p>
+      -->
+      <p>
+        We use the the example scripted
+        in <a href="examples/C2F.inq" class="fork">C2F.inq</a> to illustrate simple
+        GUI building. We can run the example with the
+        invocation <code>inq -in C2F.inq</code>. Here is what it looks like:
+      </p>
+      <figure src="images/c2f_linux.png" alt="C2F Window"/>
+      <p>
+      </p>
+      <section id="components">
+        <title>Create The Components</title>
+        <p>
+          Components are created explicitly in script statements or implicitly
+          by directives and groupings specified in the layout. We cover the latter
+          when discussing the <code>layout</code> function in detail.
+        </p>
+        <p>
+          Components are created by declaring them just like any other
+          variables. The following data types are available:
+        </p>
+        <table>
+          <caption>GUI Component Data Types</caption>
+          <tr>
+            <th class="guitypes">Data Type</th>
+            <th class="guitypes">Component Type</th>
+            <th class="guitypes">Underlying Component</th>
+          </tr>
+          <tr>
+            <td>gWindow</td><td>A top-level window that interacts with the system window manager</td><td><code>JFrame</code></td>
+          </tr>
+          <tr>
+            <td>gDialog</td><td>A modal or non-modal dialog</td><td><code>JDialog</code></td>
+          </tr>
+          <tr>
+            <td>gIWindow</td><td>An top-level window suitable for use with a <code>gDesktop</code></td><td><code>JInternalFrame</code></td>
+          </tr>
+          <tr>
+            <td>gBox</td><td>A horizontal or vertical box for use as an intermediate, grouping container</td><td><code>JPanel</code></td>
+          </tr>
+          <tr>
+            <td>gCard</td><td>A container that displays one of its children at any given time</td><td><code>JPanel</code></td>
+          </tr>
+          <tr>
+            <td>gButton</td><td>A simple button</td><td><code>JButton</code></td>
+          </tr>
+          <tr>
+            <td>gArrow</td><td>An arrow button</td><td><code>BasicArrowButton</code></td>
+          </tr>
+          <tr>
+            <td>gToggle</td><td>A toggle button</td><td><code>JToggleButton</code></td>
+          </tr>
+          <tr>
+            <td>gCheck</td><td>A check box</td><td><code>JCheckBox</code></td>
+          </tr>
+          <tr>
+            <td>gRadio</td><td>A radio button intended for use with a <code>gButtonGroup</code></td><td><code>JRadioButton</code></td>
+          </tr>
+          <tr>
+            <td>gTable</td><td>A table</td><td><code>JTable</code></td>
+          </tr>
+          <tr>
+            <td>gList</td><td>A list</td><td><code>JList</code></td>
+          </tr>
+          <tr>
+            <td>gTree</td><td>A tree</td><td><code>JTree</code></td>
+          </tr>
+          <tr>
+            <td>gToolBar</td><td>A tool bar container</td><td><code>JToolBar</code></td>
+          </tr>
+          <tr>
+            <td>gMenuBar</td><td>A menu bar for use as the <code>menuBar</code> property of a <code>gWindow</code> or <code>gIWindow</code></td><td><code>JMenuBar</code></td>
+          </tr>
+          <tr>
+            <td>gMenu</td><td>A menu suitable for use in a <code>gMenuBar</code> or as a sub-menu in a <code>gPopupMenu</code></td><td><code>JMenu</code></td>
+          </tr>
+          <tr>
+            <td>gLabel</td><td>A label</td><td><code>JLabel</code></td>
+          </tr>
+          <tr>
+            <td>gMenuButton</td><td>A simple menu button</td><td><code>JMenuItem</code></td>
+          </tr>
+          <tr>
+            <td>gMenuCheck</td><td>A menu check button</td><td><code>JCheckBoxMenuItem</code></td>
+          </tr>
+          <tr>
+            <td>gMenuRadio</td><td>A menu radio button</td><td><code>JRadioButtonMenuItem</code></td>
+          </tr>
+          <tr>
+            <td>gPopupMenu</td><td>A popup menu that can be placed on a component using the default or other popup event</td><td><code>JPopupMenu</code></td>
+          </tr>
+          <tr>
+            <td>gButtonGroup</td><td>Provides access to member radio buttons as a group</td><td></td>
+          </tr>
+          <tr>
+            <td>gTextField</td><td>A one-line text field</td><td><code>JTextField</code></td>
+          </tr>
+          <tr>
+            <td>gPasswdField</td><td>A one-line text field that hides its text</td><td><code>JPasswordField</code></td>
+          </tr>
+          <tr>
+            <td>gTextArea</td><td>A multi-line, single-style text area</td><td><code>JTextArea</code></td>
+          </tr>
+          <tr>
+            <td>gTextPane</td><td>A multi-line, multi-style text area</td><td><code>JTextPane</code></td>
+          </tr>
+          <tr>
+            <td>gTab</td><td>A tab container whose Inq children are the the root of the GUI under each tab</td><td><code>JTabbedPane</code></td>
+          </tr>
+          <tr>
+            <td>gSplit</td><td>A horizontal or vertical split pane</td><td><code>JSplitPane</code></td>
+          </tr>
+          <tr>
+            <td>gComboBox</td><td>A combo-box</td><td><code>JComboBox</code></td>
+          </tr>
+          <tr>
+            <td>gFileChooser</td><td>A file chooser</td><td><code>JFileChooser</code></td>
+          </tr>
+          <tr>
+            <td>gSpinner</td><td>A spin button capable of supporting various underlying data types</td><td><code>JSpinner</code></td>
+          </tr>
+          <tr>
+            <td>gDateChooser</td><td>A date chooser with popup calendar</td><td><code>com.toedter.calendar.JDateChooser</code></td>
+          </tr>
+          <tr>
+            <td>gProgressBar</td><td>A progress bar</td><td><code>JProgressBar</code></td>
+          </tr>
+          <tr>
+            <td>gSlider</td><td>A slider with a defined numeric range</td><td><code>JSlider</code></td>
+          </tr>
+          <tr>
+            <td>gDesktop</td><td>A desktop container to support <code>gIWindow</code> components</td><td><code>JDesktopPane</code></td>
+          </tr>
+        </table>
+        <p>
+          The components our example uses are created by the following script
+          fragment
+        </p>
+        <source>
+// A top-level window.  By setting its contextNode property to true we
+// are saying that events occurring at or below this point in the Inq
+// hierarchy will run with $this set to "win".
+gWindow win;
+win.properties.contextNode = true;
+win.properties.defaultCloseOperation = EXIT_ON_CLOSE;
+
+
+// Create some GUI components. Labels are used to display the flag icons.
+gSlider slCelsius;
+gTextField tfCelsius;
+gLabel lCelcius;
+
+gSlider slFahr;
+gTextField tfFahr;
+gLabel lFahr;
+</source>
+      </section>
+      <section id="properties">
+        <title>Set The Required Property Values</title>
+        <p>
+          Next, the script sets up any properties using each
+          component's <code>properties</code> child:
+        </p>
+        <source>
+slCelsius.properties.orientation =
+  slFahr.properties.orientation = ORIENT_VERTICAL;
+
+slCelsius.properties.minimum    = -273;
+slCelsius.properties.maximum    = 100;
+slFahr.properties.minimum = call celciusToFahrenheit(celcius = -273);
+slFahr.properties.maximum = call celciusToFahrenheit(celcius = 100);
+
+slCelsius.properties.majorTickSpacing = 13;
+slFahr.properties.majorTickSpacing    = 27;
+slCelsius.properties.paintTicks  = slFahr.properties.paintTicks  = true;
+slCelsius.properties.paintLabels = slFahr.properties.paintLabels = true;
+</source>
+        <p>
+          Provided the underlying component supports it, properties can be
+          both set and read in this way. All the JavaBeans<sup>TM</sup>
+          single-value properties defined by the underlying component are
+          available. Some components define additional properties as part
+          of their implementation in the Inq run-time. These are detailed
+          in the components reference section [TODO]. <!--XXX link Er TBD-->
+        </p>
+        <section id="ctxnodeprop">
+          <title>When Is The Context Established?</title>
+          <p>
+            The window, <code>win</code> has its <code>contextNode</code>
+            property set to <code>true</code>. Although, as stated above,
+            this means that the context node for event handlers will
+            be <code>win</code>, its important to note that this will not be
+            the context prevailing when the <code>createGUI()</code> function
+            is called. While the GUI is being created the context is
+            a higher-level part of the application, or even <code>$root</code>
+            if we are creating the first window.
+          </p>
+          <p>
+            This temperature converter is an command line script to simply mockup
+            a GUI.
+            As we will see when we discuss full client-server applications,
+            it can be inconvenient to invoke any server-side services required
+            during GUI setup when the context is not the one that GUI will run in.
+            For this purpose, Inq defines a component event that is fired when
+            that component's context becomes known. This happens during GUI
+            layout, when the component is added to the Inq hierarchy such that
+            an ancestor node has its <code>contextNode</code> property set
+            to <code>true</code>. We will return to this subject when we cover
+            client-server examples.
+          </p>
+        </section>
+      </section>
+      <section id="mvc">
+        <title>Attaching Views to Models</title>
+        <p>
+          All components support Inq-defined properties that are used to
+          specify the data they are rendering. Setting these properties
+          establishes two things:
+        </p>
+        <ul>
+          <li>
+            tells the component where in the node space it must look to
+            fetch the data it is displaying (and to update if the component
+            can accept input);
+          </li>
+          <li>
+            dispatches the events Inq raises on the data to the component,
+            so that when the data is changed by client or server-side
+            script the component will refresh.
+          </li>
+        </ul>
+        <p>
+          Using the well-known MVC paradigm, setting these properties is the
+          way Inq binds a view to a model. Once established, the flows
+          to implement MVC are handled by the Inq run-time. While the
+          application may drive the GUI state from specific GUI event
+          handlers, no scripting is required to implement MVC.
+        </p>
+        <p>
+          Complex components, such as tables, trees and the list forms
+          implement more than one property for this purpose and use complex
+          property values. Simple components rendering single values, like the
+          ones used in this example, require only the <code>renderInfo</code>
+          property to establish their MVC. Here is the script that does
+          this for our temperature converter:
+        </p>
+        <source>
+// Create two variables - the "model" data if you like. We use fixed-precision
+// numbers for convenience, as the maths cannot be accurate.  Note that
+// sliders can only yield integers, but Inq can handle model data of any
+// non-integer type for them.
+decimal:2 win.vars.celcius;
+decimal:2 win.vars.fahr;
+
+// Bind the two celcius views to the same model data....
+slCelsius.properties.renderInfo = renderinfo($this.vars.celcius);
+tfCelsius.properties.renderInfo = renderinfo($this.vars.celcius, editable = true);
+
+// .... and the same for the fahrenheit views.  These statements mean
+// that the GUI will update the model and changes to the model will update
+// the GUI.
+slFahr.properties.renderInfo = renderinfo($this.vars.fahr);
+tfFahr.properties.renderInfo = renderinfo($this.vars.fahr, editable = true);
+</source>
+        <p>
+          The model data is two decimal values to hold the temperatures. These are
+          declared underneath the window, <code>win</code>, because that is the
+          context node.
+        </p>
+        <note>GUI nodes support children but cannot directly contain rendered data
+          items. Such items must be placed in a subordinate map, <code>vars</code>
+        in this example.</note>
+        <section id="renderinfo">
+          <title>The renderInfo Property</title>
+          <p>
+            The <code>renderInfo</code> property accepts the result of
+            a <code>renderinfo()</code> expression. In its simplest
+            form, <code>renderinfo</code> takes a single argument of a node
+            reference, as in these examples. However, as well as specifying
+            where in the node space the data is, <code>renderinfo</code>
+            can also represent a number of other parameters that affect how this
+            data will be rendered. The syntax of <code>renderinfo</code>
+            is as follows:
+          </p>
+          <source>
+"renderinfo" "("
+               ( [&lt;expression&gt;]
+               | ( "typedef"  "=" &lt;field_reference&gt; | typeof = &lt;expression&gt; "," &lt;expression&gt; )
+               | "format"   "=" &lt;expression&gt;
+               | "label"    "=" &lt;expression&gt;
+               | "width"    "=" &lt;expression&gt;
+               | "editable" "=" &lt;expression&gt;
+               )
+               ( ","
+                 ( ( "typedef"  "=" &lt;field_reference&gt; | typeof = &lt;expression&gt; "," &lt;expression&gt; )
+                 | "format"   "=" &lt;expression&gt;
+                 | "label"    "=" &lt;expression&gt;
+                 | "width"    "=" &lt;expression&gt;
+                 | "editable" "=" &lt;expression&gt;
+                 )
+               )*
+             ")"
+</source>
+          <p>
+            With everything appearing to be optional, examples of the minimum
+            valid <code>renderinfo</code>s are
+          </p>
+            <source>
+renderinfo($this.vars.useBillingAddress);     // Just an expression
+</source>
+          <p>
+            or
+          </p>
+            <source>
+renderinfo(typedef=Order.UseBillingAddress);  // Just a typedef/field reference
+</source>
+          <p>
+            The optional first argument is an expression whose result is
+            the data to be rendered. In many cases, is a simple
+            node reference of the form <code>$this.vars.foo</code>
+            however the expression can be anything.
+          </p>
+          <note>The <code>renderinfo</code>'s expression is evaluated when the
+            context of its component is established, so as for event
+            handlers, <code>$this</code> refers to the context
+            node after GUI creation and not the context the script
+            is currently running in.</note>
+          <p>
+            If an expression is present it must be the first argument.
+            The remaining arguments are also optional and independent of
+            their order, so are named.
+          </p>
+          <dl>
+            <dt><strong>typedef =</strong></dt>
+            <dd><p>The <code>typedef</code> argument is a field reference to a
+              typedef entity or a reference to a typedef alias. From foregoing
+              typedef examples we could specify
+              </p>
+              <source>
+typedef=Entity.GlobalLimit
+</source>
+              <p>
+              and
+            </p>
+              <source>
+typedef=FXRate
+</source>
+              <p>
+              When used with an expression argument, the effect
+              of <code>typedef</code> is to apply the format, width and
+              label from the definition of the field or alias. If no
+              expression is specified then Inq assumes a default node
+              path of <code>$this.&lt;type_name&gt;.&lt;field_name&gt;</code>
+              where <code>&lt;type_name&gt;</code> is the name of the
+              typedef, or its override if it defines one.
+              </p>
+              <p>
+              The default path is suitable when resolving children of
+              a <em>node set</em> structure, such as those Inq builds
+              when applying non-unique keys. These structures are often
+              displayed as a table or list form, so <code>renderinfo</code>
+              expressions used for these components typically do not require
+              the expression argument.
+              </p>
+              <note>As an alternative to providing type information
+              statically, <code>typeof</code> can be used when the
+              type is not known until run-time. This is covered when
+              we look at the reusable component, the Attribute Editor
+              [to be written up].</note>
+            </dd>
+            <dt><strong>format =</strong></dt>
+            <dd><p>A string expression that
+              specifies the format pattern. <!--XXX link--> If present,
+              the argument overrides any format implied by a <code>typedef</code>
+              argument.</p></dd>
+            <dt><strong>label =</strong></dt>
+            <dd><p>A string expression that
+              specifies the label.  If present,
+              the argument overrides any label implied by a <code>typedef</code>
+              argument.</p></dd>
+            <dt><strong>width =</strong></dt>
+            <dd><p>An integer expression that
+              specifies the width. If present,
+              the argument overrides any format implied by a <code>typedef</code>
+              argument. The width is used to dimension the component as
+              a the character width of lower-case '<code>n</code>' in the
+              component's font. If the <code>renderinfo</code> applies to a
+              table column then <code>width</code> dimensions the column. If
+              neither <code>typedef</code> or <code>width</code> are present
+              then a default width of 12 is assumed.</p></dd>
+            <dt><strong>editable =</strong></dt>
+            <dd><p>If the component accepts input and has an editable and
+              non-editable state then the <code>editable</code> boolean expression
+              sets this state. By default, <code>editable</code>
+              is <code>false</code>. A component's editable state (and that
+              of complex component elements such as table cells) is
+              also accessible through a property. If the application needs
+              to change <code>editable</code> according to current state then
+              it does so via property access and <code>renderinfo</code> only
+              provides the initial value.</p></dd>
+          </dl>
+          <p>
+            The temperature converter does not use <code>typedef</code>
+            declarations at all and, because the data model uses fixed
+            precision <code>decimal</code> values, need not use explicit
+            formatting. As we will see when discussing this example's layout,
+            the text fields are allowed to take a preferred size, so
+            no <code>width</code> is specified either.
+          </p>
+        </section>
+        <section id="rinfoexpr">
+          <title>The renderinfo Expression</title>
+          <p>
+            When an <a href="process.html#eventflows">event</a> propagates
+            upwards through the node space, the <code>renderinfo</code>'s
+            expression (or implied expression when only <code>typedef</code>
+            is present) allows it to determine whether the event is of
+            interest to the associated GUI component.
+          </p>
+          <p>
+            As stated above, A <code>renderinfo</code>'s
+            expression can be any Inq statement. Consider the following example
+            of a label component that is set up to display audit information
+            about when and by whom some data was last updated:
+          </p>
+          <source>
+tfLastUpdatedByUser.properties.renderInfo = renderinfo(renderf("Last Updated {0} By {1}",
+                                                               $this.vars.selected.Cpty.LastUpdated,
+                                                               $this.vars.selected.Cpty.User));
+</source>
+          <p>
+            In this case the expression is not a simple node reference. It
+            is Inq's <code>renderf</code> function. This is similar
+            to <code>printf</code> in C or Java but uses formatting information
+            from the associated <code>typedef</code>, if any can be inferred
+            from the references.
+          </p>
+          <p>
+            <code>renderinfo</code> examines the node references in its
+            expression and responds to node events that must be of interest
+            to it, thus binding the dependent data items to the view.
+            Only node references relative to <code>$this</code> are
+            considered because events can only arise in
+            the <a href="nodes.html#contextnode">persistent node space</a>.
+          </p>
+          <p>
+            In general, Inq will analyse complex <code>renderinfo</code>
+            expressions to determine the node events that should be dispatched to
+            a component.  Any function
+            calls in the expression will be walked and eligible node paths in
+            the function body considered.
+          </p>
+        </section>
+        <section id="rinfofire">
+          <title>renderinfo and firemodel</title>
+          <p>
+            When a GUI component updates its model data, the MVC design
+            states that the component will fire a model event to notify
+            other observers of the new model state. Inq components do
+            not, by default, raise model events in this way because
+          </p>
+          <ul>
+            <li>the component is often the only observer of the data;</li>
+            <li>there can be several options for component events that
+              need to raise model events, for example a text field may
+              update its model when the <code>enter</code> key is pressed,
+              when keyboard focus is lost or on every key stroke.</li>
+          </ul>
+          <p>
+            As we will see when discussing component event handlers below, Inq
+            script can configure which component events will fire model events
+            with the <code>firemodel</code> argument.
+            Note, though, that Inq can only fire model events when
+            the <code>renderinfo</code> expression is a simple node path. If
+            a complex expression is used then <code>firemodel</code> is ignored.
+          </p>
+        </section>
+      </section>
+      <section id="layout">
+        <title>Performing The Layout</title>
+        <p>
+          Achieving a satisfactory layout of components that also exhibits
+          the desired behaviour when the user resizes the GUI can be a very
+          time-consuming exercise and not especially edifying. The approach
+          taken by Inq was originally inspired by
+          the <a class="fork" href="ext:motiftools/home">XMT Toolkit</a>
+          written by <a class="fork" href="ext:davidflanagan/home">David Flanagan</a>.
+          It avoids the need for the programmer to master the many complex
+          layout managers available and expresses the layout in a way that
+          is easy to visualise and maintain. 
+        </p>
+        <p>
+          The <code>layout</code> function performs a component layout given
+          the minimum of
+        </p>
+        <ul>
+          <li>the set of components;</li>
+          <li>the parent into which the layout will be made;</li>
+          <li>the layout string specification.</li>
+        </ul>
+        <p>
+          It includes the layout schemes of
+        </p>
+        <dl>
+          <dt><strong>Row / Column</strong></dt>
+          <dd><p>components are laid out in horizontal or vertical rows with specified
+          geometry and alignment costraints; the underlying layout manager
+          is the Java <a class="fork" href="ext:j2seapi/apidocs/boxlayout"><code>BoxLayout</code></a>.
+          </p></dd>
+          <dt><strong>Table</strong></dt>
+          <dd><p>components are placed in one or more defined cells with optional
+          justification and gapping; the underlying layout manager is Daniel
+          Barbalace's <a class="fork" href="ext:tablelayout/home"><code>TableLayout</code></a>.
+          See also the Inq <a class="fork" href="tablelayout.pdf">Mini Guide</a>
+          to using TableLayout.</p></dd>
+          <dt><strong>Card</strong></dt>
+          <dd><p>one of the child components is visible at any one time;
+          the underlying layout manager is the
+          Java <a class="fork" href="ext:j2seapi/apidocs/cardlayout"><code>CardLayout</code></a>.
+          </p></dd>
+        </dl>
+        <p>
+          A full discussion of <code>layout</code> is covered in its own
+          section [TODO] <!--XXX link-->
+          For now we will discuss those features used by our example,
+          whose <code>layout</code> invocation is
+        </p>
+        <source>
+layout(., win,  "Row
+                {
+                  Margin d:3 Caption tl $catalog.{$root.i18n}.celcius; Column
+                  {
+                    Geometry d:f lCelcius
+                    Nofocus Geometry xy:fv slCelsius
+                    Geometry xy:vf tfCelsius
+                  }
+                  Margin d:3 Caption tl $catalog.{$root.i18n}.fahrenheit; Column
+                  {
+                    Geometry d:f lFahr
+                    Nofocus Geometry xy:fv slFahr
+                    Geometry xy:vf tfFahr
+                  }
+                }");
+</source>
+        <section id="layoutargs">
+          <title>Layout Arguments</title>
+          <p>
+            The first argument to <code>layout</code> is the component set.
+            The components we are laying out are all declared on the stack, which
+            is yielded by the node path "<code>.</code>". The layout specification
+            itself refers to the components by their name within the set. This
+            name is a single identifier, not a node path, so all the components
+            must reside in the same Inq map container and therefore have unique names.
+          </p>
+          <p>
+            The second argument is the Inq node into which Inq the components will be
+            placed. As components are referenced in the layout specification, so they
+            are added to this node. Remember that Inq maps operate a unique key set,
+            so the layout will fail if there is already a child in the specified
+            Inq node with the same name as any of the components. It is this aspect
+            of layout processing that creates the Inq hierarchy introduced earlier
+            and if the node, or an ancestor of it, is a context node, this node
+            will become the context for each component as it is processed
+            by <code>layout</code>. In our example the Inq root <em>and</em> the
+            GUI root are the window.
+          </p>
+          <p>
+            The third argument is the layout specification. This is a string that
+            is parsed to create the GUI hierarchy and apply layout constraints
+            applicable to the scheme being used.
+          </p>
+        </section>
+        <section id="layoutspec">
+          <title>The Layout Specification</title>
+          <p>
+            Rows and columns are introduced with the keywords <code>Row</code>
+            and <code>Column</code>. Generally, keywords in the layout syntax
+            always begin with an upper case letter. Qualifiers apply to the named
+            component that follow. Layout artifacts, such as rows and columns
+            are unnamed components that can also accept qualifiers. If followed by
+            an identifer, an unnamed component becomes an Inq node in the same way
+            as if it had been declared explicitly prior to layout.
+          </p>
+          <p>
+            When considering the desired layout for the temperature converter we
+            settle on a row containing two children, each of which is a column
+            containing the label (for the image), the slider and the text field.
+            As each of the row children represents a temperature scale it is
+            given the following qualifiers:
+          </p>
+          <ul>
+            <li>a margin of 3 pixels dimension;</li>
+            <li>a caption at the top and justified to the left in the default border.</li>
+          </ul>
+          <p>
+            The caption is an expression followed by a semi-colon which must
+            evaluate to a string. In this example the expression is a path that
+            references the system catalog with a parameterised path intended to
+            take account of an internationalisation setting.  <!--XXX link to
+            internationalisation section !!).-->
+          </p>
+          <p>
+            The <code>Geometry</code> qualifier states how the component it
+            applies to will resize. When absent, as for the columns, the
+            component is fully resizable in both the X and Y directions.
+            For the components within the columns, the geometry constraints are
+            set as follows:
+          </p>
+          <ol>
+            <li>The labels are fixed in both the X and Y directions. This means
+              that, as the window is resized, the labels will remain at their
+              initial dimensions. There would be no consequence visually if the
+              labels were allowed to resize in the X direction and, as they
+              do not have any event handlers attached to them, there are no
+              functional implications either. Fixing them in the Y direction is
+              important because we want any resizing on this axis to affect the
+              sliders only. To fix the label dimensions the geometry
+              setting <code>d:f</code> is applied. The <code>dimension</code>
+              letter <code>d</code> is short for both <code>x</code>
+              and <code>y</code>. The value <code>f</code> means "fixed".
+            </li>
+            <li>The sliders have the geometry specifier <code>xy:fv</code>,
+              meaning they can grow and shrink on the Y axis but are fixed
+              along X. As for the labels, the same visual effect would be achieved
+              if the sliders were fully floating (if no <code>Geometry</code>
+              were specified) however constraining their width means that their
+              mouse input area is sensible. Try the example changing the
+              geometry value to <code>xy:vv</code> and (subject to any look and
+              feel dependencies) you will see that the sliders are clickable
+              all the way to the window extremities.
+            </li>
+            <li>
+              Finally, for the text fields we would like them to remain a
+              fixed height but be allowed to grow along the X axis, in other
+              words the opposite behaviour to the sliders.
+            </li>
+          </ol>
+          <p>
+            The <code>Nofocus</code> qualifier applied to the sliders means they
+            will not accept the keyboard focus, leaving the only
+            focusable components in this example as the text fields.
+          </p>
+        </section>
+        <section id="nodespace">
+          <title>The Resulting Node Hierarchies</title>
+          <p>
+            Returning to the subject of instance hierarchies, after layout is
+            complete the component and Inq node trees
+            are as shown in the figures below. Click on the images for a larger
+            view.
+          </p>
+          <table class="plain">
+            <tr>
+              <td class="centred"><a class="fork" href="images/C2FInq.png"><img src="images/C2FInq_Small.png" alt="Click to enlarge"/></a></td>
+              <td class="centred"><a class="fork" href="images/C2FGui.png"><img src="images/C2FGui_Small.png" alt="Click to enlarge"/></a></td>
+            </tr>
+            <tr>
+              <td class="centred"><em>Inq Hierarchy</em></td>
+              <td class="centred"><em>GUI Hierarchy</em></td>
+            </tr>
+          </table>
+          <p>
+            The GUI hierarchy includes the necessary artifacts to achieve
+            the desired layout. The Inq hierarchy places the components
+            of interest under the context node, which is the window.
+            The active components are viewing the model data rooted
+            at <code>$this.vars</code>, though which all further control
+            of the application takes place.
+          </p>
+        </section>
+      </section>
+    </section>
+    <section id="modelinit">
+      <title>Initialising The Model</title>
+      <p>
+        The next two lines of the example initialise the model data.
+      </p>
+      <source>
+// Just some initialisation
+win.vars.celcius = 0;
+win.vars.fahr = call celciusToFahrenheit(celcius = win.vars.celcius);
+</source>
+      <p>
+        In this
+        case the model data is defined in the client itself. In client-server
+        applications its common to make a service request to retrieve data and
+        set up the client's server-side state. These service requests are
+        frequently made from a handler of the <em>context established</em>
+        event, set up on any suitable component. In any case, the purpose of
+        any model data initialisation is to fire model events that, in turn,
+        will initialise the components to which those events are dispatched.
+        Event dispatching by the model and data resolution by the GUI components
+        through the expression of their <code>renderinfo</code> property
+        is only enabled when the context is established and so must take place
+        after this time.
+      </p>
+      <p>
+        The temperature converter has two views each
+        of <code>$this.vars.celcius</code> and <code>$this.vars.fahr</code>,
+        the slider and the text field. Binding the view to the model has the
+        effect of making the container <code>vars</code> emit events when
+        script mutates fields within it. This is an entirely free-form way of
+        creating active model data in the client and can be used for any
+        client-side-only state required to drive the GUI. In our example,
+        initialising the model as above sets up the GUI so that it shows
+        zero celcius and 32 fahrenheit.
+      </p>
+    </section>
+    <section id="inputvalidation">
+      <title>Input Validation</title>
+      <p>
+        The following lines establish the <code>validateInsert</code> property,
+        which must be a <code>func</code> whose expression is a <code>call</code>
+        statement:
+      </p>
+      <source>
+// Setup the "validateInsert" property on the text fields.
+// $catalog.guiFuncs.numericFloat is a predefined function that allows
+// only numeric characters to be entered.
+// See classpath://inq/gui/verifiers.inq
+tfCelsius.properties.validateInsert =
+  tfFahr.properties.validateInsert = $catalog.guiFuncs.numericFloat;
+</source>
+      <p>
+        The <code>validateInsert</code> function is called whenever text
+        is typed or pasted into the text field or when its <code>text</code>
+        property changes. This includes model events that cause the text
+        field's content to change. The function returns <code>null</code>
+        to veto the text or the string value to be inserted otherwise.
+      </p>
+      <p>
+        A detailed discussion of <code>validateInsert</code> and the
+        companion <code>inputVerifier</code> property functions is covered
+        in the detailed sections (to be written).
+      </p>
+    </section>
+    <section id="guievents">
+      <title>Establishing Component Event Handlers</title>
+      <p>
+        An application responds to user input, or other component events,
+        by establishing event handlers with the Inq <code>gEvent</code>
+        function. Here is the syntax of <code>gEvent</code>
+      </p>
+      <source>
+"gEvent" "(" &lt;expression&gt; ","
+           ( [&lt;call_statement&gt;] ","
+             [ "event" "=" "(" &lt;event_list&gt; ")" ] ","
+             [ "gModify" "=" "(" &lt;modifier_list&gt; ")"] ","
+             [ "gDialog" "=" ( "gDialogok" | "gDialogcancel" ) ] ","
+             [ "consume" "=" "(" &lt;boolean_literal&gt; ")" ] ","
+             [ "firemodel" "=" "(" &lt;boolean_literal&gt; ")" ]
+           )
+         ")"
+</source>
+      <p>
+        The expression argument must reference a component node.
+        To be valid, in addition <code>gEvent</code> requires at least
+        a <code>call</code> statement or specify <code>firemodel=true</code>.
+        Here are some uses of <code>gEvent</code> in the temperature converter:
+      </p>
+      <source>
+gEvent(slCelsius, call celciusToFahrenheitCB(), firemodel=true);
+gEvent(tfCelsius, call celciusToFahrenheitCB(), firemodel=true);
+
+gEvent(slFahr, call fahrenheitToCelciusCB(), firemodel=true);
+gEvent(tfFahr, call fahrenheitToCelciusCB(), firemodel=true);
+</source>
+      <section id="handlerfunc">
+        <title>The Handler Function</title>
+        <p>
+          If a component event requires specific processing (that is it will
+          do more than just fire a model event) then this is scripted as a
+          function and <code>gEvent</code> uses the call statement argument.
+          The temperature converter's  call-backs just call helper functions
+          to perform the conversion. These functions are entirely stack-based
+          and do not assume any particular structure prevailing
+          below <code>$this</code>. This means that functionality is separated
+          from model data and can be used more generally.
+        </p>
+        <section id="eventparams">
+          <title>Passing Parameters To The Event Handler</title>
+          <p>
+            The call statement can pass parameters to the call-back function, so
+            an alternative way to write the gEvent statements is
+          </p>
+          <source>
+gEvent(slCelsius, call celciusToFahrenheitCB2(temperatures = $this.vars), firemodel=true);
+gEvent(tfCelsius, call celciusToFahrenheitCB2(temperatures = $this.vars), firemodel=true);
+
+gEvent(slFahr, call fahrenheitToCelciusCB2(temperatures = $this.vars), firemodel=true);
+gEvent(tfFahr, call fahrenheitToCelciusCB2(temperatures = $this.vars), firemodel=true);
+</source>
+          <p>
+            This is another pattern for reducing the dependency of call-back
+            functions on the context. Notice that the argument passed
+            is <code>$this.vars</code> and not individual fields, to avoid
+            field ripping. <!--(XXX link)-->
+          </p>
+        </section>
+        <section id="predefargs">
+          <title>Predefined Arguments To Event Handlers</title>
+          <p>
+            If we uncomment the line <code>writeln($catalog.system.out, $stack);</code>
+            in <code>celciusToFahrenheitCB</code> then we can look at the
+            predefined arguments Inq places on the stack. Here is the output we get
+            for a call-back from the celsius slider:
+          </p>
+          <source>
+{@eventId=E_CHANGE, @component={renderedValue=$this.vars.celcius}}
+<!--@event=E_CHANGE {component={renderedValue=$this.vars.celcius}},-->
+</source>
+          <p>
+            Inq passes the event ID, in this case E_CHANGE, and the originating
+            component at the path <code>@component</code>. When single-value
+            components
+            are rendering a simple node path, Inq includes
+            the indirection <code>renderedValue</code>. This allows the event handler
+            to access the component's model data using the
+            path <code>@component.renderedValue</code> without having to know the
+            specific path that was used in its <code>renderinfo</code>.
+          </p>
+          <p>
+            The more complex components place additional information in the event.
+            These are covered in the reference section <!--XXX link--> and
+            the example applications.
+          </p>
+        </section>
+      </section>
+      <section id="eventspec">
+        <title>Specifying The Events</title>
+        <section id="defaultevent">
+          <title>The Default Event</title>
+          <p>
+            The general syntax for a <code>gEvent</code> expression specifies
+            the events to be processed in
+            the <code>event = (&lt;event_list&gt;)</code> argument.
+            In the examples this argument is omitted, meaning that Inq will
+            use the default event for the component. Only those components that
+            have an obvious default support call-back definition in this way.
+            These are currently defined as:
+          </p>
+          <table>
+            <caption>Component Default Events</caption>
+            <tr>
+              <th class="guitypes">Component</th>
+              <th class="guitypes">Default Event</th>
+              <th class="guitypes">Comments</th>
+            </tr>
+            <tr>
+              <td><code>gTextField</code> and <code>gPasswdField</code></td>
+              <td><code>gAction</code></td>
+              <td/>
+            </tr>
+            <tr>
+              <td>Plain, toggle or radio buttons and their menu variants</td>
+              <td><code>gAction</code></td>
+              <td/>
+            </tr>
+            <tr>
+              <td><code>gComboBox</code></td>
+              <td><code>gAction</code></td>
+              <td/>
+            </tr>
+            <tr>
+              <td><code>gTab</code></td>
+              <td><code>gChange</code></td>
+              <td/>
+            </tr>
+            <tr>
+              <td><code>gDateChooser</code></td>
+              <td><code>gChange</code></td>
+              <td/>
+            </tr>
+            <tr>
+              <td><code>gSlider</code></td>
+              <td><code>gChange</code></td>
+              <td/>
+            </tr>
+            <tr>
+              <td><code>gMenu</code></td>
+              <td><code>gMenuSelected</code></td>
+              <td/>
+            </tr>
+            <tr>
+              <td><code>gButtonGroup</code></td>
+              <td><code>gAction</code></td>
+              <td>Events are solicited from the group, not the group's radio
+                items</td>
+            </tr>
+          </table>
+        </section>
+        <section id="specifyevent">
+          <title>Specific Event Types</title>
+          <p>
+            Specific events are named, for example these lines solicit the
+            focus lost event from the text fields:
+          </p>
+          <source>
+gEvent(tfCelsius, call celciusToFahrenheitCB(), event=(gFocuslost), firemodel=true);
+gEvent(tfFahr, call fahrenheitToCelciusCB(), event=(gFocuslost), firemodel=true);
+</source>
+        </section>
+        <!--
+        <section id="eventlist">
+          <title>Using An Event List</title>
+          <p>
+            An event handler will be called on one or more particular events if
+            the event list argument is present. The event list is a comma-separated
+            set of event key words.
+          </p>
+          <p>
+            Inq maps its event definitions from those of the
+            underlying Java<sup>TM</sup> components according to the following
+            list, as well as defining some of its own. When the component supports
+            the listener type the Inq event may be specified in a <code>gEvent</code>
+            event list.
+          </p>
+          <table>
+            <caption>Inq Component Events</caption>
+            <tr>
+              <th>Inq Event</th>
+              <th>Component Listener</th>
+              <th>Comments</th>
+            </tr>
+            <tr>
+              <td>gAction</td>
+              <td>java.awt.event.ActionListener</td>
+              <td/>
+            </tr>
+            <tr>
+              <td>gFocusgained</td>
+              <td rowspan="2">java.awt.event.FocusListener</td>
+              <td rowspan="2"/>
+            </tr>
+            <tr>
+              <td>gFocuslost</td>
+              <td></td>
+              <td/>
+            </tr>
+            <tr>
+              <td>gChange</td>
+              <td>javax.swing.event.ChangeListener</td>
+              <td/>
+            </tr>
+            <tr>
+              <td>gWactivated</td>
+              <td rowspan="7">java.awt.event.WindowListener
+                or javax.swing.event.InternalFrameListener</td>
+              <td rowspan="7"/>
+            </tr>
+            <tr>
+              <td>gWclosing</td>
+              <td></td>
+              <td/>
+            </tr>
+            <tr>
+              <td>gWclosed</td>
+              <td></td>
+              <td/>
+            </tr>
+            <tr>
+              <td>gWdeactivated</td>
+              <td></td>
+              <td/>
+            </tr>
+            <tr>
+              <td>gWdeiconified</td>
+              <td></td>
+              <td/>
+            </tr>
+            <tr>
+              <td>gWiconified</td>
+              <td></td>
+              <td/>
+            </tr>
+            <tr>
+              <td>gWopened</td>
+              <td></td>
+              <td/>
+            </tr>
+            <tr>
+              <td>gMclicked</td>
+              <td rowspan="6">java.awt.event.MouseListener</td>
+            <td rowspan="6">Inq raises <code>gMpopup</code> when the
+               underlying event is a popup trigger, however use of Inq's
+               dedicated popup support is preferred.</td>
+            </tr>
+            <tr>
+              <td>gMentered</td>
+              <td></td>
+              <td/>
+            </tr>
+            <tr>
+              <td>gMexited</td>
+              <td></td>
+              <td/>
+            </tr>
+            <tr>
+              <td>gMpressed</td>
+              <td></td>
+              <td/>
+            </tr>
+            <tr>
+              <td>gMreleased</td>
+              <td></td>
+              <td/>
+            </tr>
+            <tr>
+              <td>gMpopup</td>
+              <td></td>
+              <td/>
+            </tr>
+            <tr>
+              <td>gMdragged</td>
+              <td rowspan="2">java.awt.event.MouseMotionListener</td>
+              <td rowspan="2"/>
+            </tr>
+            <tr>
+              <td>gMmoved</td>
+              <td></td>
+              <td/>
+            </tr>
+            <tr>
+              <td>gMenuSelected</td>
+              <td rowspan="3">javax.swing.event.MenuListener</td>
+              <td rowspan="3"/>
+            </tr>
+            <tr>
+              <td>gMenuDeselected</td>
+              <td></td>
+              <td/>
+            </tr>
+            <tr>
+              <td>gMenuCanceled</td>
+              <td></td>
+              <td/>
+            </tr>
+            <tr>
+              <td>gPopupVisible</td>
+              <td rowspan="3">javax.swing.event.PopupMenuListener</td>
+              <td rowspan="3"/>
+            </tr>
+            <tr>
+              <td>gPopupInvisible</td>
+              <td></td>
+              <td/>
+            </tr>
+            <tr>
+              <td>gPopupCanceled</td>
+              <td></td>
+              <td/>
+            </tr>
+            <tr>
+              <td>gKtyped</td>
+              <td rowspan="3">java.awt.event.KeyListener</td>
+              <td rowspan="3"/>
+            </tr>
+            <tr>
+              <td>gKpressed</td>
+              <td></td>
+              <td/>
+            </tr>
+            <tr>
+              <td>gKreleased</td>
+              <td></td>
+              <td/>
+            </tr>
+            <tr>
+              <td>gFCapprove</td>
+              <td rowspan="2"/>
+              <td rowspan="2">File chooser approve and cancel events defined by Inq</td>
+            </tr>
+            <tr>
+              <td>gFCcancel</td>
+              <td></td>
+              <td/>
+            </tr>
+            <tr>
+              <td>gDialogok</td>
+              <td rowspan="2"/>
+              <td rowspan="2">Dialog OK and cancel events defined by Inq.
+                These are redirects of any events from the dialog's children</td>
+            </tr>
+            <tr>
+              <td>gDialogcancel</td>
+              <td></td>
+              <td/>
+            </tr>
+            <tr>
+              <td>gCellEditDone</td>
+              <td rowspan="2"/>
+              <td rowspan="2">Table cell editing events defined by Inq</td>
+            </tr>
+            <tr>
+              <td>gCellEditCancel</td>
+              <td></td>
+              <td/>
+            </tr>
+            <tr>
+              <td>gDocchange</td>
+              <td rowspan="3">javax.swing.event.DocumentListener</td>
+              <td rowspan="3">Inq defines these events for the document-based
+                components <code>gTextField</code>, <code>gPasswdField</code>,
+                <code>gTextArea</code>, <code>gTextPane</code>,
+              <code>gDateChooser</code> and <code>gSpinner</code></td>
+            </tr>
+            <tr>
+              <td>gDocinsert</td>
+              <td></td>
+              <td/>
+            </tr>
+            <tr>
+              <td>gDocremove</td>
+              <td></td>
+              <td/>
+            </tr>
+            <tr>
+              <td>gSelection</td>
+              <td>javax.swing.event.ListSelectionListener</td>
+              <td>On components that have a <code>javax.swing.ListSelectionModel</code></td>
+            </tr>
+            <tr>
+              <td>gItem</td>
+              <td>java.awt.event.ItemListener</td>
+              <td/>
+            </tr>
+            <tr>
+              <td>gTreeselection</td>
+              <td>javax.swing.event.TreeSelectionListener</td>
+              <td/>
+            </tr>
+            <tr>
+              <td>gTreeexpand</td>
+              <td rowspan="2">javax.swing.event.TreeExpansionListener</td>
+              <td rowspan="2"/>
+            </tr>
+            <tr>
+              <td>gTreecollapse</td>
+              <td></td>
+              <td/>
+            </tr>
+            <tr>
+              <td>gContext</td>
+              <td/>
+              <td>Defined by Inq on all components and fired when their context
+                becomes known.</td>
+            </tr>
+          </table>
+          <p>
+            Multiple event types can be handled by a single call-back like this:
+          </p>
+          <source>
+gEvent(winSomeWindow, call strangeEvent(), event=(gFocusgained, gWiconified));
+</source>
+          <p>
+            Notice that the event list can specify Inq events
+            derived from differing underlying listener types.
+          </p>
+        </section>
+        <section id="eventmodifier">
+          <title>Applying Modifiers</title>
+          <p>
+            As well as the event type, modifiers can be applied to further qualify
+            the call-back condition for mouse and key events.
+            The <code>gModify</code> argument specifies a list of modifiers
+            as follows:
+          </p>
+          <dl>
+            <dt><code>count=&lt;integer_literal&gt;</code></dt>
+            <dd>A click count for mouse events. Only events with the specified
+              click count will invoke the call-back.</dd>
+            <dt><code>mbutton=&lt;integer_literal&gt;</code></dt>
+            <dd>The number of the button for mouse events. Only events on the
+              specified button will invoke the call-back.</dd>
+            <dt><code>keycode=&lt;keycode_literal&gt;</code></dt>
+            <dd>The key code for key events. Only events on the specified
+              key will invoke the call-back. The <code>keycode_literal</code>
+              is any of the identifiers defined
+              in <a class="fork" href="ext:j2seapi/apidocs/keyevent">KeyEvent</a>
+            </dd>
+            <dt><code>keymod=&lt;modifier_literal&gt;</code></dt>
+          <dd>A modifier key for key events. The <code>modifier_literal</code> is
+              one
+              of <code>MOD_ALT</code>, <code>MOD_CTRL</code>, <code>MOD_SHIFT</code>, <code>MOD_ALTGRAPH</code>
+              and <code>MOD_META</code>. The <code>keymod</code> clause can be
+              repeated, requiring all the modifier keys to be present for
+              the call-back to be invoked.</dd>
+          </dl>
+          <p>
+            Key and mouse modifiers cannot be mixed in a
+            single use of <code>gEvent</code> although other event types that
+            do not use modifiers can appear with a key or mouse event.
+          </p>
+        </section>
+        <section id="eventconsume">
+          <title>Consuming Events</title>
+          <p>
+           If the <code>gEvent</code> specifies <code>consume=true</code>
+            then the underlying component event is consumed and
+            does not progress further up the GUI containment hierarchy. This
+            facility is provided for low-level control of event propagation
+            within the host graphics system.
+          </p>
+        </section>
+        -->
+      </section>
+      <!--
+      <section id="dialogevents">
+        <title>Dialog Events</title>
+        <p>
+          Inq defines the events <code>gDialogok</code>
+          and <code>gDialogcancel</code> on the <code>gDialog</code>
+          top-level window. These events are fired when a particular
+          component laid out within the dialog generates an event
+          that has been designated as <code>gDialogok</code>
+          or <code>gDialogcancel</code>. Any number of component
+          events can be set up in this way, with the actual
+          functionality scripted against the dialog events themselves.
+          Here are the lines from Inq's built-in print dialog that
+          set up the <code>gDialogcancel</code> on the dialog's
+          cancel button and when the window is closed:
+        </p>
+        <source>
+gEvent(topLevel, gDialog=gDialogcancel, event=(gWclosing));
+gEvent(bCancel,  gDialog=gDialogcancel);
+</source>
+        <p>
+          This dialog handles the actual cancel and OK events itself,
+          calling back to user script on function arguments defined in
+          its global entry point, <code>printDialog</code>.
+        </p>
+      </section>
+      -->
+    </section>
+    <section id="bindproperties">
+      <title>Binding Properties</title>
+      <p>
+        Attaching a view to its model is a special case of Inq's ability
+        to bind any property a component supports to a data item.
+        The <code>gProperty</code> function accepts a component, a
+        property name and a <code>renderinfo</code> expression to achieve
+        this.
+      </p>
+      <source>
+"gProperty" "("
+             &lt;expression&gt;
+             &lt;identifier&gt;
+             &lt;renderinfo&gt;
+             ")"
+</source>
+      <p>
+        The <code>expression</code> must resolve to a GUI component.
+        The <code>identifier</code> is a literal property name the component
+        must support. In the temperature converter we have bound the foreground
+        property of the text fields to the celsius temperature as an
+        illustration:
+      </p>
+      <source>
+gProperty(tfFahr,
+          foreground,
+          renderinfo({ $this.vars.celcius &lt; 0 ? $this.vars.blue
+                                              : $this.vars.red; }));
+gProperty(tfCelsius,
+          foreground,
+          renderinfo({ $this.vars.celcius &lt; 0 ? $this.vars.blue
+                                              : $this.vars.red; }));
+</source>
+      <p>
+        The text colour is blue below zero celsius and red otherwise.
+        Property bindings can be set up to drive GUI state from the data
+        in the node space, for example sensitising components according to
+        data state. Further cases are shown in the example applications.
+      </p>
+    </section>
+  </body>
+</document>

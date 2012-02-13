@@ -98,7 +98,7 @@ public class Render extends    AbstractFunc
     
     af.resolveDirectives(a, getTransaction());
     
-    return new ConstString(af.format(toRender));
+    return new AnyString(af.format(toRender));
 
 	}
 

@@ -207,16 +207,13 @@ public class PropertySet extends AbstractAny
 	{
 		if (!set_.contains(property))
 		{
-		  return null;
+		  //return null;
 		  
-		  // Altered from the below. We'll allow higher-level things like
-		  // unresolved operands to catch this and see how we get on. This
-		  // is somewhat less precise than the exception below but we're
-		  // all grown-ups here...
-//			throw new IllegalArgumentException("Unsupported property " +
-//			                                   property +
-//			                                   " on "
-//			                                   + o.getClass());
+		  // TODO Choose between above and below
+			throw new IllegalArgumentException("Unsupported property " +
+			                                   property +
+			                                   " on "
+			                                   + o.getClass());
 		}
 
     PropertyInfo pi = (PropertyInfo)set_.get(property);

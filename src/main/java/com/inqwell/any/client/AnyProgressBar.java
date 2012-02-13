@@ -33,7 +33,7 @@ import javax.swing.JComponent;
 import com.inqwell.any.client.swing.JPanel;
 import javax.swing.JProgressBar;
 
-public class AnyProgressBar extends AnyComponent
+public class AnyProgressBar extends AnySimpleComponent
 {
   private JProgressBar    b_;
 	private JComponent      borderee_;

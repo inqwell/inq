@@ -4,8 +4,7 @@
                         http://maven.apache.org/xsd/assembly-1.1.2.xsd">
 
   <!--
-  Build the inq runtime, combining its dependencies into
-  the output
+  Build the inq distribution
   -->
 
   <id>dist</id>
@@ -100,6 +99,19 @@
       <fileMode>0644</fileMode>
       <directoryMode>0755</directoryMode>
       <outputDirectory>/</outputDirectory>
+    </fileSet>
+
+    <!--
+    Docs
+    -->
+    <fileSet>
+      <directory>src/main/forrest/build</directory>
+      <includes>
+        <include>site/**</include>
+      </includes>
+      <fileMode>0644</fileMode>
+      <directoryMode>0755</directoryMode>
+      <outputDirectory>documentation</outputDirectory>
     </fileSet>
 
     <fileSet>

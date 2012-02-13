@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright 2006 Inqwell Ltd.
+-->
+<!DOCTYPE document PUBLIC "-//APACHE//DTD Documentation V2.0//EN" "http://forrest.apache.org/dtd/document-v20.dtd">
+<document>
+  <header>
+    <title>Running Chat</title>
+  </header>
+  <body>
+    <section id="reqs">
+      <title>Requirements</title>
+      <p>
+        Inq requires Java<sup>TM</sup> J2SE 1.6. If necessary, download
+        it for your platform from <a class="fork" href="ext:j2sedl">JavaSoft</a>.
+      </p>
+    </section>
+    <section id="download">
+      <title>Download The Latest Inq Distribution</title>
+      <p>
+        Go to the <a href="../../download/index.html">Download</a> page
+        to get the latest Inq distribution and install it as follows:
+      </p>
+      <ol>
+        <li>Unzip the jar file to a suitable directory. If you are running
+        on a MS Windows platform please ensure the directory path contains
+        no spaces.</li>
+        <li>Optionally, set the environment variable <code>INQHOME</code>
+        to the directory created by the extraction. If you don't do so
+        then the Inq launcher scripts will try to work it out. For
+        example:
+        <p>
+        <strong>Windows</strong>: <code>set INQHOME=C:\inqwell\inq1_0</code>
+        </p>
+        <p>
+        <strong>Linux/Unix</strong>: <code>export INQHOME=/home/me/inqwell/inq1_0</code>
+        </p>
+        </li>
+        <li>Optionally include <code>$INQHOME/bin</code> on your path.</li>
+        <li>On Linux/Unix, make the launcher script executable:
+        <p><strong><code>chmod +x $INQHOME/bin/inq</code></strong></p></li>
+      </ol>
+    </section>
+    <section id="server">
+      <title>Start The Server</title>
+      <p>
+        Change directory to the root of the distribution, e.g.
+      </p>
+      <source>
+cd \inqwell\inq1_0
+</source>
+      <p>
+        Assuming the distribution's <code>bin</code> directory is on the path, start
+        the server as follows:
+      </p>
+      <source>
+inq -server
+</source>
+      <p>
+        The by default, the server binds to port 6556, so this needs to be available.
+        You should then see output like this:
+      </p>
+      <source>
+Inq Server
+Copyright (c) InqWell Ltd 2002-2011
+Java Compiler Compiler Version 3.2 Copyright (c) 2003 Sun Microsystems, Inc. All  Rights Reserved.
+DeadlockScanner Started
+Server Started
+speakinq Socket Listener Started on port 6556
+</source>
+    </section>
+    <section id="load">
+      <title>Load The Chat Server Script</title>
+      <p>
+        In a separate terminal window, change to the same directory. Load the
+        chat application into the server as follows:
+      </p>
+      <source>
+inq -load
+    -u admin
+    -p inqwell
+    -server speakinq://localhost
+    -url file:examples/chat/chatBoot.inq
+</source>
+      <p>
+        Note that the <code>-url</code> argument specifies a <em>relative</em>
+        URL. This is primarily to make these instructions the same on all platforms
+        but, as noted elsewhere, this URL is resolved by the server, not the
+        loader client. The relative resolution is thus with respect to
+        the <em>server's</em> current working directory.
+      </p>
+    </section>
+    <section id="client">
+      <title>Start The Client</title>
+      <p>
+        To start the client enter the following
+      </p>
+      <source>
+inq -client
+</source>
+      <p>
+        The login window should then appear - fill it in as shown:
+      </p>
+      <figure src="images/login2.png" alt="Chat Login"/>
+      <p>
+        As discussed <a href="services.html#login">earlier</a>, the chat
+        package does not define a Login service so any password will do.
+        All being well the chat application window will then show. At the
+        moment, nobody else is logged in, but you can still talk to
+        yourself. Try <code>File->New Private...</code>:
+      </p>
+      <figure src="images/chatinqnew.png" alt="New Private"/>
+      <p>
+        The <code>File->New Group...</code> option creates a new private
+        conference and joins the creator as the first participant. Other
+        users can then be invited. <code>File->New Public...</code>
+        creates new public chat rooms that can be joined
+        using <code>File->Join Public...</code>.
+      </p>
+      <p>
+        Obviously, you'll want to install the Inq runtime on other
+        clients and have them connect to the host where you are running
+        the server. See also tips on webstart below.
+      </p>
+    </section>
+    <section id="landf">
+      <title>If You Get Look-And-Feel Problems...</title>
+      <p>
+        Unless specified otherwise the Inq client sets the default look and feel
+        for the platform. If you experience problems with the platform look and
+        feel you can switch to the Java L&amp;F like this:
+      </p>
+      <source>
+inq -client -lookandfeel none
+</source>
+    </section>
+    <section id="urls">
+      <title>Clicking on URLs Doesn't Work</title>
+      <p>
+        Yes, well this is a bit weak while we are still running Java 1.5 and
+        cannot make use of the <code>java.awt.Desktop</code> class. Have
+        a look at the <code>clickOverUrl()</code> function
+        in <code>chattab.inq</code> and perhaps change it to your liking.
+      </p>
+    </section>
+    <section id="webstart">
+      <title>Can I Use Webstart with Inq?</title>
+      <p>
+        Yes. The distribution contains the example <code>chatinq.jnlp</code> file
+        in the <code>examples/chat</code> directory. You can modify this for
+        a suitable webserver you run and you'll need to create a signed version
+        of <code>inq.jar</code> (which when we do it we name <code>inqs.jar</code>)
+      </p>
+    </section>
+  </body>
+</document>

@@ -51,7 +51,6 @@ public class AnyFileChooser extends    AnyComponent
     fcProperties__.add(directory__);
 	}
 
-// TODO doesn't render anything? So does not need AnyComponent base?
 // TODO can we set initial value(s) programatically ?
 	
   public AnyFileChooser()

@@ -191,10 +191,8 @@ public class Inqs
     svcargs.add (new AnyString("close"), AnyBoolean.TRUE);
 		SendRequest sr = new SendRequest(new AnyString("system.services.RunInq"),
 																	   null,  // no context
-																	   null, //ServerConstants.SVCOUTP,  // temporary save-at
 																	   svcargs,
-																	   och,
-																	   null);
+																	   och);
 		sr.setPropagateContext(false);
     sr.setTransaction(new ClientTransaction());
 		sr.exec(null);

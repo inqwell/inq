@@ -1,0 +1,466 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright 2002-2004 The Apache Software Foundation or its licensors,
+  as applicable.
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<!--
+Forrest site.xml
+
+This file contains an outline of the site's information content.  It is used to:
+- Generate the website menus (though these can be overridden - see docs)
+- Provide semantic, location-independent aliases for internal 'site:' URIs, eg
+<link href="site:changes"> links to changes.html (or ../changes.html if in
+  subdir).
+- Provide aliases for external URLs in the external-refs section.  Eg, <link
+  href="ext:cocoon"> links to http://cocoon.apache.org/
+
+See http://forrest.apache.org/docs/linking.html for more info
+-->
+
+<site label="Inqwell" href="" xmlns="http://apache.org/forrest/linkmap/1.0" tab="home">
+   <!-- Note: No matter what you configure here, Forrest will always try to load
+       index.html when you request http://yourHost/.
+       'How can I use a start-up-page other than index.html?' in the FAQs has more
+       information tells you how to change that.
+   -->
+
+  <welcome label="Welcome" tab="home">
+    <index label="Welcome to Inqwell" href="index.html" description="Welcome to Inqwell"/>
+    <faq label="FAQ" href="faq.html" description="FAQ"/>
+    <whitepaper label="White Paper" href="whitepaper.html" description="Inq White Paper"/>
+    <license label="License" href="license.html" description="License and Related"/>
+  </welcome>
+
+  <about label="About" tab="about">
+    <about label="About Us" href="about.html" description="About Us"/>
+  </about>
+
+  <primer label="Inq Language and Environment" href="primer/" tab="learn">
+    <nodes label="Hierarchical Data Structures" href="nodes.html"
+      description="Hierarchical Data Structures">
+      <top href="#top"/>
+      <section href="#section"/>
+    </nodes>
+    <invoking label="Execution Modes" href="invoking.html"
+      description="Execution Modes">
+      <top href="#top"/>
+      <section href="#section"/>
+    </invoking>
+    <process label="Introduction to Processes" href="process.html"
+      description="Introduction to  Processes">
+      <top href="#top"/>
+      <section href="#section"/>
+    </process>
+    <types label="Inq Data Types" href="types.html"
+      description="Inq Data Types">
+      <top href="#top"/>
+      <section href="#section"/>
+    </types>
+    <module label="Modules, Functions and Services" href="module.html"
+      description="Modules, Functions and Services">
+      <top href="#top"/>
+      <section href="#section"/>
+    </module>
+    <typedef label="Using Typedef" href="typedef.html"
+      description="Defining Application Types With Typedef">
+      <top href="#top"/>
+      <section href="#section"/>
+    </typedef>
+    <keys label="I/O Keys" href="keys.html"
+      description="More About I/O Keys">
+      <top href="#top"/>
+      <section href="#section"/>
+    </keys>
+    <keys label="I/O Configuration" href="ioconfig.html"
+      description="I/O Configuration">
+      <top href="#top"/>
+      <section href="#section"/>
+    </keys>
+    <txn label="Transactions" href="txn.html"
+      description="The Inq Transaction Model">
+      <top href="#oview"/>
+      <section href="#section"/>
+    </txn>
+    <guibasic label="GUI Basics" href="guibasics.html"
+      description="Building GUIs - The Basics">
+      <top href="#context"/>
+      <section href="#section"/>
+    </guibasic>
+    <controlflow label="Execution, Statements and Control Flow" href="controlflow.html"
+      description="Execution, Statements and Control Flow">
+      <top href="#intro"/>
+      <section href="#section"/>
+    </controlflow>
+    <expressions label="Expressions" href="expressions.html"
+      description="Expressions">
+      <top href="#intro"/>
+      <section href="#section"/>
+    </expressions>
+    <structures label="Building Node Structures" href="structures.html"
+      description="Structures">
+      <top href="#intro"/>
+      <section href="#section"/>
+    </structures>
+    <events label="Events" href="events.html"
+      description="Events">
+      <top href="#intro"/>
+      <section href="#section"/>
+    </events>
+    <exh label="Exception Handling" href="exh.html"
+      description="Exception Handling">
+      <top href="#intro"/>
+      <section href="#section"/>
+    </exh>
+    <concurr label="Concurrency" href="concurrency.html"
+      description="Concurrency">
+      <top href="#intro"/>
+      <section href="#section"/>
+    </concurr>
+    <!--
+    <print label="Printing In Inq" href="printing.html"
+      description="Printing In Inq">
+      <top href="#intro"/>
+      <section href="#section"/>
+    </print>
+    -->
+  </primer>
+
+  <enterprise label="Inq in the Enterprise" href="primer/" tab="learn">
+    <jms label="Using JMS" href="jms.html"
+      description="Using JMS">
+      <top href="#top"/>
+      <section href="#section"/>
+    </jms>
+    <logging label="Logging" href="logging.html"
+      description="Logging">
+      <top href="#intro"/>
+      <section href="#section"/>
+    </logging>
+  </enterprise>
+
+<!--
+  <faq label="Inqwell FAQ" href="" tab="home">
+    <faq label="FAQ" href="faq.html" description="FAQ"/>
+  </faq>
+-->
+  <download label="Downloads" href="download/" tab="download">
+    <index label="Download Inq" href="index.html" description="Downloads"/>
+  </download>
+
+  <support label="Support" href="support/" tab="support">
+    <index label="Support" href="index.html" description="Support"/>
+  </support>
+
+  <examples label="Examples" href="examples/" tab="examples">
+    <index label="Example Applications" href="index.html" description="Examples"/>
+  </examples>
+
+  <helloworld label="Hello World!" href="examples/helloworld/" tab="examples">
+    <index label="Inq's Hello World" href="index.html" description="Hello World"/>
+    <runhello label="Running Hello World" href="runhello.html"/>
+  </helloworld>
+
+  <chatintro label="Chat" href="examples/chat/" tab="examples">
+    <index label="A Chat Utility" href="index.html" description="Chat"/>
+    <chatsvces label="Services and Flows" href="services.html"/>
+    <gui label="GUI" href="gui.html"/>
+    <runchat label="Running Chat" href="runchat.html"/>
+  </chatintro>
+
+  <petstore label="Petstore" href="examples/petstore/" tab="examples">
+    <index label="The Petstore Blueprint" href="index.html" description="Petstore"/>
+    <anatomy label="Petstore Anatomy" href="anatomy.html" description="Anatomy"/>
+    <dashboard label="The Dashboard" href="dashboard.html" description="Dashboard"/>
+    <account label="My Account" href="account.html" description="Account"/>
+    <neworder label="New Order" href="neworder.html" description="New Order"/>
+    <myorders label="My Orders" href="myorders.html" description="My Orders"/>
+    <items label="Browse Items" href="items.html" description="Browse Items"/>
+    <orderproc label="Order Processor" href="orderprocessor.html" description="Order Processor"/>
+  </petstore>
+
+  <jobcontrol label="Job Control" href="examples/jobcontrol/" tab="examples">
+    <index label="Batch Processing With JobControl" href="index.html" description="JobControl"/>
+    <usage label="Using JobControl" href="usage.html" description="Usage"/>
+    <works label="How JobControl Works" href="how.html" description="How"/>
+    <concurrency label="Concurrency and Events" href="concurrency.html" description="Concurrency"/>
+    <runjob label="Running Jobs" href="runjob.html" description="Running Jobs"/>
+  </jobcontrol>
+
+  <external-refs>
+
+    <java.sun.com href="http://java.sun.com/">
+      <j2seapi href="j2se/1.5.0/">
+        <apidocs href="docs/api/">
+          <messageformat href="java/text/MessageFormat.html"/>
+          <numberformat href="java/text/DecimalFormat.html"/>
+          <dateformat href="java/text/SimpleDateFormat.html"/>
+          <keyevent href="java/awt/event/KeyEvent.html"/>
+          <boxlayout href="javax/swing/BoxLayout.html"/>
+          <cardlayout href="java/awt/CardLayout.html"/>
+          <sort href="java/util/Collections.html#sort(java.util.List,%20java.util.Comparator)"/>
+          <compareToIgnoreCase href="java/lang/String.html#compareToIgnoreCase(java.lang.String)"/>
+          <document href="javax/swing/text/Document.html"/>
+        </apidocs>
+      </j2seapi>
+      <hotspot href="javase/technologies/hotspot/"/>
+      <swingtutorial href="docs/books/tutorial/uiswing/">
+        <editorpane href="components/editorpane.html"/>
+      </swingtutorial>
+      <j2sedl href="javase/downloads/index.jsp"/>
+    </java.sun.com>
+
+    <xmlgraphics.apache.org href="http://xmlgraphics.apache.org/">
+      <fop href="fop/">
+        <download href="download.html#binary"/>
+      </fop>
+    </xmlgraphics.apache.org>
+
+    <maven.apache.org href="http://maven.apache.org/">
+      <maven href="">
+      </maven>
+    </maven.apache.org>
+
+    <www.oracle.com href="http://www.oracle.com/technetwork/">
+      <java href="java/">
+        <jms href="jms/index.html"/>
+      </java>
+    </www.oracle.com>
+    
+    <www.w3.org href="http://www.w3.org/">
+      <DOM href="DOM/"/>
+    </www.w3.org>
+    
+    <www.json.org href="http://www.json.org/">
+      <JSON href=""/>
+    </www.json.org>
+
+    <download.oracle.com href="http://download.oracle.com/">
+      <javaee href="javaee/1.3/">
+        <apidocs href="api/">
+          <jms href="javax/jms/package-summary.html"/>
+        </apidocs>
+      </javaee>
+      <javase href="javase/6/">
+        <logging href="docs/technotes/guides/logging/overview.html"/>
+      </javase>
+    </download.oracle.com>
+
+    <mq.java.net href="http://mq.java.net/">
+      <openmq href="">
+        <home href=""/>
+      </openmq>
+    </mq.java.net>
+    
+    <qooxdoo.org href="http://qooxdoo.org/">
+      <home href=""/>
+    </qooxdoo.org>
+
+    <motiftools.sourceforge.net href="http://motiftools.sourceforge.net/">
+      <motiftools href="">
+        <home href=""/>
+      </motiftools>
+    </motiftools.sourceforge.net>
+    
+    <jline.sourceforge.net href="http://jline.sourceforge.net/">
+      <home href=""/>
+    </jline.sourceforge.net>
+
+    <davidflanagan.com href="http://www.davidflanagan.com/">
+      <davidflanagan href="">
+        <home href=""/>
+      </davidflanagan>
+    </davidflanagan.com>
+
+    <tablelayout.java.net href="http://tablelayout.java.net/">
+      <tablelayout href="">
+        <home href=""/>
+      </tablelayout>
+    </tablelayout.java.net>
+
+    <steve-yegge.blogspot.com href="http://steve-yegge.blogspot.com/">
+      <yeggeblog>
+        <Two008 href="2008/">
+          <Zero5 href="05/">
+            <dynamic-languages-strike-back href="dynamic-languages-strike-back.html"/>
+          </Zero5>
+        </Two008>
+      </yeggeblog>
+    </steve-yegge.blogspot.com>
+
+    <code.google.com href="http://code.google.com/">
+      <googlecode href="">
+        <android href="android/"/>
+      </googlecode>
+    </code.google.com>
+
+    <www.symbian.com href="http://www.symbian.com/">
+      <symbian href="">
+        <home href=""/>
+      </symbian>
+    </www.symbian.com>
+
+    <www.openmoko.com href="http://www.openmoko.com/">
+      <openmoko href="">
+        <home href=""/>
+      </openmoko>
+    </www.openmoko.com>
+
+    <www.inqwell.com href="http://www.inqwell.com/">
+      <inqlaunch href="inq/">
+        <petstore href="petstore/petstore.jnlp"/>
+      </inqlaunch>
+      <downloads href="inq/download/">
+        <bin href="bin/"/>
+        <src href="src/"/>
+      </downloads>
+      <jcalendar-inqwell href="jcalendar.html"/>
+      <jcalendar-api href="jcalendar/apidocs"/>
+    </www.inqwell.com>
+
+    <forums.inqwell.com href="http://forums.inqwell.com/">
+      <forums href="">
+        <home href=""/>
+      </forums>
+    </forums.inqwell.com>
+
+<!--
+    <downloads.inqwell.com href="http://www.inqwell.com/">
+      <downloads href="downloads/">
+        <v1.0   href="download.php?download=v1.0"/>
+        <v1.0.1 href="download.php?download=v1.0.1"/>
+        <v1.0.2 href="download.php?download=v1.0.2"/>
+      </downloads>
+    </downloads.inqwell.com>
+-->
+
+    <www.xylinq.com href="http://www.xylinq.com/">
+      <xylinq href=""/>
+    </www.xylinq.com>
+
+    <en.wikipedia.org href="http://en.wikipedia.org/">
+      <wikipedia href="wiki/">
+        <ermodelling href="Entity-relationship_model"/>
+        <objcomposition href="Object_composition"/>
+        <designpatterns href="Design_Patterns"/>
+        <reified href="Reification_(computer_science)"/>
+        <eighty20 href="Pareto_principle"/>
+        <bjarne href="Bjarne_Stroustrup"/>
+        <proto href="Prototype"/>
+        <prototheory href="Prototype_Theory"/>
+        <protoprog href="Prototype-based_programming"/>
+        <cvs href="Concurrent_Versions_System"/>
+        <csp href="Communicating_sequential_processes"/>
+        <monitor href="Monitor_(synchronization)#Blocking_condition_variables"/>
+      </wikipedia>
+    </en.wikipedia.org>
+
+    <www.cs.wustl.edu href="http://www.cs.wustl.edu/">
+      <schmidt href="~schmidt/">
+        <aceoverview href="ACE-overview.html"/>
+      </schmidt>
+    </www.cs.wustl.edu>
+
+    <www.britannica.com href="http://www.britannica.com/EBchecked/">
+      <britannica href="topic/">
+        <classif href="120378/classification-theory"/>
+      </britannica>
+    </www.britannica.com>
+
+    <www.alphaworks.ibm.com href="http://www.alphaworks.ibm.com/">
+      <bml href="tech/bml/"/>
+    </www.alphaworks.ibm.com>
+
+    <javacc.java.net href="http://javacc.java.net/">
+      <javacc href=""/>
+    </javacc.java.net>
+    
+    <java.net href="http://java.net/">
+      <projects href="projects/">
+        <javacc href="javacc/">
+          <downloads href="downloads/">
+            <oldversions href="directory/oldversions"/>
+          </downloads>
+        </javacc>
+      </projects>
+    </java.net>
+
+    <research.sun.com href="http://research.sun.com/">
+      <self href="self"/>
+    </research.sun.com>
+    
+    <www.slideshare.net href="http://www.slideshare.net/">
+      <peterfriese href="peterfriese/building-dsls-with-eclipse-1916333"/>
+    </www.slideshare.net>
+    
+    <!--
+    <dock.javaforge.com href="http://dock.javaforge.com/">
+      <home href=""/>
+    </dock.javaforge.com>
+    -->
+    
+    <www.w3.org href="http://www.w3.org/">
+      <xslt href="TR/xslt"/>
+    </www.w3.org>
+    
+    <www.opensource.org href="http://www.opensource.org/">
+      <licenses href="licenses/">
+        <artistic href="artistic-license-2.0.php"/>
+      </licenses>
+    </www.opensource.org>
+
+    <www.ultraedit.com href="http://www.ultraedit.com/">
+      <ultraedit href=""/>
+    </www.ultraedit.com>
+
+    <www.mysql.com href="http://www.mysql.com/">
+      <mysql href="">
+        <downloads href="downloads/">
+          <mysql51 href="mysql/5.1.html"/>
+        </downloads>
+      </mysql>
+    </www.mysql.com>
+
+    <dev.mysql.com href="http://dev.mysql.com/">
+      <mysqljdbc href="downloads/connector/j/5.1.html"/>
+    </dev.mysql.com>
+
+    <www.toedter.com href="http://www.toedter.com/en/">
+      <jcalendar href="jcalendar/index.html"/>
+    </www.toedter.com>
+    
+    <dock.javaforge.com href="http://dock.javaforge.com/">
+      <dock href="index.html"/>
+    </dock.javaforge.com>
+    
+    <github.com href="https://github.com/inqwell/">
+      <github-inq href="inq/"/>
+      <github-jcalendar href="jcalendar/"/>
+      <github-mvn href="mvn-repo/"/>
+    </github.com>
+    
+    <www.linkedin.com href="http://www.linkedin.com/">
+      <in href="in/">
+        <bharat href="bharatbedia"/>
+      </in>
+    </www.linkedin.com>
+
+    <mailinqwell href="mailto:">
+      <infoatinqwell href="info@inqwell.com"/>
+    </mailinqwell>
+
+  </external-refs>
+
+</site>

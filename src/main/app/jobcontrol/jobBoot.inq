@@ -1,0 +1,51 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * Inqwell Job Control Package
+ *
+ * Server Boot File
+ *
+ * Private & Confidential Copyright � Inqwell Ltd 2007.
+ * All rights reserved.
+ */
+
+// supported languages so far:
+set supportedLanguages = ("en");
+
+// check if we have specified the i18n parameter. if not, set the language to English.
+string i18n;
+
+if ($catalog.argsMap.i18n)
+{
+	i18n = $catalog.argsMap.i18n;
+}
+else
+{
+	writeln($catalog.system.out, "WARNING: i18n parameter not found. Will use 'en' by default.");
+	i18n = "en";
+}
+
+// do we have the requested language in our repository????
+if (!contains(supportedLanguages, i18n))
+{
+	writeln($catalog.system.out, "ERROR: Requested i18n language '" + i18n + "' not found. Aborting.");
+	exit();
+}
+
+// store it for later use
+string $catalog.i18n = i18n;
+
+// load the constant string values
+exec(i18n + "/i18n.inq");
+
+
+#include<defs.inq>
+#include<common.inq>
+#include<Job.inq>
+#include<JobVolatile.inq>
+#include<jobControl.inq>

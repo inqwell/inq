@@ -19,23 +19,23 @@ import com.inqwell.any.identity.AnyMapDecor;
 public abstract class AbstractMap extends    AbstractComposite
                                   implements Map
 {
-  static Any P_READ;
-  static Any P_WRITE;
-  static Any P_ADD;
-  static Any P_REMOVE;
+  public final static Any P_READ;
+  public final static Any P_WRITE;
+  public final static Any P_ADD;
+  public final static Any P_REMOVE;
   
-  static Map defaultPrivileges__;
+  final static Map defaultPrivileges__;
   
   static
   {
-    P_READ   = new ConstShort(Map.P_READ);
-    P_WRITE  = new ConstShort(Map.P_WRITE);
-    P_ADD    = new ConstShort(Map.P_ADD);
-    P_REMOVE = new ConstShort(Map.P_REMOVE);
+    P_READ   = AbstractValue.flyweightConst(new ConstShort(Map.P_READ));
+    P_WRITE  = AbstractValue.flyweightConst(new ConstShort(Map.P_WRITE));
+    P_ADD    = AbstractValue.flyweightConst(new ConstShort(Map.P_ADD));
+    P_REMOVE = AbstractValue.flyweightConst(new ConstShort(Map.P_REMOVE));
 
     // May be we should use MAXIMUM_PRIVILEGE by default for
     // write/add/remove?  See also getPrivilegeLevelImpl below.
-    Any s = new ConstShort(Process.MINIMUM_PRIVILEGE);
+    Any s = AbstractValue.flyweightConst(new ConstShort(Process.MINIMUM_PRIVILEGE));
     defaultPrivileges__ = AbstractComposite.simpleMap();
     defaultPrivileges__.add(P_READ, s);
     defaultPrivileges__.add(P_WRITE, s);
@@ -87,11 +87,6 @@ public abstract class AbstractMap extends    AbstractComposite
     v.visitMap(this);
   }
 
-  public java.util.Map getMap ()
-  {
-		throw new UnsupportedOperationException();
-  }
-
   public boolean contains (Any key)
   {
 		throw new UnsupportedOperationException();
@@ -110,6 +105,14 @@ public abstract class AbstractMap extends    AbstractComposite
   public Array keys ()
   {
 		throw new UnsupportedOperationException();
+  }
+  
+  /**
+   * The default implementation delegates to {@link #equals(Any)}
+   */
+  public boolean valueEquals(Map m)
+  {
+    return this.equals(m);
   }
   
   public Any getMapKey(Any key)
@@ -185,16 +188,6 @@ public abstract class AbstractMap extends    AbstractComposite
 		return new AnyMapDecor (this);
 	}
 
-  public void setAux(Any aux)
-  {
-    throw new UnsupportedOperationException();
-  }
-  
-  public Any getAux()
-  {
-    throw new UnsupportedOperationException();
-  }
-  
 // If we have transactional maps at two levels (like client vars, vars.filter)
 // then this causes problems passing vars.filter as a call arg. The txn status
 // of vars causes the map to become const...
@@ -221,41 +214,66 @@ public abstract class AbstractMap extends    AbstractComposite
    * for all children of <code>this</code>.
    * @return The privilege level
    */
-  public short getPrivilegeLevel(Any access, Any key)
+  public final short getPrivilegeLevel(Any access, Any key)
   {
-    return getPrivilegeLevelImpl(access, key);
-  }
-
-  protected short getPrivilegeLevelImpl(Any access, Any key)
-  {
-    Map privileges = (privileges_ == null) ? defaultPrivileges__
-                                           : privileges_;
-    
     short ret = Process.MINIMUM_PRIVILEGE;
     
-    if (privileges.contains(access))
+    if (privileges_ != null)
     {
-      ShortI s = (ShortI)privileges.get(access);
-      ret = s.getValue();
+      Map privs = null;      
+      if ((privs = (Map)privileges_.getIfContains(key)) != null)
+      {
+        ShortI s = (ShortI)privs.getIfContains(access);
+        if (s != null)
+          ret = s.getValue();
+      }
     }
     
     return ret;      
   }
-  
-  public void setPrivilegeLevels(Map levels, Any key, boolean merge)
+
+  public final void setPrivilegeLevels(Map levels, Any key, boolean merge)
   {
-    // Tidy the map and make it exclusive to us in the process.
+    if (levels != null && key == null)
+      throw new IllegalArgumentException("No key supplied for levels");
     
-    Map m = AbstractComposite.simpleMap();
-    
-    Iter i = defaultPrivileges__.createKeysIterator();
-    while (i.hasNext())
+    if (levels != null)
     {
-      Any k = i.next();
-      if (levels.contains(k))
+      // Ensure privileges
+      if (privileges_ == null)
+        privileges_ = AbstractComposite.map();
+      
+      // Tidy the map and make it exclusive to us in the process.
+      Map privs = (Map)privileges_.getIfContains(key);
+      if (privs == null)
+        privs = AbstractComposite.simpleMap();
+      
+      if (!merge)
+        privs.empty();
+      
+      Iter i = defaultPrivileges__.createKeysIterator();
+      while (i.hasNext())
       {
-        m.add(k, levels.get(k).cloneAny());
+        Any k = i.next();
+        if (levels.contains(k))
+        {
+          privs.replaceItem(k, levels.get(k).cloneAny());
+        }
       }
+      privileges_.replaceItem(key, privs);
+    }
+    else
+    {
+      // Remove privileges
+      if (key == null)
+        privileges_ = null;
+      else
+      {
+        if (privileges_ != null && privileges_.contains(key))
+          privileges_.remove(key);
+      }
+    }
+        /*
       else
       {
         if (privileges_ != null && merge)
@@ -264,9 +282,7 @@ public abstract class AbstractMap extends    AbstractComposite
             m.add(k, privileges_.get(k));
         }
       }
-    }
-    
-    privileges_ = m;
+      */
   }
   
   /**

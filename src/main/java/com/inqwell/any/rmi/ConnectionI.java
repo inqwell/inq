@@ -14,13 +14,22 @@
 
 package com.inqwell.any.rmi;
 
-import com.inqwell.any.*;
-import com.inqwell.any.server.StartUserProcess;
-import com.inqwell.any.server.StartRouterProcess;
-import com.inqwell.any.channel.*;
+import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
 import java.rmi.server.Unreferenced;
-import java.rmi.RemoteException;
+
+import com.inqwell.any.AnyException;
+import com.inqwell.any.EventDispatcher;
+import com.inqwell.any.StartProcessEvent;
+import com.inqwell.any.StringI;
+import com.inqwell.any.channel.AnyChannel;
+import com.inqwell.any.channel.ChannelConstants;
+import com.inqwell.any.channel.ChannelDriver;
+import com.inqwell.any.channel.FIFO;
+import com.inqwell.any.channel.OutputChannel;
+import com.inqwell.any.channel.RMI;
+import com.inqwell.any.channel.ToChannel;
+import com.inqwell.any.server.StartUserProcess;
 
 /**
  * Implementation of the remote interface for RTF server connection
@@ -47,7 +56,6 @@ public class ConnectionI extends    UnicastRemoteObject
   {
 		ed_ = new EventDispatcher();
 		ed_.addEventListener(new StartUserProcess());
-		ed_.addEventListener(new StartRouterProcess());
   }
 
 	public ConnectionI (StringI user,

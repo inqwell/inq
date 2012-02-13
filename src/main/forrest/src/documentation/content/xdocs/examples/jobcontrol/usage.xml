@@ -1,0 +1,549 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright 2011 Inqwell Ltd.
+-->
+<!DOCTYPE document PUBLIC "-//APACHE//DTD Documentation V2.0//EN" "http://forrest.apache.org/dtd/document-v20.dtd">
+<document>
+  <header>
+    <title>Using Job Control</title>
+  </header>
+  <body>
+    <section id="intro">
+      <title>Introduction</title>
+      <p>
+        A <em>Job</em> is a <em>box</em> if it does not define
+        a <em>FunctionExpr</em> and a <em>task</em> if it does.
+        Both tasks and boxes may have a <em>TimerExpr</em>,
+        which determines the time the job will next run.
+      </p>
+      <section id="toplevel">
+        <title>Top Level Jobs</title>
+        <p>
+          A <em>top level</em> job (typically a box) has
+          its schedule time determined by its timer (if it
+          defines one) or by the earliest timer defined
+          by its children. When this timer fires
+          that <em>job tree</em> is executed. Sub-level
+          boxes and tasks are run according to any time they
+          themselves may define or by their <em>JobOrder</em>
+          within their parent. 
+        </p>
+      </section>
+      <section id="boxtypes">
+        <title>Box Types</title>
+        <p>
+          Boxes have two attributes that determine how they execute
+          their child jobs. In the GUI client there are tool bar
+          buttons for setting these.
+        </p>
+        <dl>
+          <dt><strong>Box Type</strong> <icon src="images/boxtype.png" alt="boxtype"/></dt>
+          <dd>
+            <p>
+            When a box is of type <em>timed</em> then it runs its
+            children at times they specify. Those that do not define
+            a <em>TimerExpr</em> are run after any that do, according
+            to their <em>JobOrder</em>.
+            </p>
+            <p>
+            A box of type <em>sequence</em> runs its children
+            according to their job order, regardless of any
+            timers they may define.
+            </p>
+          </dd>
+          <dt><strong>Child Exit Status</strong> <icon src="images/boxerror.png" alt="boxerror"/></dt>
+          <dd>
+            <p>
+            A task's <em>FunctionExpr</em> must return an
+            exit status, zero indicates success, non-zero
+            means an error has occurred. A box can be configured
+            to stop executing its children should the current
+            child return an error, or to continue
+            to 
+            </p>
+            <p>
+            The first error status from a child becomes the status
+            for its box parent.
+            </p>
+          </dd>
+        </dl>
+      </section>
+    </section>
+    <section id="testjobs">
+      <title>The Test Jobs</title>
+      <p>
+        If we expand the job tree created by <code>testSetup.inq</code> then
+        we can see examples of these:
+      </p>
+      <figure src="images/jobtree.png" alt="jobtree"/>
+      <section id="timers">
+        <title>The Timer Expression</title>
+        <p>
+          Job Control uses an Inq script fragment to create
+          and return an instance of the data type <em>timer</em>.
+          In the example job <em>Periodic</em> the script is
+          as follows:
+        </p>
+        <source>
+// Run in 10 seconds time
+timer t;
+date d = getdate();
+t.properties.nextRuns = dateadd(SECOND, 10, d);
+
+// return the timer
+t;
+</source>
+        <p>
+          This example fires 10 seconds after the box last completed.
+          The script must set the timer's <code>nextRuns</code>
+          property for the timer to be schedulable.
+        </p>
+        <p>
+          You can change a job's timer by clicking on the
+          magnifying glass in the table cell to bring up
+          the expression editor. Then click on the Edit button
+          to enable editing. In order to be able to commit
+          the edit by clicking OK the script must parse. This
+          example shows what happens when it does not:
+        </p>
+        <figure src="images/editor1.png" alt="editor"/>
+      </section>
+      <section id="enable">
+        <title>Enabling A Job</title>
+        <p>
+          <code>testSetup.inq</code> leaves the jobs it creates disabled.
+          In the GUI any number of jobs can be selected and enabled
+          using the toolbar button <icon src="images/enable.png" alt="enable"/>. If
+          the top-level job <em>Periodic</em> is enabled then it
+          is executed and its <em>Last Ran</em> value is updated
+          each time the timer fires. However as none of its child
+          jobs are enabled nothing else happens. If we enable the
+          remaining jobs in this sub-tree, <em>Box</em>, <em>gcc error</em>
+          and <em>no-op ok</em> then Job Control will attempt to execute
+          them.
+        </p>
+      </section>
+      <section id="abortonerror">
+        <title>Abort On Error</title>
+        <p>
+          Notice that job <em>Box</em> is set to abort on error, that is
+          if a child returns error status any subsequent children are not
+          executed. We can see that <em>no-op ok</em> does not run:
+        </p>
+        <figure src="images/aborterror.png" alt="abortonerror"/>
+        <p>
+          You can use the expression editor to look at <em>gcc error</em>'s
+          function expression to see that it does its best to return
+          an error. Furthermore, if <em>Box</em> is selected and
+          changed to <em>Continue On Error</em> we can see
+          that <em>no-op ok</em> then runs.
+        </p>
+      </section>
+      <section id="timedbox">
+        <title>Timed Boxes</title>
+        <p>
+          The top-level job <em>Periodic</em> defines the sub-tree timer
+          itself and there are no timers elsewhere below. An alternative
+          is to use a timed box and have children define timers according
+          to their needs. This is demonstrated by the top-level
+          job <em>Absolute</em> whose children <em>foo</em> and <em>bar</em>
+          both define a timer expression. Here is the timer expression
+          for <em>foo</em>:
+        </p>
+        <source>
+// Run at a fixed time
+timer t;
+date d = getdate();
+dateset(HOUR_OF_DAY, d, 22);
+dateset(MINUTE, d, 56);
+dateset(SECOND, d, 0);
+if (d &lt;= getdate())
+  d = dateadd(DAY_OF_YEAR, 1, d);
+
+t.properties.nextRuns = d;
+
+// return the timer
+t;
+</source>
+        <p>
+          This expression returns a timer that fires when the time is next 22:56:00.
+          The expression for <em>bar</em> is the same other than it fires
+          three minutes later.
+        </p>
+        <p>
+          When these jobs are enabled Job Control evaluates the timers and
+          assigns the earliest one as that which fires the top-level job.
+          To experiment, adjust the timer expressions to fire shortly in
+          the future. We see that <em>foo</em> runs and when complete,
+          execution waits until the Next Runs time of <em>bar</em> and
+          the top-level job has status <em>Waiting</em>: 
+        </p>
+        <figure src="images/timedbox.png" alt="timedbox"/>
+      </section>
+    </section>
+    <section id="logging">
+      <title>Logging</title>
+      <section id="joboutput">
+        <title>Job Output</title>
+        <p>
+          When Job Control executes a task it prepares a file stream
+          and places it at <code>$process.system.out</code>. This can
+          be used by script to write any diagnostic output to, or
+          passed to Inq's <code>syscmd</code> function if the task
+          executes host commands. By default these files are
+          placed at <code>$INQHOME/tmp</code> and are named after the
+          job's <em>ShortName</em> combined with a time stamp. In fact,
+          this line generates the file name: 
+        </p>
+        <source>
+// Pattern is Java MessageFormat
+renderf("{0}_{1,date,yyyyMMdd_HHmmss}.log", filename, getdate());
+</source>
+        <p>
+          where <code>filename</code> is the job's short name with any
+          spaces removed. Job Control limits the number of files kept
+          according to its properties configuration. <!-- XXX link -->
+        </p>
+      </section>
+      <section id="jclog">
+        <title>Job Control System Log</title>
+        <p>
+          The Inq server logging configuration, defined
+          in <code>$INQHOME/etc/server.log.properties</code>, includes
+          the named logger <code>inq.jobcontrol</code>. This logger
+          is used by Job Control for all its logging output. 
+        </p>
+      </section>
+    </section>
+    <section id="stopstart">
+      <title>Stopping and Starting Job Control</title>
+      <p>
+        When the <code>app/jobcontrol/jobBoot.inq</code> has been
+        parsed Job Control is running.
+        A <a href="../../primer/process.html#detached">detached process</a>
+        called <code>jobdispatcher</code> hosts the timers. This process
+        can be stopped (via the GUI client's System menu), thus halting
+        the Job Control application.
+      </p>
+      <p> 
+        The <a href="how.html">next section</a> covers
+        how Job Control is implemented in more detail.
+      </p>
+    </section>
+    <section id="api">
+      <title>API Functions</title>
+      <p>
+        The following functions are available to other applications
+        wishing to use Job Control programmatically.
+      </p>
+      <note>Inq code can always throw an exception which, if not
+      caught, will be handled by a process's <em>default exception
+      handler</em>. If an application has local code flow requirements
+      such as a monitor notification, it can use
+      a <code>try</code>/<code>catch</code>/<code>finally</code>
+      construct.</note> 
+      <section id="setloglevel">
+        <title>function setLogLevel(any logLevel)</title>
+        <p>
+          Sets the logging level used by the logger <code>inq.jobcontrol</code>.
+        </p>
+        <p>
+          Example:
+        </p>
+        <source>
+call inq.jobcontrol:setLogLevel(LOG_FINER);
+</source>
+      </section>
+      <section id="getjob">
+        <title>function getJob(any ShortName)</title>
+        <p>
+          Find a job by its <code>ShortName</code>. Returns the Job instance
+          or <code>null</code> if there is no job with the given <code>ShortName</code>.
+        </p>
+        <p>
+          Example:
+        </p>
+        <source>
+any Job = call inq.jobcontrol:getJob(ShortName = "foo");
+</source>
+      </section>
+      <section id="createjob">
+        <title>function createJob(any Job, any parent)</title>
+        <p>
+          Create a new job. <code>Job</code> is the candidate
+          instance, requiring at least the <code>ShortName</code>
+          and <code>JobOrder</code> fields to have been
+          initialised. If <code>parent</code> is supplied it must
+          be a <code>Job</code> that is a box. Otherwise the new
+          job will be at the top level.   
+        </p>
+        <p>
+          If the job's <code>FunctionExpr</code> is <code>null</code>
+          then the new instance will be a box. Otherwise it will be
+          a task. Once the enclosing transaction has committed and the
+          instance enters
+          the <a href="../../primer/typedef.html#instancelifecycle">managed state</a>
+          this field cannot be changed between <code>null</code> and
+          non-<code>null</code>, that is a box cannot later become
+          a task and vice versa.
+        </p>
+        <p>
+          Example:
+        </p>
+        <source>
+// Make a top-level box
+any topLevelPeriodic = new(inq.jobcontrol:Job);
+topLevelPeriodic.ShortName = "Periodic";
+setblob(topLevelPeriodic.TimerExpr, "// Run in 10 seconds time
+timer t;
+date d = getdate();
+t.properties.nextRuns = dateadd(SECOND, 10, d);
+
+// return the timer
+t;
+");
+
+topLevelPeriodic.JobOrder = 0;
+
+any Job = call inq.jobcontrol:createJob(Job = topLevelPeriodic);
+</source>
+      </section>
+      <section id="deletejob">
+        <title>function deleteJob(any Job)</title>
+        <p>
+          Delete a single <code>Job</code>. If a job is a box then its
+          children are deleted also.
+        </p>
+        <p>
+          Example:
+        </p>
+        <source>
+any Job = call inq.jobcontrol:getJob(ShortName = "foo");
+
+call inq.jobcontrol:deleteJob(Job);
+</source>
+      </section>
+      <section id="deletejobs">
+        <title>function deleteJobs(any jobs)</title>
+        <p>
+          Delete a list of <code>Job</code>s. If any job is a box then its
+          children are deleted also.
+        </p>
+        <p>
+          This example deletes the children of job <code>foo</code>
+          without deleting <code>foo</code> itself:
+        </p>
+        <source>
+any Job = call inq.jobcontrol:getJob(ShortName = "foo");
+
+any root = call inq.jobcontrol:getJobsBelow(Job);
+
+call inq.jobcontrol:deleteJobs(jobs = root.tree.childJobs);
+</source>
+      </section>
+      <section id="getjobsbelow">
+        <title>function getJobsBelow(any Job, any root)</title>
+        <p>
+          Creates a tree structure rooted at the specified <code>Job</code>.
+          The <code>root</code> argument is optional. If specified it
+          will contain the tree and must be a map type that
+          supports <a href="../../primer/types.html#maptypes">vector access</a>.
+          If not supplied a <code>omap</code> is created and returned.
+        </p>
+        <p>
+          The structure conforms to that of
+          a <a href="../../primer/structures.html#nestednodeset">nested node set</a>
+          whose paths are <code>root.tree.Job</code>
+          and <code>root.tree.childJobs[].Job</code> and recursively downwards.
+        </p>
+        <p>
+          See <a href="#deletejobs">function deleteJobs(any jobs)</a> for
+          an example
+        </p>
+      </section>
+      <section id="mutationfuncs">
+        <title>Mutation Functions</title>
+        <p>
+          As we discuss further when examining the
+          implementation, <code>Job</code> instances can only
+          be modified by specific functions provided for
+          the purpose. When certain fields are changed,
+          in particular <code>TimerExpr</code> and <code>Active</code>,
+          Job Control re-evaluates the timer for the affected
+          sub-tree.
+        </p>
+        <p>
+          If Job Control is running, mutating a Job instance
+          directly causes an exception.
+        </p>
+        <section id="setjobexpression">
+          <title>function setJobExpression(any Job, any FunctionExpr)</title>
+          <p>
+            Set the <code>FunctionExpr</code> of the specified <code>Job</code>.
+            This function can only be called for jobs that are already
+            tasks, that is they were created with a
+            non-null <code>FunctionExpr</code>. Violating this condition
+            causes an exception to be thrown during transaction
+            commit.
+          </p>
+          <p>
+            Example:
+          </p>
+          <source>
+any Job = call inq.jobcontrol:getJob(ShortName = "foo");
+
+call inq.jobcontrol:setJobExpression(Job, "
+call myFoo(arg = \"something\");
+");
+</source>
+        </section>
+        <section id="settimerexpression">
+          <title>function setJobTimer(any Job, any TimerExpr)</title>
+          <p>
+            Set the <code>TimerExpr</code> of the specified <code>Job</code>.
+            If Job Control is running this function causes the affected
+            sub-tree timer to be reevaluated.
+          </p>
+          <p>
+            Example:
+          </p>
+          <source>
+any Job = call inq.jobcontrol:getJob(ShortName = "foo");
+
+call inq.jobcontrol:setJobTimer(Job, "// Run at a fixed time
+timer t;
+date d = getdate();
+dateset(HOUR_OF_DAY, d, 22);
+dateset(MINUTE, d, 56);
+dateset(SECOND, d, 0);
+if (d &lt;= getdate())
+  d = dateadd(DAY_OF_YEAR, 1, d);
+
+t.properties.nextRuns = d;
+
+// return the timer
+t;
+");
+</source>
+        </section>
+        <section id="setshortname">
+          <title>function setJobShortName(any Job, any ShortName)</title>
+          <p>
+            Set the specified job's <code>ShortName</code>.
+          </p>
+          <p>
+            Example:
+          </p>
+          <source>
+any Job = call inq.jobcontrol:getJob(ShortName = "foo");
+
+call setJobShortName(Job, "Fetch Prices");
+</source>
+        </section>
+        <section id="setorder">
+          <title>function setJobOrder(any Job, any JobOrder)</title>
+          <p>
+            Set the specified job's <code>JobOrder</code>. In the
+            absence of any timer, the <code>JobOrder</code> field
+            determines the order of the child jobs within a box.
+          </p>
+          <p>
+            Example:
+          </p>
+          <source>
+any Job = call inq.jobcontrol:getJob(ShortName = "foo");
+
+call inq.jobcontrol:setJobOrder(Job, 2);
+</source>
+        </section>
+      </section>
+      <section id="restartjob">
+        <title>function restartJob(any Job)</title>
+        <p>
+          The specified <code>Job</code> must at the top-level.
+          The sub-tree rooted at <code>Job</code> has its
+          timer reevaluated and scheduled.
+        </p>
+        <p>
+          Example:
+        </p>
+        <source>
+any Job = call inq.jobcontrol:getJob(ShortName = "Master");
+
+call inq.jobcontrol:restartJob(Job);
+</source>
+      </section>
+      <section id="runjobnow">
+        <title>function runJobNow(any Job)</title>
+        <p>
+          Executes the specified <code>Job</code> immediately.
+          The job can be any job in the tree, not necessarily
+          a top-level one. Timers that the job or any of
+          its descendents define are ignored and children
+          are run in their defined order.
+        </p>
+        <p>
+          Example:
+        </p>
+        <source>
+any Job = call inq.jobcontrol:getJob(ShortName = "bar");
+
+call inq.jobcontrol:runJobNow(Job);
+</source>
+      </section>
+      <section id="killjob">
+        <title>function killJob(any Job)</title>
+        <p>
+          Kills a job, if it is running, otherwise has no effect.
+          If the specified <code>Job</code> or
+          any ancestor is executing its execution is halted immediately and
+          any subsequent children are not run. The <code>Job.LastRan</code>
+          field is not updated.
+        </p>
+        <p>
+          Example:
+        </p>
+        <source>
+any Job = call inq.jobcontrol:getJob(ShortName = "bar");
+
+call inq.jobcontrol:killJob(Job);
+</source>
+      </section>
+      <section id="startjc">
+        <title>function startJobControl()</title>
+        <p>
+          Starts Job Control, scheduling timers of active jobs.
+          Throws an exception if Job Control is already running.
+        </p>
+        <p>
+          Example:
+        </p>
+        <source>
+call inq.jobcontrol:startJobControl();
+</source>
+      </section>
+      <section id="stopjc">
+        <title>function stopJobControl()</title>
+        <p>
+          Stops Job Control, cancelling all
+          timers. Throws an exception if Job Control is
+          not running.
+        </p>
+        <p>
+          When Job Control is not running jobs can still be created,
+          mutated and deleted, however calling <code>restartJob</code>
+          or <code>runJobNow</code> throws an exception.
+        </p>
+        <p>
+          Example:
+        </p>
+        <source>
+call inq.jobcontrol:stopJobControl();
+</source>
+      </section>
+      <p>
+        <a href="how.html"><icon src="../images/nextpage.gif" alt="nextpage"/></a>
+      </p>
+    </section>
+  </body>
+</document>

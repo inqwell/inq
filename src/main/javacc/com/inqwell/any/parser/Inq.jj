@@ -62,6 +62,7 @@ import com.inqwell.any.client.MDIInstantiator;
 import com.inqwell.any.client.DialogInstantiator;
 import com.inqwell.any.client.AnyView;
 import com.inqwell.any.client.AnyComponent;
+import com.inqwell.any.client.AnySimpleComponent;
 import com.inqwell.any.client.AnyButton;
 import com.inqwell.any.client.AnyBox;
 import com.inqwell.any.client.AnyGrid;
@@ -187,6 +188,7 @@ import com.inqwell.any.server.Create;
 import com.inqwell.any.server.IsCreating;
 import com.inqwell.any.server.Creating;
 import com.inqwell.any.server.Modifying;
+import com.inqwell.any.server.IsModifying;
 import com.inqwell.any.server.Deleting;
 import com.inqwell.any.server.Delete;
 import com.inqwell.any.server.Interrupt;
@@ -348,23 +350,6 @@ public class Inq extends AbstractAny
     modifierKeys__.put(EventConstants.MOD_SHIFT.toString(), EventConstants.MOD_SHIFT);
     modifierKeys__.put(EventConstants.MOD_ALTGRAPH.toString(), EventConstants.MOD_ALTGRAPH);
     modifierKeys__.put(EventConstants.MOD_META.toString(), EventConstants.MOD_META);
-
-/*
-    P_READ   = new ConstShort(Map.P_READ);
-    P_WRITE  = new ConstShort(Map.P_WRITE);
-    P_ADD    = new ConstShort(Map.P_ADD);
-    P_REMOVE = new ConstShort(Map.P_REMOVE);
-*/
-/*
-    // May be we should use MAXIMUM_PRIVILEGE by default for
-    // write/add/remove?  See also getPrivilegeLevelImpl below.
-    ShortI s = new ConstShort(Process.MINIMUM_PRIVILEGE);
-    defaultPrivileges__ = AbstractComposite.simpleMap();
-    defaultPrivileges__.add(P_READ, s);
-    defaultPrivileges__.add(P_WRITE, s);
-    defaultPrivileges__.add(P_ADD, s);
-    defaultPrivileges__.add(P_REMOVE, s);
-*/
   }
 
   // For integration with xml/xsl
@@ -608,6 +593,14 @@ public class Inq extends AbstractAny
     parser.blockLevel_ = 0;
 
     p.add(UserProcess.package__, AnyAlwaysEquals.instance());
+    Map privs = AbstractComposite.simpleMap();
+    
+    // This is a test. Not possible to add or remove "package" from
+    // $process. The fact that $process.package is originally installed
+    // as a ConstString prevents it from being changed by value.
+    privs.add(AbstractMap.P_ADD, Process.A_MAXIMUM_PRIVILEGE);
+    privs.add(AbstractMap.P_REMOVE, Process.A_MAXIMUM_PRIVILEGE);
+    p.setPrivilegeLevels(privs, UserProcess.package__, false);
 
     Call.setupCommandLineArgs(documentURL, args, argsMap, cArgs, t);
     if (inUrl != null)
@@ -1242,7 +1235,18 @@ public class Inq extends AbstractAny
     // Either a control token or path element.  Add $stack prefix
     n.addFirst(NodeSpecification.strict__);
     n.addFirst(stack__);
-
+/*
+    // However (and this is a bit ugly I agree) if the first
+    // element is an indirection then leave alone and allow
+    // the indirection to define any $this, $stack etc. Makes
+    // paths like {$this.x} work whereas otherwise they would
+    // be redirected to $tack.x
+    if (!(n.getFirst() instanceof Locate))
+    {
+      n.addFirst(NodeSpecification.strict__);
+      n.addFirst(stack__);
+    }
+*/    
     return n;
   }
 
@@ -1341,7 +1345,7 @@ public class Inq extends AbstractAny
       if (funcRef == null)
         throw new AnyRuntimeException("Must specify the exec entity");
 
-      complexType.add(AbstractInputFunc.exec__, funcRef);
+      complexType.add(AbstractInputFunc.exec__, funcRef.getFQName());
 
     }
     else
@@ -2267,7 +2271,6 @@ SKIP :
 | < FOREACH:          "foreach" >
 | < GARBAGECOLLECT:   "garbagecollect" >
 | < GROUPBY:          "groupby" >
-//| < GETAUX:           "getaux" >
 | < GETDATE:          "getdate" >
 | < GETBLOB:          "getblob" >
 | < GETLOCALHOST:     "getlocalhost" >
@@ -2291,6 +2294,7 @@ SKIP :
 | < ISLETTER:         "isletter" >
 | < ISLOWERCASE:      "islowercase" >
 | < ISSPACE:          "isspace" >
+| < ISMODIFYING:      "ismodifying" >
 | < ISNUMERIC:        "isnumeric" >
 | < ISWHITESPACE:     "iswhitespace" >
 | < ISUPPERCASE:      "isuppercase" >
@@ -2345,7 +2349,7 @@ SKIP :
 | < SETNULL:          "setnull" >
 | < SETNODESET:       "setnodeset" >
 | < SETUNIQUEKEY:     "setuniquekey" >
-| < SETPRIVILEGE:     "setprivilege" >
+//| < SETPRIVILEGE:     "setprivilege" >
 | < SETEXCEPTIONHANDLER: "setexceptionhandler" >
 | < SHOW:             "show" >
 | < RESIZE:           "resize" >
@@ -2378,6 +2382,7 @@ SKIP :
 | < WAIT:             "wait" >
 | < WAITPROC:         "waitproc" >
 | < NOTIFY:           "notify" >
+| < NOTIFYALL:        "notifyall" >
 | < UNLOCK:           "unlock" >
 | < WRITESTREAM:      "writestream" >
 | < WRITELN:          "writeln" >
@@ -2467,6 +2472,7 @@ SKIP :
 | < WIDTH:            "width" >
 | < FORMAT:           "format" >
 | < CONSTRUCT:        "construct" >
+| < JOIN:             "join" >
 | < MUTATE:           "mutate" >
 | < DESTROY:          "destroy" >
 | < PKEY:             "pkey" >
@@ -2654,9 +2660,12 @@ SKIP :
 | < DOCK:             "gDock" >
 | < DOCKBUTTON:       "gDockButton" >
 | < DOCKMENU:         "gDockMenu" >
+| < DOCKRADIO:        "gDockRadio" >
+| < DOCKCHECK:        "gDockCheck" >
 | < DOCKDROPDOWN:     "gDockDropDown" >
 | < DOCKPOPUP:        "gDockPopup" >
-| < DOCKACTIONS:      "gDockActions" >
+| < DOCKBUTTONGROUP:  "gDockButtonGroup" >
+//| < DOCKACTIONS:      "gDockActions" >
 | < MBUTTON:          "mbutton" >
 | < KEYCODE:          "keycode" >
 | < KEYSTROKE:        "keystroke" >
@@ -3695,6 +3704,7 @@ Any Operand() :
   | a = Creating()
   | a = Deleting()
   | a = Modifying()
+  | a = IsModifying()
   | a = IsType()
   | a = KeysOf()
   | a = Kill()
@@ -3789,7 +3799,7 @@ Any Operand() :
   | a = IsNumeric()
   | a = SetCompressed()
   | a = SetNull()
-  | a = SetPrivilege()
+//  | a = SetPrivilege()
   | a = SetUniqueKey()
   | a = SetNodeSet()
   | a = GetDesktop()
@@ -4759,6 +4769,23 @@ Any Modifying() :
     Modifying m = new Modifying(descriptor);
     m.setLineNumber(line);
     return m;
+  }
+}
+
+Any IsModifying() :
+{
+  Any a;
+  int line;
+}
+{
+  "ismodifying" { line = token.beginLine; }
+  "("
+  a = Expression()
+  ")"
+  {
+    IsModifying i = new IsModifying(a);
+    i.setLineNumber(line);
+    return i;
   }
 }
 
@@ -7658,15 +7685,16 @@ Any Notify() :
   Any a;
   Any expression = null;
   int line;
+  boolean all = false;
 }
 {
-  "notify" { line = token.beginLine; }
+  ( "notify" | "notifyall" { all = true;} ) { line = token.beginLine; }
   "("
   a = Expression()
   [ "," expression = Expression() ]
   ")"
   {
-    Notify n = new Notify(a, expression);
+    Notify n = new Notify(a, expression, all);
     n.setLineNumber(line);
     return n;
   }
@@ -7850,6 +7878,9 @@ Any Try() :
   [ "catch"   aCatch   = Block() ]
   [ "finally" aFinally = Block() ]
   {
+    if (!nested && aCatch == null && aFinally == null)
+      throw new AnyRuntimeException("try without catch or finally at line " + line);
+
     Try t;
     if (nested)
       t = new TxnBlock(create, aTry, aCatch, aFinally);
@@ -8391,20 +8422,6 @@ Any GetUniqueKey() :
   }
 }
 
-/*
-Being removed
-Any GetAux() :
-{ Any node; int line; }
-{
-  "getaux" { line = token.beginLine; } "(" node = Expression() ")"
-  {
-    GetAux g = new GetAux (node);
-    g.setLineNumber(line);
-    return g;
-  }
-}
-*/
-
 Call Call() :
 {
   String  func;
@@ -8645,11 +8662,19 @@ Any UnListen() :
   int line;
 }
 {
+  // If the single argument version is used then the argument
+  // must in fact be dispatchingTo (returned by the
+  // corresponding listen() ). That is we no longer not need
+  // to know the node we were originally listen()ing to.
+  // The two argument version is maintained for backward
+  // compatibility.
   "unlisten" { line = token.beginLine; }
   "("
   listeningTo = Expression()
-  ","
-  dispatchingTo = Expression()
+  (
+    ","
+    dispatchingTo = Expression()
+  )?
   ")"
   {
     UnListen u = new UnListen(listeningTo, dispatchingTo);
@@ -8783,6 +8808,9 @@ void RaisesEventType(Array eventTypes) :
   Any eventType = null;
 }
 {
+  // Hmmm, note not all of these are actually supported at the
+  // moment, nor will they necessarily be. Use only create, delete
+  // and update at the moment
   ( "create"
   | "delete"
   | "add"
@@ -9043,10 +9071,8 @@ Any SendRequest() :
 
     SendRequest sr = new SendRequest(new ConstString(packageOverride + ".services." + svc),
                                      context,
-                                     null,
                                      args,
-                                     channel,
-                                     null);
+                                     channel);
     sr.setLineNumber(line);
     return sr;
   }
@@ -10140,6 +10166,7 @@ AbstractDescriptor TypedefBody(String typeName, String alias, String fQName, boo
   }
   Fields(d)
   ( Construct(d)
+  | Join(d)
   | Mutate(d)
   | Destroy(d)
   | Expirer(d)
@@ -10268,7 +10295,24 @@ void FieldAttribs(Descriptor d, Any fieldAny, Any fieldName) :
       }
     )
   )*
-  (";" | ( "(" FieldEnums(fieldName, fieldAny, d) ")" ) )
+  (
+    ";"
+    |
+    ( 
+      "("
+      FieldEnums(fieldName, fieldAny, d)
+      ")"
+      {
+        // When the descriptor is a NativeDescriptor
+        // then ensure the prototype carries the
+        // descriptor
+        if (d instanceof NativeDescriptor)
+        {
+          fieldAny = NativeDescriptor.convertWithDescriptor(fieldAny, d);
+        }
+      }
+    )
+  )
   {
     //if (fieldAny instanceof Value)
       //((Value)fieldAny).setNull();
@@ -10425,6 +10469,20 @@ void Construct(BOTDescriptor d) :
       throw new AnyRuntimeException("typedef constructor must be a function");
 
     d.setConstructor((Func)ctor);
+  }
+}
+
+void Join(BOTDescriptor d) :
+{
+  Any join;
+}
+{
+  "join" "(" join = Expression() ")"
+  {
+    if (!(join instanceof Func))
+      throw new AnyRuntimeException("typedef join expression must be a function");
+
+    d.setJoin((Func)join);
   }
 }
 
@@ -10791,6 +10849,7 @@ PhysicalIO IOBinding(Descriptor d) :
 // End Declarations
 
 // Privilege Handling
+/*
 Any SetPrivilege() :
 {
   Any node;
@@ -10818,6 +10877,7 @@ Any SetPrivilege() :
     return s;
   }
 }
+*/
 
 // parse out a privilege specification which takes the form
 //   privilege(<prigilege> : <level> [, <privilege> : <level>] ... )
@@ -11018,11 +11078,14 @@ Any GuiDeclaration() :
   | "gDesktop"     { a = new GuiInstantiator ("com.inqwell.any.client.swing.JDesktopPane",  "com.inqwell.any.client.AnyDesktopPane"); }
   | "gMDI"         { a = new MDIInstantiator ("com.inqwell.any.client.swing.JFrame",  "com.inqwell.any.client.AnyFrame"); }
   | a = DockInstantiation()
-  | "gDockActions" { a = new GuiInstantiator ("com.inqwell.any.client.dock.RootActionContainer", "com.inqwell.any.client.dock.AnyRootActionContainer"); }
+//  | "gDockActions" { a = new GuiInstantiator ("com.inqwell.any.client.dock.RootActionContainer", "com.inqwell.any.client.dock.AnyRootActionContainer"); }
   | "gDockButton"  { a = new GuiInstantiator ("bibliothek.gui.dock.common.action.CButton", "com.inqwell.any.client.dock.AnyCAction"); }
+  | "gDockRadio"  { a = new GuiInstantiator ("com.inqwell.any.client.dock.CRadioButton", "com.inqwell.any.client.dock.AnyCRadio"); }
+  | "gDockCheck"  { a = new GuiInstantiator ("com.inqwell.any.client.dock.CCheckBox", "com.inqwell.any.client.dock.AnyCCheck"); }
   | "gDockMenu"    { a = new GuiInstantiator ("com.inqwell.any.client.dock.CMenu", "com.inqwell.any.client.dock.AnyCAction"); }
   | "gDockDropDown" { a = new GuiInstantiator ("com.inqwell.any.client.dock.CDropDownButton", "com.inqwell.any.client.dock.AnyCAction"); }
   | "gDockPopup"   { a = new GuiInstantiator ("com.inqwell.any.client.dock.CPanelPopup", "com.inqwell.any.client.dock.AnyCPanelPopup"); }
+  | "gDockButtonGroup" { a = new GuiInstantiator ("bibliothek.gui.dock.common.action.CRadioGroup", "com.inqwell.any.client.dock.AnyCButtonGroup"); }
   )
   l = NodeRef()
 
@@ -11093,6 +11156,10 @@ Any GuiLayout(Any context, Map components, Map mInqRoot, AnyView awtRoot, Any ro
     {
       JMenu menu = (JMenu)addTo;
       JMenu.adjustSeparators(menu);
+    }
+    else if (addTo instanceof com.inqwell.any.client.dock.RootActionContainer)
+    {
+      ((AnyCAction.ActionContainer)addTo).afterLayout();
     }
     return mInqRoot;
   }
@@ -11207,7 +11274,8 @@ void Container(Any context, Map components, Map inqRoot, Object addTo, Any rootN
 
         }
 
-        if (!(o instanceof ButtonGroup)) // no awt hierarchy for button groups
+        //if (!(o instanceof ButtonGroup)) // no awt hierarchy for button groups
+        if (o != null) // no native hierarchy when null
         {
           if (cAddTo != null)
           {
@@ -11265,7 +11333,7 @@ void Container(Any context, Map components, Map inqRoot, Object addTo, Any rootN
       [ "{"
         //{ t.setLineNumber(lineOffset_ + token.endLine); }
         // Drop down a level in the awt hierarchy - for menus.
-        // Also drop down a level in inq hierarchy if its a tabbed pane
+        // Also drop down a level in inq hierarchy if its a tabbed pane or a card
         (Container(context,
                    components,
                    ((v instanceof AnyTabbedPane) ||
@@ -11374,7 +11442,7 @@ void Container(Any context, Map components, Map inqRoot, Object addTo, Any rootN
 
         if (wrapName != null)
         {
-          AnyComponent cJsp = new AnyComponent();
+          AnyComponent cJsp = new AnySimpleComponent();
           cJsp.setObject(jsp);
           inqRoot.add(AbstractValue.flyweightString(wrapName), cJsp);
         }
@@ -11427,6 +11495,10 @@ void Container(Any context, Map components, Map inqRoot, Object addTo, Any rootN
                                                           : new JSeparator(SwingConstants.VERTICAL);
             cAddTo.add(separator);
           }
+        }
+        else if (aAddTo != null)
+        {
+          aAddTo.addSeparator();
         }
       }
     )
@@ -11865,7 +11937,8 @@ TableLayoutConstraints GridChild(JPanel                 grid,
 
         }
 
-        if (o instanceof ButtonGroup) // no awt hierarchy for button group
+        //if (o instanceof ButtonGroup) // no awt hierarchy for button group
+        if (o == null) // no native hierarchy for this view
         {
           tlc = null;
         }
@@ -11999,7 +12072,7 @@ TableLayoutConstraints GridChild(JPanel                 grid,
 
         if (wrapName != null)
         {
-          AnyComponent cJsp = new AnyComponent();
+          AnyComponent cJsp = new AnySimpleComponent();
           cJsp.setObject(jsp);
           inqRoot.add(AbstractValue.flyweightString(wrapName), cJsp);
         }

@@ -1,0 +1,13 @@
+﻿eligible
+  (
+    ( $this.instance.DomicileCountry  == $this.key.DomicileCountry ||
+      isnull($this.key.DomicileCountry) ) &&
+
+    ( $this.instance.BaseCurrency  == $this.key.BaseCurrency ||
+      isnull($this.key.BaseCurrency) )    &&
+
+    ( $this.instance.Entity  == $this.key.Entity ||
+      isnull($this.key.Entity) )
+
+  )
+

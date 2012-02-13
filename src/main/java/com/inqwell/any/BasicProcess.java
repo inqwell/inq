@@ -172,7 +172,6 @@ public class BasicProcess extends    AbstractProcess
 
   protected void initMembers()
  	{
-    getRoot().setPrivilegeLevels(AbstractMap.defaultPrivileges__, null, false);
     if (stackFrames_ == null)
       stackFrames_ = AbstractComposite.queue();
  	}

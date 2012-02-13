@@ -1,0 +1,19 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/*
+ * Inqwell common definitions. Demonstrates the use of imports and
+ * reusing common types (see jobcontrol where references are made)
+ */
+
+package inq.boot;
+
+typedef string UserName width=16 label="User Name";
+typedef date   LastUpdated label="Last Updated";
+typedef string FullName width=20 label="Full Name";
+
+typedef int    Id;

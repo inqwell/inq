@@ -37,12 +37,26 @@ import com.inqwell.any.Set;
 import com.inqwell.any.Transaction;
 import com.inqwell.any.beans.Facade;
 
-// TODO: rebase away from AnyComponent...
-
-public class AnyRadio extends AnyToggleButton
+/**
+ * Wrap up radio buttons.
+ * <p/>
+ * A radio button must exist along side a button group, of which it is a member.
+ * Although a radio button accepts a {@link RenderInfo} it itself does not
+ * solicit node events from its expression. Rather the expression's
+ * value (expected to be a constant) is used to set the value referenced
+ * by the associated {@link AnyButtonGroup}.
+ * <p>
+ * The button group, for its part, does solicit node events so that the
+ * appropriate radio button can be selected.
+ *  
+ * @author tom
+ *
+ */
+public class AnyRadio extends AnyComponent
 {
   private AbstractButton b_;
-  private AnyButtonGroup g_;
+  private AbstractButtonGroup g_;
+  private RenderInfo     r_;
   
 	private static Set     radioProperties__;
 	private static Any     buttonGroup__ = new ConstString("buttonGroup");
@@ -62,9 +76,9 @@ public class AnyRadio extends AnyToggleButton
 
     b_ = (AbstractButton)o;
     
-    Facade f = getParentComponent();
-    if (f instanceof AnyButtonGroup)
-      g_ = (AnyButtonGroup)f;
+//    Facade f = getParentComponent();
+//    if (f instanceof AnyButtonGroup)
+//      g_ = (AnyButtonGroup)f;
       
 
 		super.setObject(b_);
@@ -93,30 +107,49 @@ public class AnyRadio extends AnyToggleButton
         b_.setText(s);
       }
     }
-    super.setRenderInfo(r);
+    r_ = r;
   }
-
 	
+  public RenderInfo getRenderInfo()
+  {
+    return r_;
+  }
+  
+  public Any getRenderedValue()
+  {
+    try
+    {
+      // Get the current rendered value, if any (for simple things)
+      Any a = null;
+      
+      if (r_ != null)
+        a = r_.resolveResponsibleData(getContextNode());
+      
+      return a;
+    }
+    catch(AnyException e)
+    {
+      throw new RuntimeContainedException(e);
+    }
+  }
+  
 	public void setButtonGroup(Any g)
 	{
+	  if (!(g instanceof AbstractButtonGroup))
+	    throw new AnyRuntimeException("Not a button group");
+	  
     if (g_ != null)
     {
-      ButtonGroup bg = g_.getButtonGroup();
-      bg.remove(b_);
-      g_.removeButton(this);
+      g_.removeFromGroup(this);
     }
     
     g_ = null;
     
     if (!AnyNull.isNull(g))
     {
-      if (!(g instanceof AnyButtonGroup))
-        throw new AnyRuntimeException("Not a button group");
-      
-  		g_ = (AnyButtonGroup)g;
+  		g_ = (AbstractButtonGroup)g;
+  		g_.addToGroup(this);
   		
-		  g_.getButtonGroup().add(b_);
-      g_.addButton(this);
       setTextFromButtonGroup(getRenderInfo());
     }
 	}
@@ -124,18 +157,6 @@ public class AnyRadio extends AnyToggleButton
 	public Any getButtonGroup()
 	{
 		return g_;
-	}
-	
-	Any getRadioData() throws AnyException
-	{
-    Any ret = null;
-    RenderInfo r = getRenderInfo();
-    if (r != null)
-    {
-      // Get the value we represent
-      ret = r.resolveDataNode(getContextNode(), true);
-    }
-    return ret;
 	}
 	
   protected void setValueToComponent(Any v)
@@ -192,7 +213,7 @@ public class AnyRadio extends AnyToggleButton
   	  Descriptor d = r.getDescriptor();
       if (d != Descriptor.degenerateDescriptor__ && d != null)
       {
-        Any        f = r.getField();
+        Any f = r.getField();
         
         if (d.isEnum(f) && myRenderInfo != null)
         {

@@ -1,0 +1,1711 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright 2006 Inqwell Ltd.
+-->
+<!DOCTYPE document PUBLIC "-//APACHE//DTD Documentation V2.0//EN" "http://forrest.apache.org/dtd/document-v20.dtd">
+<document>
+  <header>
+    <title>My Orders</title>
+  </header>
+  <body>
+    <section id="intro">
+      <title>Introduction</title>
+      <p>
+        The My Orders window is used to browse previously submitted orders by
+        specifying the desired date range. It illustrates the following Inq features:
+      </p>
+      <dl>
+        <dt><strong>The Window Menu Bar</strong></dt>
+        <dd>
+          Inq's support for setting up a window's menu bar and building menus.
+        </dd>
+        <dt><strong>Keys As Filters</strong></dt>
+        <dd>
+          The <code>Order</code> typedef defines a key called <code>Filter</code>.
+          We look at how this key is applied to SQL and its use of Inq's caching
+          system. 
+        </dd>
+        <dt><strong>Listening For Created Orders In The Server</strong></dt>
+        <dd>
+          The server code for My Orders listens for events raised when new orders
+          are created and uses them to maintain the summary table of orders.  
+        </dd>
+        <dt><strong>Listening For Node Events In The Client</strong></dt>
+        <dd>
+          Using event listeners in the client is just as valid as the
+          server. My Orders uses a listener to keep the items totals row
+          up to date when an order is selected in the summary table. 
+        </dd>
+        <dt><strong>Writing Reports</strong></dt>
+        <dd>
+          My Orders implements pdf reports by using Inq's ability
+          to transform node structures into XML and deploys Inq's <em>file
+          transfer</em> package to return the generated files to the client.
+        </dd>
+        <dt><strong>Table GUI Events</strong></dt>
+        <dd>
+          Any items in an order that are not yet shipped by
+          the <a href="orderprocessor.html#intro">Order Processor</a>
+          can be cancelled by clicking on the icon in the status column of
+          the <em>Items</em> table. Code for this table is shared
+          with the New Order function - soliciting table events and the information
+          Inq provides in them is
+          described <a href="neworder.html#tableevents">there</a>.
+        </dd>
+      </dl>
+      <p>
+      </p>
+<!--
+        In this section we
+        cover: 
+      <ul>
+        <li>Setting up a menu bar</li>
+        <li>Using filters</li>
+        <li>Listening for new orders</li>
+        <li>Writing Reports</li>
+      </ul>
+-->
+      <p>
+        Here is what the My Orders window looks like:
+      </p>
+      <figure src="images/psmyorders.png" alt="myorders"/>
+    </section>
+    <section id="menu">
+      <title>The Menu Bar</title>
+      <p>  
+        To add a menu bar to a window, set its <code>menuBar</code> property:
+      </p>
+      <source>
+// Menu Bar
+myOrders.properties.menuBar = call createMenu(context=myOrders, i18n);
+</source>
+      <p>
+        The menu bar and contents are created by the <code>createMenu()</code>
+        function. My Orders just has a <em>File</em> menu:
+      </p>
+      <source>
+gMenuBar menuBar;
+
+gMenu fileMenu;
+fileMenu.properties.text={i18n}.ps.button.FILE;
+</source>
+      <p>
+        Next, the menu items are created and initialised, as in this
+        example (the others have been omitted for brevity):
+      </p>
+      <source>
+// Generate a printable of the filtered orders
+gMenuButton filePrintSummary;
+filePrintSummary.properties.text={i18n}.ps.button.PRINT_SUMMARY;
+filePrintSummary.properties.icon = $catalog.icons.pdf16;
+gEvent(filePrintSummary, call printSummary());
+</source>
+      <p>
+        The following statement lays out the menu and its menu items:
+      </p>
+      <source>
+// Layout the menu
+layout(., context, menuBar,
+       "fileMenu
+        {
+          fileNew
+          Separator
+          filePrintSummary
+          filePrintOrder
+          Separator
+          fileClose
+        }
+        ");
+</source>
+      <note>
+        In this example of <code>layout()</code> there are four arguments, because
+        the graphical root is not the same as
+        the Inq node.
+      </note>
+      <p>
+        The graphical root is <code>menuBar</code> while the Inq node where the
+        components are all placed is <code>context</code> (the <code>myOrders</code>
+        window). The <code>menuBar</code> component accepts menus as its immediate
+        children and the open-brace <code>{</code> causes <code>layout</code> to
+        descend in the graphical hierarchy. This menu includes separators, created
+        during the layout with the <code>Separator</code> keyword. Here is the result:
+      </p>
+      <figure src="images/myordersmenu.png" alt="myordersmenu"/>
+      <p>
+        Menus can be nested in the layout string by using successive matched braces
+        to define the menu items at the next level. 
+      </p>
+    </section>
+    <section id="filter">
+      <title>Using a Filter</title>
+      <p>
+        The <code>Order</code> typedef defines a key called <code>Filter</code>. The
+        purpose of this key is to return a lesser or greater number of instances
+        according to tighter or looser input values. To <em>wild-card</em> an input
+        value the key implementation uses Inq's <code>null</code> value. Furthermore
+        this key uses two input values (of type <code>date</code> in this example)
+        to specify a range.
+      </p>
+      <section id="keydefs">
+        <title>Key Definition</title>
+        <p>
+          Here is the implementation of the key from <code>Order.inq</code>:
+        </p>
+        <source>
+key Filter cached=true
+(
+  // This example defines fields in the key that are not part of the
+  // typedef. FromDate and ToDate exist in the key only.
+  fields(Account,
+         Status,
+         Date.Date FromDate,
+         Date.Date ToDate)
+
+  eligible
+  (
+    // This key is cached while at the same time containing an inequality.
+    // Once an order is placed the OrderDate field never changes but we
+    // could just as well create new Orders whose OrderDate would satisfy
+    // a cached key's date range. To maintain a correct cache we define an
+    // eligibility expression. It must match the sql where clause.
+    $this.instance.Account   == $this.key.Account &amp;&amp;
+    ($this.instance.Status   == $this.key.Status || isnull($this.key.Status)) &amp;&amp;
+    ($this.instance.OrderDate &gt;= $this.key.FromDate || isnull($this.key.FromDate)) &amp;&amp;
+    ($this.instance.OrderDate &lt;= $this.key.ToDate || isnull($this.key.ToDate))
+  )
+
+  // When defining the database binding information for this key
+  // we include a "read-order" element. This is because the key
+  // fields are used more than once in the where clause, that is
+  // we cannot rely on the key field declaration order to initialise
+  // the prepared statement parameters.
+  auxcfg( map(
+  "prepared", true,
+  "read-sql",
+    "
+      {select-stmt}
+      where O.userid = ?
+      and (O.Status = ? OR ? IS NULL)
+      and (O.orderdate &gt;= ? OR ? IS NULL)
+      and (O.orderdate &lt;= ? OR ? IS NULL)
+    ",
+  "read-order",
+    array a = (
+                "Account",
+                "Status",       "Status",
+                "FromDate",     "FromDate",
+                "ToDate",       "ToDate"
+              )
+
+  ))
+)
+</source>
+        <p>
+          This key defines four fields. We can see in its SQL <code>where</code>
+          clause and associated configuration how these are used, including an array
+          to guide the parameter substitution.
+        </p>
+        <p>
+          Keys are discussed in <a href="../../primer/keys.html">More About I/O Keys</a>.
+          The <code>eligible()</code> expression mirrors the <code>where</code> clause, so
+          when new orders are created or the <code>Status</code> field of existing ones
+          changes Inq maintains its cache accordingly.
+        </p>
+      </section>
+      <section id="clientfilter">
+        <title>The Client</title>
+        <p>
+          The filter components are created and laid out as a unit
+          in <code>gui/myOrders.inq:createFilterBar()</code>.
+        </p>
+        <figure src="images/myordersfilter.png" alt="myordersfilter"/>
+        <p>
+          The data these
+          components are bound to is an instance of the <code>Order.Filter</code>
+          key:
+        </p>
+        <source>
+// Create the data the filter bar components will operate on.
+// This is an instance of Order.Filter
+any context.vars.filter = new(Order.Filter);
+</source>
+        <p>
+          The components themselves are created much like other the other
+          examples already discussed however there are a few interesting
+          features used by the filter.
+        </p>
+        <section id="filtercheck">
+          <title>Check Box Values</title>
+          <p>
+            We saw when looking at
+            the <a href="neworder.html#popupmenus">popup menu</a> used in the Item
+            Chooser how check components support different values for their
+            checked and unchecked state. To implement the desired functionality
+            of the filter's check box we can set up these values as follows: 
+          </p>
+          <source>
+gCheck cStatus;
+cStatus.properties.checkedValue = enum(OStatus, O);
+cStatus.properties.uncheckedValue = null;
+cStatus.properties.renderInfo = renderinfo($this.vars.filter.Status, label={i18n}.ps.button.OPEN_ONLY);
+</source>
+          <p>
+            With these properties in effect, toggling the check box sets
+            the <code>Status</code> field of the filter to the <code>OPEN</code>
+            order status or <code>null</code>, as we require. 
+          </p>
+        </section>
+        <section id="filterdate">
+          <title>The Date Choosers</title>
+          <p>
+            Inq
+            incorporates <a class="fork" href="ext:jcalendar">Kai Toedter's JCalendar</a>
+            as its <em>date chooser</em> component. For the filter we use two
+            date choosers like this:
+          </p>
+          <source>
+// Two date choosers for the date range
+gDateChooser dcFromDate;
+gDateChooser dcToDate;
+dcFromDate.properties.renderInfo = renderinfo($this.vars.filter.FromDate,
+                                              typedef=Order.OrderDate,
+                                              format="dd MMM yyyy",
+                                              width=8,
+                                              label={i18n}.ps.general.FROM_DATE);
+dcToDate.properties.renderInfo   = renderinfo($this.vars.filter.ToDate,
+                                              typedef=Order.OrderDate,
+                                              format="dd MMM yyyy",
+                                              width=8,
+                                              label={i18n}.ps.general.TO_DATE);
+
+// The from date cannot be null (which referring to Order.Filter
+// means the field is ignored) so we are preventing the user from going
+// back to the beginning of time.
+dcFromDate.properties.nullText   = null;
+</source>
+          <p>
+            By default a date chooser allows the null value. This can be established
+            by the user hitting <code>ctrl-n</code> in the focused date chooser.
+            If the component is rendering the null date it displays the default
+            text <code>&lt;none&gt;</code>. The <code>nullText</code> property
+            allows this text to be changed or the null value to be prevented by
+            setting <code>nullText</code> to null.
+          </p>
+        </section>
+        <section id="filterreset">
+          <title>Resetting The Filter</title>
+          <p>
+            Included in the filter components is a <em>reset</em> button. This
+            is scripted to call the function <code>resetFilter()</code> function,
+            which demonstrates date arithmetic:
+          </p>
+          <source>
+local function resetFilter(any filter)
+{
+  // Default the from date to today minus one month. Default
+  // the end date to open
+  filter.FromDate = dateadd(MONTH, -1, getdate());
+  filter.ToDate   = null;
+}
+</source>
+          <p>
+            The <code>createFilterBar()</code> function returns the component
+            it laid out its components in, so that client script can place it
+            in the wider GUI under construction.
+          </p>
+        </section>
+      </section>
+      <section id="serverfilter">
+        <title>The Server</title>
+        <p>
+          The filter is used in two ways by server-side script, found
+          in <code>psOrders.inq</code>.
+        </p>
+        <section id="serverapply">
+          <title>Applying The Filter</title>
+          <p>
+            The client invokes the <code>filterOrders</code> service, supplying the
+            filter as set by the GUI and the path where the server should
+            place the resulting node-set.
+          </p>
+          <figure src="images/filterorders.png" alt="filterorders"/>
+          <p>
+            This service makes no formal response. Instead it uses event
+            propagation from server to client as the means to return the
+            data. Inq's automatic handling of such events received at the
+            client is to place the node set at the same path, in turn
+            generating an event in the client which is dispatched to
+            the <em>Orders</em> table. 
+          </p>
+<!--
+          <source>
+service filterOrders(any filter, any at)
+{
+  any list = call filterOrders(filter);
+  
+  // Place the list in the context, raising an event as we do so.
+  // Any events now occurring within the structure will be propagated
+  // to the client.
+  add(list, at);
+</source>
+-->
+        </section>
+        <section id="serverlisten">
+          <title>Listening For New Orders</title>
+          <p>
+            When discussing the New Order function we showed how
+            the <a href="neworder.html#crevent">event</a>
+            raised by Inq on successful instance creation can
+            carry some user-supplied data. This data acts as additional
+            discrimination, allowing consumers to filter events of
+            interest to them.
+          </p>
+          <p>
+            In this example an instance of <code>Order.Filter</code> has been
+            used for this data. Using a key instance is just a convenience - any
+            kind of map, however created, can be used. When considering how
+            parts of the system communicate via events, filtering them is
+            part of the design. For a given event flow (in this
+            case <code>Order</code> creation) all participants must
+            agree on the form the create event data will take.  
+          </p>
+          <p>
+            Our event flow arranges for new orders to appear on the My Orders
+            screen, provided the order matches the event filtering currently
+            in place. The following diagram depicts this flow: 
+          </p>
+          <figure src="images/listenorders.png" alt="listenorders"/>
+          <p>
+            Although this diagram shows two clients cooperating via their
+            presence in the server, its equally valid (and more appropriate
+            in petstore) that a <a href="../../primer/process.html">User Process</a>
+            receives its own events. Inq makes no distinction in this regard.   
+          </p>
+          <p>
+            The <code>filterOrders()</code> service arranges to
+            receive <code>Order</code> creation events with the following
+            statement: 
+          </p>
+          <source>
+any $this.listeners.newOrder = listen (unlisten($catalog, $this.listeners.newOrder),
+                                       func f = call newOrderCreated(listenInfo, Order = @eventData),
+                                       event = (create),
+                                       create  = call makeCreateListenData(filter),
+                                       typedef = Order,
+                                       listenInfo);
+</source>
+          <p>
+            In fact, there are two complementary Inq functions being
+            used - <code>listen()</code>
+            and <code>unlisten()</code>. The arguments to <code>listen()</code>
+            are as follows (the first three arguments are mandatory, the
+            remainder optional):
+          </p>
+          <table>
+            <caption>listen() example arguments [Full explanation of listen() is TODO]</caption>
+            <tr>
+              <th>Name</th>
+              <th>Description</th>
+            </tr>
+            <tr>
+              <td/>
+              <td>
+                <p>
+                  The node to listen to. When listening for <code>create</code>
+                  events this is always <code>$catalog</code> because
+                  all such events emanate from there.
+                </p>
+                <p>
+                  Note that <code>unlisten</code> (explained below) returns its first
+                  argument.
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td/>
+              <td>
+                <p>
+                  The function to dispatch to. Does not have to be a <code>call</code>
+                  statement, instead it can be any <em>closure</em> style
+                  statement.
+                </p>
+                <p>
+                  When the function executes the stack is initialised by Inq as
+                  explained below.
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td><p><code>event = (...)</code></p></td>
+              <td>
+                <p>
+                  A comma-separated list of event types. This example is only
+                  interested in <code>create</code> events.
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td><p><code>create = &lt;expression&gt;</code></p></td>
+              <td>
+                <p>
+                  The create listen data. This is the complement of the
+                  value produced by <code>makeCreateRaiseData()</code>
+                  discussed in <a href="neworder.html#crevent">New Order</a>.
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td><p><code>typedef = &lt;typedef-literal&gt;</code></p></td>
+              <td>
+                <p>
+                  A literal type reference whose <code>create</code> events we
+                  want to receive.
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td><p><code>listenInfo</code></p></td>
+              <td>
+                <p>
+                  An example of a trailing argument whose value is placed on
+                  the stack when an event is dispatched.
+                </p>
+              </td>
+            </tr>
+          </table>
+          <p>
+            The return value of <code>listen</code> is a token that represents
+            the event binding. Script can retain this token for future use
+            in removing the binding with <code>unlisten()</code>.
+          </p>
+          <note>
+            Other than when replacing a listener with a new one, it is not
+            necessary to tidy listeners up. If the User Process terminates Inq
+            will remove defunct listeners automatically.
+          </note>
+          <p>
+            The <code>unlisten()</code> function itself returns its first
+            argument (the node from which the event binding is being removed)
+            and tolerates that its second (the event binding) is unresolved, to
+            support the <code>listen(unlisten(...))</code> construct. Each
+            time <code>filterOrders()</code> is invoked any existing listener is
+            discarded and a new one established with the prevailing filter data
+            represented in the <code>create</code> argument, returned
+            by the call to <code>makeCreateListenData(any filter)</code>:
+          </p>
+          <source>
+local function makeCreateListenData(any filter)
+{
+  any createData.Account   = isnull(filter.Account, equals);
+  any createData.Status    = isnull(filter.Status, equals);
+  
+  // Event filtering is only by equality. As we are dealing with a date range
+  // we let all creations through and check in the dispatch function. This is
+  // OK because in this case we are only listening to our own data.
+  any createData.FromDate  = equals;
+  any createData.ToDate    = equals;
+
+  // returns
+  createData;
+}
+</source>
+          <p>
+            We can see that this function creates its map "by implication"
+            rather than using an instance of <code>Order.Filter</code>
+            like <a href="neworder.html#crevent"><code>makeCreateRaiseData()</code></a> does.
+            This is incidental. What is important is that the map content (which
+            must use the same <em>key set</em> as the one used
+            in <code>create()</code>) wild-cards any of its fields using
+            the <code>equals</code> constant. This is a special value that always
+            yields <code>true</code> when compared with anything.
+          </p>
+          <p>
+            You may notice that the <code>FromDate</code> and <code>ToDate</code>
+            are always set to <code>equals</code>. This is because at present,
+            discrimination by event data only supports equality. Given that these
+            parameters specify a range, there is currently no way to express
+            this. Instead the dispatch function performs an additional check
+            to see that the new Order's <code>Order.OrderDate</code> falls within the
+            the current filter's range:
+          </p>
+          <source>
+local function newOrderCreated(any Order, any listenInfo)
+{
+
+  if (call isNewInstanceInDateRange(listenInfo.filter, Order))
+  {
+    // Make a node set child for the new Order
+    hmap m;
+    any m.Order = Order;
+
+    // Add it into the list, causing it to appear on the GUI screen.
+    any pKey = getprimarykey(Order);
+    add(m, path($this.{listenInfo.at}.{pKey}));
+  }
+}
+</source>
+          <p>
+            What processing does the dispatch function perform? It needs to add
+            the new order to the 
+            current <a href="../../primer/structures.html#nodeset">node-set</a>
+            structure in the server: 
+          </p>
+          <ul>
+          <li>it creates the map <code>m</code> as a suitable node-set child;</li>
+          <li>places the new Order beneath <code>m</code>
+            as <code>m.Order</code>;</li>
+          <li>acquires the unique key of the Order and uses
+              it <a href="../../primer/structures.html#nsetnames">to
+              add</a> <code>m</code> to the node-set.</li>
+          </ul> 
+          <p>
+            The last step causes the new node-set child to be propagated
+            to the client where, similarly when applying the filter, it is
+            replicated at the same path, processed by Inq's MVC and dispatched
+            to the table. 
+          </p>
+        </section>
+        <section id="serverstruct">
+          <title>Structuring The Code For Desktop and Web Clients</title>
+          <p>
+            Long before reaching this point you will have realised that
+            the Inq implementation of petstore is not a web application
+            as such. Of course, this refers only to the client, which has
+            been implemented to demonstrate Inq's capabilities with respect
+            to the desktop. 
+          </p>
+          <p>
+            As well as this Inq supports the construction of web-based
+            applications, allowing the server-side script to be reused but
+            changing the client technology. What are the differences
+            between the two architectures? 
+          </p>
+          <table>
+            <caption>Comparison Of Desktop and Web-based Inq Applications</caption>
+            <tr>
+              <th>Desktop</th>
+              <th>Web</th>
+            </tr>
+            <tr>
+              <td>Client has a permanent, bidirectional connection to the server</td>
+              <td>Client makes a connection to the server for each request</td>
+            </tr>
+            <tr>
+              <td>Server may invoke services in the client or send it events</td>
+              <td>Server cannot initiate an exchange with the client</td>
+            </tr>
+            <tr>
+              <td>Server maintains complex state on behalf of the client</td>
+              <td>Server maintains minimal state for subsequent client connections</td>
+            </tr>
+            <tr>
+              <td>Server knows when client disconnects</td>
+              <td>Server times out client if it never connects again</td>
+            </tr>
+            <tr>
+              <td>Client/Server custom protocol</td>
+              <td>Client/Server standard protocol (including firewalling)</td>
+            </tr>
+          </table>
+          <figure src="images/deskweb.png" alt="deskweb.png"/>
+          <note>
+            Explanation of how Inq generates JSON when working with web apps and
+            integration with JavaScript is TODO.
+          </note>
+          <p>
+            For filtering orders, the call structure for the desktop is as follows:
+          </p>
+          <source>
+Client
+ |
+ |--service filterOrders()
+     |
+     |-------call filterOrders()
+               |
+ |&lt;--event-- add list to node space
+             establish new order listener
+        
+</source>
+          <p>
+            Adding the current orders list to the node space and listening
+            for new orders are things only relevant to the desktop client.
+            In the web case, the return value of the service makes up the
+            data returned to the browser client. The process of applying
+            the filter is factored out into
+            the <em>function</em> <code>filterOrders</code>, and a suitable
+            entry point <code>webFilterOrders</code> is created for it. The
+            call structure for the web app case looks like this:
+          </p>
+          <source>
+Browser
+ |
+ |--service webFilterOrders()
+     |
+     |-------call filterOrders()
+               |
+ |&lt;--returns---| 
+        
+</source>
+          <p>
+            In the web app case there is no persistent state held in the
+            server, other than the session's connection to the Inq server. 
+          </p>
+        </section>
+      </section>
+    </section>
+    <section id="clientlisten">
+      <title>Listening For Events in the Client</title>
+      <p>
+        In the majority of cases, the listsners Inq sets up internally when
+        binding views to models are sufficient to drive the GUI from the
+        events occurring in the node space. Sometimes however, it is necessary
+        to script explicit event handlers for node events.
+      </p>
+      <p>
+        My Orders needs to update the total order value, displayed in
+        the items table totals row, when a selection is made from the
+        filtered orders list. The <code>listen()</code> function is
+        equally supported in the client as it is in the server; the client
+        sets up a listener with this statement: 
+      </p>
+      <source>
+// listen to $this.itemTable.properties.modelRoot so that when
+// the items list is replaced the order total is displayed
+listen ($this,
+        func f = 
+        {
+          call calcOrderTotal();
+        },
+        event  = (add, remove, replace),
+        path   = $this.vars.items  // NB listen path must be literal at the moment
+       );
+</source>
+      <p>
+        This example listens to the context node, <code>$this</code>,
+        and uses <code>listen()</code>'s optional <code>path</code>
+        argument to discriminate for events originating
+        at the root of the items data, <code>$this.vars.items</code>.
+        If a node is added at that location, removed or replaced with
+        a new one (seen as distinct from <code>add</code>) the listener
+        will fire. The
+        function <code>calcOrderTotal</code> (in <code>gui/newOrder.inq</code>)
+        simply reevaluates the rendered data: 
+      </p>
+      <source>
+function calcOrderTotal()
+{
+  $this.vars.orderTotal.row.OrderTotal.Price =
+    $this.vars.items ? isnull(sum($this.vars.items, $loop.LineItem.Qty * $loop.LineItem.UnitPrice), 0)
+                     : 0;
+}
+</source>
+    </section>
+    <section id="reports">
+      <title>Creating Printable Reports</title>
+      <p>
+        My Orders includes two printable reports - one at a summary
+        level for the filtered order set and one for a selected
+        order and its items. Writing reports in Inq combines Inq's ability
+        to transform a node structure into XML with an external
+        PDF generator such
+        as <a class="fork" href="ext:fop">Apache FOP</a>. This
+        XML is processed against an XSLT style sheet to
+        create the report as <code>&lt;fo:</code>... Formatting Objects XML.
+      </p>
+      <figure src="../../primer/images/report.png" alt="fopreport"/>
+      <p>
+        Report generation is performed by the server and petstore
+        deploys the Inq bundled package <em>filexfer</em> to
+        return the PDF result to the client for display or print. In
+        this way Inq maintains its minimal software requirements
+        of the desktop environment to just a Java<sup>TM</sup>
+        runtime environment and any suitable PDF reader associated with
+        that file type.
+      </p>
+      <section id="rptcontent">
+        <title>The XML Report Content</title>
+        <p>
+          The XSL templates used to transform the XML report content
+          into Formatting Objects can be found
+          at <code>reports/psreports.xsl</code>, which references the
+          subordinate files <code>pagelayout.xsl</code>
+          and <code>tableutils.xsl</code>. These templates
+          have been written as examples and infer a particular layout
+          of XML document they can process. You may have existing
+          templates that require a different format of
+          XML input document. In that case you will need
+          to modify the Inq script that generates this file, so
+          bear in mind that the explanation of petstore's
+          reports includes a XML/XSL design that we do not dwell on
+          here.
+        </p>
+        <p>
+          Further discussion uses these examples of
+          the <a href="reports/ordersummary.pdf">order summary</a>
+          and <a href="reports/orderdetail.pdf">order detail</a> (pdf).
+        </p>
+        <p>
+          The XML that generates these reports is respectively
+          <a class="fork" href="reports/ordersummary.xml"><code>ordersummary.xml</code></a>
+          and <a class="fork" href="reports/orderdetail.xml"><code>orderdetail.xml</code></a>.
+          Here is a partially expanded view of <code>ordersummary.xml</code>:
+        </p>
+        <figure src="reports/ordersummary1.png" alt="ordersummary1"/>
+        <p>
+          The file contains four sections:
+        </p>
+        <dl>
+          <dt><code>&lt;report&gt;</code></dt>
+          <dd>
+            Fixed information such as the report title and the footer.
+          </dd>
+          <dt><code>&lt;summarytable&gt;</code></dt>
+          <dd>
+            A tag to define the table caption, its columns and <em>where in the
+            data section</em> the row data for this table should be extracted.
+          </dd>
+          <dt><code>&lt;data&gt;</code></dt>
+          <dd>
+            All the data for the report. For the Order Summary report this
+            is the Account and the list of orders including the totals row.
+          </dd>
+          <dt><code>&lt;INQmetadata&gt;</code></dt>
+          <dd>
+            Meta-data about all the typedefs instances of which are present
+            in the <code>&lt;data&gt;</code> section. Much like the Inq client
+            GUI does, this information may
+            be used by the templates to generate row headers, dimension columns
+            and so forth.
+          </dd>
+        </dl>
+        <p>
+          The <code>&lt;data&gt;</code> and <code>&lt;INQmetadata&gt;</code>
+          sections are known as <em>reference</em> sections
+          whereas <code>&lt;report&gt;</code> and <code>&lt;summarytable&gt;</code>
+          are called <em>content</em> sections.
+        </p>
+        <section id="templates">
+          <title>How The Templates Work</title>
+          <p>
+            Briefly, the templates generate their Formatting Objects output by
+            processing the <em>content</em> sections against
+            the <code>&lt;data&gt;</code> section to provide the values
+            and the <code>&lt;INQmetadata&gt;</code> section, where widths, labels
+            and enumerations are held.
+          </p>
+          <p>
+            Using attributes common to both, the templates use XPath expressions
+            to extract information from the reference sections as directed by
+            a particular element of the content.
+          </p>
+        </section>
+      </section>
+      <section id="ioxmlx">
+        <title>The ioXMLX Stream</title>
+        <p>
+          Inq includes a <em>stream</em> type called <code>ioXMLX</code>
+          which writes Inq structures to its sink as XML or parses XML from
+          its source into an Inq structure.
+        </p>
+        <note>
+          In Inq a particular stream type defines the format that data
+          is read or written in (for example XML, plain text or some
+          other format) and its connected source or sink the physical
+          medium where it is read or written. Sources and sinks are
+          specified with a URL syntax, such
+          as <code>file://&lt;path&gt;</code>
+          or <code>socket://&lt;host:port&gt;</code>
+        </note>
+        <p>
+          Conversion of an Inq structure to XML involves the following steps:
+        </p>
+        <ol>
+          <li>
+            Declare a stream of type <code>ioXMLX</code>
+          </li>
+          <li>
+            Configure the stream using the properties it supports
+          </li>
+          <li>
+            Open the stream for writing, binding it to a sink 
+          </li>
+          <li>
+            Write one (or more) values to the stream, closing it when done.
+          </li>
+        </ol>
+        <p>
+        </p>
+        <section id="compare">
+          <title>Comparing Inq and DOM Structures</title>
+          <p>
+            Before looking at this process in more detail, it is useful to
+            compare Inq and <a class="fork" href="ext:DOM">Document Object
+            Model</a> structures
+            to see how they differ. An Inq structure is a simple containment
+            hierarchy in which nodes are either maps, which may contain children,
+            or leaves of some data type. In a map, the key set must be
+            unique. Map children may or may not have an ordinal position. 
+          </p>
+          <p>
+            In a DOM structure there are various node types
+            including <em>elements</em>, <em>attributes</em>
+            and <em>text</em>. Elements may contain other elements, attributes
+            or text. Elements have a name and child elements do not have to
+            be uniquely named in their parent. Text nodes are unnamed
+            but their ordinal position, alongside that of their sibling
+            elements, is significant.  
+          </p>
+          <p>
+            The construction of a suitable Inq structure and use of an
+            appropriately set up <code>ioXMLX</code> stream support the production
+            of elements, attributes and text as either XML text, in-memory
+            as a tree rooted at an instance of <code>org.w3c.dom.Document</code>
+            or as <a class="fork" href="ext:JSON">JSON</a> text.
+          </p>
+        </section>
+        <section id="ioxmlxconfig">
+          <title>Configuring ioXMLX</title>
+          <p>
+            The <code>ioXMLX</code> stream supports the following properties
+            used to configure its behaviour:
+          </p>
+          <table>
+            <caption>ioXMLX Properties</caption>
+            <tr>
+              <th>Name</th>
+              <th>Description</th>
+              <th>Default</th>
+            </tr>
+            <tr>
+              <td>cdata</td>
+              <td>A <a href="../../primer/types.html#set"><code>set</code></a>
+                of <a href="../../primer/nodes.html#pathfn"><code>path()</code></a>s
+                that will be produced as <code>CDATA</code> sections. Otherwise
+                numeric character references or character entity references
+                are produced for markup and special characters.</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>childName</td>
+              <td>When writing node sets, the name given to the element
+                  representing a node-set child.</td>
+              <td><code>child</code></td>
+            </tr>
+            <tr>
+              <td>DOMOutput</td>
+              <td>Generate output as an in-memory <code>org.w3c.dom.Document</code>.
+                Must be set before the stream is opened</td>
+              <td><code>false</code></td>
+            </tr>
+            <tr>
+              <td>enumExt</td>
+              <td>When true produce any enumerated value fields as their external
+                representation.</td>
+              <td><code>false</code></td>
+            </tr>
+            <tr>
+              <td>excludesAt</td>
+              <td>A <a href="../../primer/types.html#set"><code>set</code></a>
+                of <a href="../../primer/nodes.html#pathfn"><code>path()</code></a>s
+                that will be excluded (and therefore their children excluded)
+                from the production.</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>excludesBelow</td>
+              <td>A <a href="../../primer/types.html#set"><code>set</code></a>
+                of <a href="../../primer/nodes.html#pathfn"><code>path()</code></a>s
+                that will themselves be produced but their children excluded
+                from the production.</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>formatOutput</td>
+              <td>When producing XML or JSON text, whether the output will
+                be formatted as indented lines for readability.</td>
+              <td><code>true</code></td>
+            </tr>
+            <tr>
+              <td>formatters</td>
+              <td>A map whose keys are <code>path()</code>s and values are
+              formatters (or format patterns). When the traversal produces
+              a scalar (generated as a <em>text</em> node) and the current
+              path compares equals [TODO link] with a map key the corresponding
+              format is applied.</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>groupingUsed</td>
+              <td>When <code>true</code> grouping separators are produced
+                in numeric text; when <code>false</code> they are not. Of
+                particular relevance to JSON output.</td>
+              <td><code>true</code></td>
+            </tr>
+            <tr>
+              <td>includes</td>
+              <td>As a complement to the <code>excludes[At,Below]</code>
+                properties, a <code>set</code> of those paths that
+                will be produced in the output; everything else
+                will not be produced.</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>inqAttributes</td>
+              <td>When <a href="../../primer/structures.html#nodeset">node
+                sets</a>, <code>typedef</code> instances and their fields
+                are encountered, whether the production of these elements
+                includes attributes that identify the element as such. See
+                also <code>writeMeta</code> below.</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>JSONOutput</td>
+              <td>Generate output as JSON text.
+                Must be set before the stream is opened</td>
+              <td><code>false</code></td>
+            </tr>
+            <tr>
+              <td>metaFunc</td>
+              <td>A function, which must be a <code>call()</code> statement,
+                that will be called as the meta-data section of the output
+                is produced. See following section. Can be used to manipulate
+                the production of the meta-data, such as changing widths or
+                labels from their typedef defaults. If set then also
+                sets <code>writeMeta</code> to <code>true</code></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>metaName</td>
+              <td>The name of the root element for the meta-data section
+                of the output. If set then also
+                sets <code>writeMeta</code> to <code>true</code></td>
+              <td><code>INQmetadata</code></td>
+            </tr>
+            <tr>
+              <td>preserveTypes</td>
+              <td>When generating tags
+                for <a href="../../primer/types.html#value-types">value types</a>
+                whether type information is included in the output so
+                that the same types are restored on input. If <code>false</code>
+                then strings will be created.</td>
+              <td><code>false</code></td>
+            </tr>
+            <tr>
+              <td>rootName</td>
+              <td>The name of the root element of the produced document.</td>
+              <td><code>root</code></td>
+            </tr>
+            <tr>
+              <td>seed</td>
+              <td>A <code>map</code> used to seed the structure created when
+                parsing XML.</td>
+              <td><code>smap</code></td>
+            </tr>
+            <tr>
+              <td>tagFuncs</td>
+              <td>A map whose keys are <code>path()</code>s and values are
+              functions, which must be <code>call()</code> statements.
+              As the traversal proceeds the path is maintained. If the current
+              path compares equals [TODO link] with a map key the
+              corresponding <em>tag function</em> is called. Used to manipulate
+              the name of the element produced, apply attributes to it and
+              manipulate any text content.</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>tagNames</td>
+              <td>A map whose keys are <code>path()</code>s and values are
+              strings. If the current
+              path compares equals with a map key the
+              corresponding value is used as this element's name. Can be used
+              instead of a <code>tagFunc</code> if the only requirement is
+              a fixed element name change.</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>writeMeta</td>
+              <td>When <code>true</code> the meta-data section will be written
+              to the output; when <code>false</code> it will not. If set
+              to <code>true</code> then implies <code>inqAttributes</code>
+              is also <code>true</code> and vice-versa.</td>
+              <td><code>false</code></td>
+            </tr>
+            <tr>
+              <td>writeMultiple</td>
+              <td>When <code>true</code> successive writes to the stream
+              are enclosed in a <code>&lt;write&gt;</code> element;
+              when <code>false</code> the stream is intended to produce
+              its document with a single write operation on the root
+              of the Inq structure.</td>
+              <td><code>false</code></td>
+            </tr>
+            <tr>
+              <td>xmlPrologue</td>
+              <td>When producing XML text (the default output format),
+              the prologue to use. The default file encoding is included
+              in the default value.</td>
+              <td><code>&lt;?xml&nbsp;version="1.0" encoding="</code><em>default-platform-encoding</em><code>"?&gt;</code></td>
+            </tr>
+            <tr>
+              <td>xmlOutput</td>
+              <td>Generate output as XML text.</td>
+              <td><code>true</code></td>
+            </tr>
+          </table>
+          <p>
+            By default, <code>ioXMLX</code> will generate an XML text document
+            for a single Inq node structure, converting maps into elements
+            containing child elements and leaves into elements with child text.
+            By setting <code>writeMeta</code> to <code>true</code>
+            the <code>&lt;INQmetadata&gt;</code> section is created automatically.
+            Referring back to <code>ordersummary.xml</code>, for the other
+            sections the remaining issues are
+          </p>
+          <ol>
+            <li>
+              generation of elements with repeated names, such
+              as <code>&lt;column&gt;</code> - Inq does not allow duplicate
+              names at a given level;
+            </li>
+            <li>
+              production of any required attributes - Inq does not have
+              any concept of different types of children, such as attributes
+              and elements, as DOM does;
+            </li>
+            <li>
+              the output is correctly ordered, for example
+              the <code>&lt;column&gt;</code> elements must appear in
+              order for the desired result in the PDF table and the
+              rows (in the <code>&lt;data&gt;</code> section) appear by ascending
+              order number, with the total row last.  
+            </li>
+          </ol>
+          <p>
+            These things can be achieved by building an appropriate Inq structure,
+            sorted as necessary, and configuring <code>ioXMLX</code>.  
+          </p>
+        </section>
+      </section>
+      <section id="repsummary">
+        <title>Focus on the Order Summary Report</title>
+        <section id="inqstr">
+          <title>Creating the Inq Structure</title>
+          <p>
+            Referring to <code>psReports.inq</code> the <code>ordersummary.xml</code>
+            file is created by the function <code>createSummaryXML()</code>. It is
+            passed the current filter from the GUI which it uses to re-fetch
+            the current order set, in this case using an ordered
+            map (an <code>omap</code>) to seed the structure: 
+          </p>
+          <source>
+local function createSummaryXML(any filter)
+{
+  omap m;
+  any root.data.orders  = call filterOrders(filter, root = m);
+</source>
+          <p>
+            Notice that the node <code>root.data.orders</code> has been created - the
+            node <code>data</code> is the beginnings of what will become
+            the <code>&lt;data&gt;</code> tag in the XML production. Next, the
+            total row for the report is created by making a new instance
+            of <code>Order</code>, setting its <code>TotalPrice</code> field
+            to the sum of the orders and placing it in the structure alongside them:
+          </p>
+          <source>
+  any total = new(Order);
+  total.TotalPrice = sum(root.data.orders, $loop.Order.TotalPrice);
+  any root.data.orders.total.Order = total;
+</source>
+          <p>
+            The <code>orders</code> node is
+            an <a href="../../primer/types.html#omap"><code>omap</code></a>, so it
+            supports vector access and therefore sorting. The table rows
+            appear in ascending order of date and order number, according to
+            the outcome of this use of <code>sort</code>: 
+          </p>
+          <source>
+  sort(root.data.orders, $loop.Order.OrderDate, $loop.Order.Order, null=NULL_HIGH);
+</source>
+          <p>
+            The Order at <code>root.data.orders.total.Order</code> has uninitialised
+            fields <code>Order.Order</code> and <code>Order.OrderDate</code>. These
+            fields have no default value set for them in the typedef, so they
+            have the value <code>null</code>. By telling <code>sort()</code>
+            that <code>null</code> sorts above non-null values with the optional
+            argument <code>null=NULL_HIGH</code> the total row will be at the end
+            of the vector.
+          </p>
+          <p>
+            The user's Account is required for the report, so this is added
+            to the <code>&lt;data&gt;</code> section. The <code>&lt;report&gt;</code>
+            tag contains the title and disclaimer:
+          </p>
+          <source>
+  any root.data.Account        = call getAccount();
+  any root.report.title        = "Order Summary"; // TODO i18n
+  any root.report.disclaimer   = call disclaimer();
+</source>
+          <p>
+            The Inq function <code>renderf</code> formats a string as
+            for <a class="fork" href="ext:j2seapi/apidocs/messageformat">MessageFormat</a>
+            with the additional semantics that if typedef fields are referenced
+            their format pattern is used. To make use of this petstore defines
+            the typedef <code>ReportHelper</code> (see <code>ReportHelper.inq</code>).
+            To create the table caption an instance of ReportHelper is
+            initialised from the filter's From and To dates. The rendered text
+            is then placed in the omap <code>root.summarytable</code>:
+          </p>
+          <source>
+  any helper = new(ReportHelper, filter);
+
+  omap root.summarytable;
+  
+  any root.summarytable.caption = renderf("Your orders between {0} and {1}:",
+                                          helper.FromDate,
+                                          isnull(helper.ToDate, "Today"));
+</source>
+          <p>
+            An omap is used so that as columns are added their order
+            is preserved. According to the requirements of an Inq map's
+            unique key set, the columns are set up like this:
+          </p>
+          <source>
+  any root.summarytable.OrderNumber = null;
+  any root.summarytable.OrderDate   = null;
+  any root.summarytable.OrderTotal  = null;
+</source>
+          <p>
+            The values are not important, in fact the column tags in the
+            XML are empty. The
+            names, <code>OrderNumber</code>, <code>OrderDate</code>
+            and <code>OrderTotal</code> are picked up by a <em>tag function</em>
+            so that a <code>&lt;column&gt;</code> tag with the required
+            attributes can be produced. Furthermore, data for the table
+            rows must be retrieved from somewhere so we need to generate
+            the <code>&lt;from&gt;</code> tag:
+          </p>
+          <source>
+  any root.summarytable.from        = null;
+</source>
+        </section>
+        <section id="useioxmlx">
+          <title>Using ioXMLX</title>
+          <p>
+            Having built an Inq structure that looks <em>somewhat</em> like
+            the XML document we want we are ready to apply it
+            to <code>ioXMLX</code>. The stream is declared and
+            the <code>tagFuncs</code> property set so script can intervene
+            during the traversal to manipulate the output:
+          </p>
+          <source>
+  // Now write the xml out. Declare a stream
+  ioXMLX strm;
+
+  object p = path($this.summarytable.%);
+  any tagFuncs.{p} = cfunc f = call orderSummaryChild(nodeset = getnodeset(root.data.orders));
+  strm.properties.tagFuncs = tagFuncs;
+</source>
+          <p>
+            As stated above, this property is a map of <code>path</code>s to
+            call statement functions. In order to get a <code>path</code> to
+            be a map key it must be protected from expansion as
+            an <a href="../../primer/nodes.html#elementsub">indirect path</a>
+            by placing it inside an <code>object</code> variable.
+          </p>
+          <note>
+            In general, variables of type <code>object</code> allow foreign
+            objects (like a DOM tree for example) to be carried around in the
+            Inq environment.
+          </note>
+          <p>
+            When is the tag function called and what does it do?
+            As <code>ioXMLX</code> traverses an Inq structure it maintains the
+            path of the current node. If this path matches a key in the
+            current <code>tagFuncs</code> then that function is called
+            before the corresponding element is produced.
+            Here is the signature of <code>orderSummaryChild()</code>:
+          </p>
+          <source>
+local function orderSummaryChild(any nodeset,   // &lt;- argument(s) from script
+                                 any node,      // &lt;- arguments Inq supplies
+                                 any parent,    // v
+                                 any nodeName,
+                                 any ordinal,
+                                 any content,
+                                 any last,
+                                 any descend,
+                                 any attributes)
+</source>
+          <p>
+            The <code>nodeset</code> argument is explicitly provided in the call
+            to the function. The other arguments are provided by <code>ioXMLX</code>
+            and have these meanings:
+          </p>
+          <table>
+            <caption>Tag Function Arguments</caption>
+            <tr>
+              <th>Name</th>
+              <th>Description</th>
+            </tr>
+            <tr>
+              <td>node</td>
+              <td>The current Inq node</td>
+            </tr>
+            <tr>
+              <td>parent</td>
+              <td>The parent of the current Inq node</td>
+            </tr>
+            <tr>
+              <td>nodeName</td>
+              <td>The name of the current node (that is its key in its parent)</td>
+            </tr>
+            <tr>
+              <td>ordinal</td>
+              <td>The zero-based ordinal position of this node in its parent. If
+                the parent does not support vector access then this argument is
+                still supplied but does not infer order. It should be considered
+                as a simple counter.</td>
+            </tr>
+            <tr>
+              <td>content</td>
+              <td>If custom content is to be produced the tag function may
+                return it by setting the value of this argument.</td>
+            </tr>
+            <tr>
+              <td>last</td>
+              <td><code>true</code> if this is the last child of the current
+                parent, <code>false</code> if it is not.</td>
+            </tr>
+            <tr>
+              <td>descend</td>
+              <td>Initialised to <code>true</code> before the function
+                is called, may be set to <code>false</code> to prevent
+                the current node being descended into.</td>
+            </tr>
+            <tr>
+              <td>attributes</td>
+              <td>A map that the function may populate
+                with <code>string</code> key/value pairs that will
+                be produced as XML attributes on the produced element.</td>
+            </tr>
+          </table>
+          <p>
+            The return value of a tag function is the desired element name.
+            If this is <code>nodeName</code> then that argument should be
+            returned. If <code>null</code> is returned then the current
+            element is not produced in the output (and not descended into).
+          </p>
+          <p>
+            Here is the body of <code>orderSummaryChild()</code>:
+          </p>
+          <source>
+  any ret = "column";
+  
+  switch
+  {
+    when(nodeName == "from")
+    {
+      any attributes.nodeset = nodeset;
+      
+      // Leave the tag name as it is
+      any ret = nodeName;
+    }
+
+    when(nodeName == "caption")
+    {
+      // Leave the tag name as it is
+      any ret = nodeName;
+    }
+    
+    when(nodeName == "OrderNumber")
+    {
+      any attributes.typedef = fqname(typedef(Order));
+      any attributes.field   = "Order";
+      any attributes.halign  = "center";  // used by table cell generation
+    }
+
+    when(nodeName == "OrderDate")
+    {
+      any attributes.typedef = fqname(typedef(Order));
+      any attributes.field   = "OrderDate";
+    }
+
+    when(nodeName == "OrderTotal")
+    {
+      any attributes.typedef = fqname(typedef(Order));
+      any attributes.field   = "TotalPrice";
+    }
+    
+    // Don't produce a tag for anything we were not expecting
+    otherwise
+      any ret = null;
+
+  }
+  
+  ret;
+</source>
+          <p>
+            and referring to the sample XML output <a href="#rptcontent">above</a>
+            we can see how this script plays its part in transforming the
+            original Inq node structure into the desired result.
+          </p>
+          <p class="vignette">
+            As noted above, the chosen XML production relates to the
+            processing by xlst templates into Formatting Objects. Out of
+            interest, how does this work? Considering the orders table
+            defined by <code>&lt;summarytable&gt;</code>,
+            the templates find the root of the rows data by tieing together
+            the <code>@nodeset</code> attribute of the <code>&lt;from&gt;</code>
+            tag with the element underneath <code>&lt;data&gt;</code>
+            whose <code>@nodeset</code> attribute has the same value.
+          </p>
+          <figure class="vignette" src="reports/ordersummary2.png" alt="ordersummary2"/>
+          <p class="vignette">
+            Similarly for the column data, the <code>@typedef</code>
+            and <code>@field</code> attributes are matched up as shown.
+          </p>
+          <p>
+            The total row has a currency symbol in its formatted result. To
+            achieve this we can override the default
+            formatting (specified in its typedef) of
+            the <code>Order.TotalPrice</code> field.
+            The <code>formatters</code> property is set up in the same way
+            as <code>tagFuncs</code> was, mapping the path whose format
+            is to be established to a format pattern:
+          </p>
+          <source>
+  object p = path($this*total.Order.TotalPrice);
+  any formatters.{p} = "¤#,##0.00";
+  strm.properties.formatters = formatters;
+
+  call writeXMLFile(strm, root, rootElementName = "ordersummary");
+</source>
+          <p>
+            Having set up those properties specific to the order summary
+            report, the remaining work to generate the XML file
+            is carried out in the helper
+            function  <code>writeXMLFile()</code>
+          </p>
+          <source>
+local function writeXMLFile(any strm,
+                            any root,
+                            any rootElementName)
+{
+  any repXml = createtmpfile($process.loginName, ".xml");
+  try
+  {
+    strm.properties.rootName = rootElementName;
+
+    strm.properties.metaFunc = cfunc f = call metaTags(priceCurrency = $catalog.{$root.i18n}.ps.CURRENCY);
+    
+    open(strm, repXml, OPEN_WRITE);
+    writestream(strm, root);
+  }
+  finally
+  {
+    close(strm);
+    
+    // returns
+    // Note: the Inq "file" type yields a URL syntax when converted to a string.
+    // We want the file system's path instead. 
+    repXml.properties.canonicalPath;
+  }
+}
+</source>
+          <p>
+            In this function the stream's <code>metaFunc</code> property is set.
+            Setting this property implies also that
+            the <code>&lt;INQmetadata&gt;</code>
+            section will be produced. Here is a sample from the order summary
+            production:
+          </p>
+          <figure src="reports/ordersummary3.png" alt="ordersummary3"/>
+          <p>
+            As <code>ioXMLX</code> encounters typedef instances during the traversal
+            so it writes out their metadata as shown. Within
+            each <code>&lt;INQfield&gt;</code> tag at most the following can
+            appear:
+          </p>
+          <table>
+            <tr>
+              <th>Tag</th>
+              <th>Description</th>
+            </tr>
+            <tr>
+              <td>
+                <code>&lt;INQisnumeric&gt;</code>
+              </td>
+              <td>
+                Present if the field is a numeric value and has the
+                text content <code>true</code>. Absent otherwise
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <code>&lt;INQwidth&gt;</code>
+              </td>
+              <td>
+                The width of the field
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <code>&lt;INQlabel&gt;</code>
+              </td>
+              <td>
+                The label of the field
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <code>&lt;INQenum&gt;</code>
+              </td>
+              <td>
+                Any enumerations the field has. The internal value is
+                given by the attribute <code>@INQinternal</code> and
+                the external value is the content. Repeated for each
+                enumerated value of the field.
+              </td>
+            </tr>
+          </table>
+          <p>
+            The <code>&lt;INQtypedef&gt;</code> and <code>&lt;INQfield&gt;</code>
+            tags respectively have the <code>@INQfqname</code>
+            and <code>@INQname</code> attributes that allow templates to
+            make use of the metadata. The sample templates do this to
+            generate the table headers, dimension the columns and
+            right-justify numeric values.
+          </p>
+          <p>
+            A <code>metaFunc</code> is called once for each field within
+            each typedef and allows script to control what gets
+            produced in the <code>&lt;INQmetadata&gt;</code> section, so that
+            if the typedef defaults are not suitable alternatives can be
+            provided. Here is what our example does: 
+          </p>
+          <source>
+local function metaTags(any priceCurrency,  // &lt;- argument(s) from script
+                        any Typedef,         // &lt;- arguments Inq supplies
+                        any Field,           // v
+                        any Label,
+                        any Width)
+{
+  switch
+  {
+    when (Typedef == typedef(Order) &amp;&amp; Field == "ShipCity")
+    {
+      Label = "Shipping\nCity";
+    }
+    
+    when (Typedef == typedef(LineItem) &amp;&amp; Field == "UnitPrice")
+    {
+      Label = "Unit Price\n" + priceCurrency.properties.symbol;
+    }
+    
+    when(Typedef == typedef(ValueHelper) &amp;&amp; Field == "Price")
+    {
+      Label = "Total Price\n" + priceCurrency.properties.symbol;
+    }
+  }
+}
+</source>
+          <p>
+            The <code>priceCurrency</code> argument is explicitly provided in the call
+            to the function. The other arguments are provided by <code>ioXMLX</code>
+            and have these meanings:
+          </p>
+          <table>
+            <caption>Tag Function Arguments</caption>
+            <tr>
+              <th>Name</th>
+              <th>Description</th>
+            </tr>
+            <tr>
+              <td>Typedef</td>
+              <td>The typedef whose metadata is being produced</td>
+            </tr>
+            <tr>
+              <td>Field</td>
+              <td>The field whose metadata is being produced</td>
+            </tr>
+            <tr>
+              <td>Label</td>
+              <td>The default label. The function can assign an alternative
+                value to this argument.</td>
+            </tr>
+            <tr>
+              <td>Width</td>
+              <td>The default width. The function can assign an alternative
+                value to this argument.</td>
+            </tr>
+          </table>
+          <p>
+            We can see that some columns have a new-line in them. It is
+            also possible to access a currency symbol (via property access and
+            Inq's <code>currency</code> data type) and include this in the
+            header. [Note: <a href="reports/orderdetail.pdf">orderdetail.pdf</a>
+            uses these].
+          </p>
+          <p>
+            Lastly, the stream is opened to a temporary file and the XML
+            created with the call of <code>writestream(strm, root);</code>.
+          </p>
+        </section>
+        <section id="genpdf">
+          <title>Generating the PDF Output</title>
+          <p>
+            Having discussed <code>createSummaryXML()</code>, the order summary pdf
+            is created by the following function:
+          </p>
+          <source>
+local function orderSummary(any filter, any ack)
+{
+  // Create the xml report file.
+  any xml = call createSummaryXML(filter);
+  
+  // Generate the pdf report
+  any pdf = call generatePdf(xml); 
+
+  // Return the generated file name to client. It then performs
+  // a file transfer request  
+  send updateOk(item = pdf, ack);
+}
+</source>
+          <p>
+            The local variable <code>xml</code> is the path of the file in which
+            the XML production of the report has been created. What
+            does <code>generatePdf()</code> do with this? Here is
+            what that function looks like:
+          </p>
+          <source>
+local function generatePdf(any xml)
+{
+  // xsl scripted report transform
+  any xsl = call makeXslFile();
+  
+  // Where the result will end up
+  any pdf = call makeOutputFile();
+                      
+  any c = "fop -xml {0} -xsl {1} -pdf {2}";
+  string cmd = renderf(c, xml, xsl, pdf);
+
+  // Put stderr in a string stream and if fop's exit status is not
+  // zero throw the string content.
+  string err;
+  ioPrint perr;
+  open(perr, "string://err", OPEN_WRITE);
+  
+  // syscmd closes any streams it is given so we don't have to
+  if (syscmd(cmd, stdout=$catalog.system.out, stderr=perr) &amp;&amp; err)
+    throw(cmd + err);
+
+  // Returns
+  call inq.filexfer:makeRelativeToRoot(filename = pdf);
+}
+</source>
+          <p>
+            In fact, this is more a demonstration of Inq interfacing with
+            the command line on the host. The important points are these:
+          </p>
+          <ol>
+            <li>
+              Build the command line to
+              run <a class="fork" href="ext:fop">Apache FOP</a> using
+              the <code>renderf</code> function described above. 
+            </li>
+            <li>
+              Create a <code>ioPrint</code> stream and open it to write
+              to a <code>string</code> variable.
+            </li>
+            <li>
+              Run the command using Inq's <code>syscmd</code> function, capturing
+              anything it writes to <code>stderr</code> and throwing an exception
+              should there be any and <code>fop</code> has a non-zero exit status.
+            </li>
+          </ol>
+          <p>
+            For completeness and the sake of showing additional Inq features in use,
+            here are the subordinate functions <code>generatePdf()</code> calls:
+          </p>
+          <source>
+local function makeXslFile()
+{
+  // Expecting to find a directory ./reports relative to this inq source
+  // file, where the reports are scripted as xslt.
+  file xsl = absurl("reports" +
+                    $properties.file_separator +
+                    "psreports.xsl");
+                      
+  xsl.properties.canonicalPath;
+}
+</source>
+          <ol>
+            <li>
+              The <code>absurl()</code> function converts a relative
+              path into an absolute URL string using either a specified
+              absolute URL as the base as its second argument or (as here) the
+              URL of the executing script is assumed. 
+            </li>
+            <li>
+              A variable of type <code>file</code> is assigned from
+              the absolute URL. This is just so that a path of the
+              form <code>/some/absolute/path/psreports.xsl</code>
+              can be retrieved using the file's <code>canonicalPath</code>
+              property. The <code>fop</code> command requires file paths,
+              not <code>file:</code> URLs.
+            </li>
+          </ol>
+          <source>
+local function makeOutputFile()
+{
+  // The three-argument version of createtmpfile takes prefix, suffix
+  // and directory. We are expecting to find &lt;filexfer&gt;/tmp as the
+  // output directory.
+  any f = createtmpfile($process.loginName,
+                        ".pdf",
+                        call inq.filexfer:makeAbsoluteFromRoot(filename = "tmp"));
+
+  f.properties.canonicalPath;
+}
+</source>
+          <ol>
+            <li>
+              The <code>createtmpfile()</code> function returns a variable
+              of type <code>file</code>, generating a name from the prefix,
+              an optional suffix and in an optional directory. If no directory
+              is specified the host's default temporary directory is used. 
+            </li>
+            <li>
+              The Inq bundled <code>inq.filexfer</code> package is discussed
+              elsewhere [TODO]
+            </li>
+          </ol>
+          <p>
+            The Order Detail report uses the same techniques and helper
+            functions as Order Summary. There is only one thing it does
+            differently, just for the sake of pointing it out.
+            In <code>createDetailXML()</code> the formatter for the Total Price
+            cell of the order (not the items) table is created like this:
+          </p>
+          <source>
+object p3 = path($this.data.Order.TotalPrice);
+any priceFormatter = format("¤#,##0.00", Order.TotalPrice);
+any formatters.{p3} = priceFormatter;
+strm.properties.formatters = formatters;
+</source>
+          <p>
+            The <code>format()</code> function creates a <em>formatter</em>, in
+            this case saving <code>ioXMLX</code> the trouble of doing so. It
+            requires a variable whose type (numeric or date) is suitable for
+            the pattern specified. Property support in formatters allows things
+            like grouping separators to be disabled, negative prefix and suffix
+            access and more [TODO].
+          </p>
+        </section>
+      </section>
+      <p>
+        <a href="items.html"><icon src="../images/nextpage.gif" alt="nextpage"/></a>
+      </p>
+    </section>
+  </body>
+</document>

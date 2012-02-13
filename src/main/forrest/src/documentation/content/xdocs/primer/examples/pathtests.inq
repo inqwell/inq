@@ -1,0 +1,57 @@
+// Set up some node structure to test our paths against.
+// First, create an ordered map (so we can show vector access as well)
+omap g.h;
+
+// Add some nodes. Use numbers that make vector tests obvious
+// (ok vectors start from zero but you know...)
+int g.h.a1.n = 11;
+int g.h.a2.n = 22;
+int g.h.a3.n = 33;
+
+// Value to test vector access with. Should result in node a3
+int m = 2;
+
+// Declare a vector path.
+any vp = path(g.h.[m].n);
+
+// Apply it
+{vp};
+
+// Change the variable used for vectoring
+m = 1;
+
+// Apply the path again. Now 22 is returned
+{vp};
+
+// Declare a substitution path. At the moment $stack.x does not exist
+any sp = path(g.h.{x}.n);
+
+string x = "a2";
+
+// Now we've got $stack.x apply the path.
+{sp};
+
+// Change x and apply the path again. Because the substitution was not
+// resolved when the path was created the new value of x is honoured
+x = "a1";
+{sp};
+
+// Perform a similar test, this time with the substitution resolved
+// when the path is declared.
+string y = "a3";
+any sp = path(g.h.{y}.n);
+
+// Apply it
+{sp};
+
+// Change y and apply the path again. There's no change - we still get 33.
+y = "a1";
+{sp};
+
+// Finally, note that it is an error if a path substution, when applied,
+// does not resolve
+any sp = path(g.h.{z}.n);
+{sp};
+
+
+

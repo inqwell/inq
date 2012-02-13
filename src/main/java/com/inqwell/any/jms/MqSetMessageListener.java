@@ -57,7 +57,7 @@ public class MqSetMessageListener extends AbstractFunc implements Cloneable
     if (f == null)
       nullOperand(f_);
     
-    if (AnyNull.isNullInstance(f))
+    if (AnyNull.isNull(f))
       mc.setMessageListener(null);
     else
     {

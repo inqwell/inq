@@ -86,6 +86,8 @@ public class NodesOf extends    AbstractFunc
         ret.add(node);
       }
     };
+    ln.setTransaction(getTransaction());
+    ln.setLineNumber(getLineNumber());
     ln.execFunc(container);
     
     return ret;

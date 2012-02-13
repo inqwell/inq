@@ -124,7 +124,7 @@ public class ListenTo extends    AbstractFunc
     }
     */
 
-    EventDispatcher ed = new EventDispatcher();
+    EventDispatcherListeningTo ed = new EventDispatcherListeningTo(listenTo);
     
     if (Globals.isServer())
       ed.setConcurrentSafe(true);
@@ -317,6 +317,32 @@ public class ListenTo extends    AbstractFunc
     public Array getDesiredEventTypes()
     {
       return eventTypes_;
+    }
+  }
+  
+  // Encapsulate the node the dispatcher is listening to, so that it is not
+  // necessary to know it when unlistening.
+  public static class EventDispatcherListeningTo extends EventDispatcher
+  {
+    private AnyWeakReference listeningTo_;
+    
+    private EventDispatcherListeningTo(Any listeningTo)
+    {
+      super();
+      listeningTo_ = new AnyWeakReference(listeningTo);
+    }
+    
+    private Any getListeneingTo()
+    {
+      return listeningTo_.getAny();
+    }
+    
+    public EventGenerator unlisten()
+    {
+      EventGenerator eg = (EventGenerator)getListeneingTo();
+      if (eg != null)
+        eg.removeEventListener(this);
+      return eg;
     }
   }
 }

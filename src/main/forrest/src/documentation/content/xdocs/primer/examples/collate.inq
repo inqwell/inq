@@ -1,0 +1,7 @@
+collator c;
+collate(c, "hello", "world");
+collate(c, "zhello", "world");
+collate(c, "world", "world");
+collate(c, "World", "world");
+c.properties.strength = STRENGTH_SECONDARY;
+collate(c, "World", "world");

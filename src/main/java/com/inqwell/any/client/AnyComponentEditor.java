@@ -158,14 +158,6 @@ public class AnyComponentEditor extends    PropertyAccessMap
     return this;
   }
   
-  /**
-   * Whether this editor has been given its component or created
-   * its own.  If a component was supplied in <code>copyFrom</code>
-   * then the it is assumed that the editor itself has updated the
-   * model and no further action is required. Otherwise this class
-   * attempts to make an editor component and supports get/set
-   * of the editing value into that component.
-   */
   public void clearEditingValue()
   {
     if (getEditingComponent() instanceof JTextField)
@@ -370,12 +362,6 @@ public class AnyComponentEditor extends    PropertyAccessMap
       
       if (hasValue())
       {
-        // We are not interested in the value as it will
-        // be the rendered value and not the responsible
-        // value.  These may not be the same thing so refetch
-        // from the model.  Note that Inq created JTables
-        // always contain an (Inq) TableModel.
-        
         extEditor_.setRenderedValue(a);
       }
     }

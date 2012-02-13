@@ -46,10 +46,6 @@ public class ConstString extends AbstractValue
 
   public String toString()
   {
-// TODO
-//    if (this.isNull())
-//      return "<null>";
-
     if (this.isNull())
       return AnyString.EMPTY.toString();
 

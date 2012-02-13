@@ -29,4 +29,10 @@ public class ProxyFunc extends    AbstractNamedFunc
   {
     setFQName(fqName);
   }
+
+	@Override
+	public Any exec(Any a) throws AnyException
+	{
+		throw new UnsupportedOperationException();
+	}
 }

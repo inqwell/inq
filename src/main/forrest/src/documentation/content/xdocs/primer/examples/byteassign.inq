@@ -1,0 +1,6 @@
+// Demonstrate implicit type conversion between integer (literals) and byte
+byte b;
+b = 127;
+b = 128;
+b = -128;
+b = -127;

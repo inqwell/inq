@@ -336,13 +336,11 @@ public class AnyRenderInfo extends    NodeFunction
 
 	public Any resolveDataNode(Any root, boolean force) throws AnyException
 	{
-    //return resolveDataNode(root, force, true);
     return resolveDataNode(root, force, false);
   }
 
 	public Any resolveDataNode(Any root, boolean force, boolean build) throws AnyException
 	{
-    //return resolveDataNode(root, force, build, Globals.process__.getTransaction());
     return resolveDataNode(root, force, false, Globals.getProcessForCurrentThread().getTransaction());
 	}
 
@@ -736,16 +734,6 @@ public class AnyRenderInfo extends    NodeFunction
     throw new UnsupportedOperationException();
   }
 
-  public void setAux(Any aux)
-  {
-    throw new UnsupportedOperationException();
-  }
-  
-  public Any getAux()
-  {
-    throw new UnsupportedOperationException();
-  }
-  
   public void setPrivilegeLevels(Map levels, Any key, boolean merge)
   {
     throw new UnsupportedOperationException();
@@ -801,6 +789,11 @@ public class AnyRenderInfo extends    NodeFunction
     return 1;
   }
 
+  public boolean valueEquals(Map m)
+  {
+    return this.equals(m);
+  }
+  
   public Any getNameInParent()
   {
     throw new UnsupportedOperationException();

@@ -65,8 +65,6 @@ public class RemoveFrom extends    AbstractFunc
 
   public Any exec(Any a) throws AnyException
   {
-//  	System.out.println ("Removing " + node_ + " " + key_);
-  	
 	  Any node = null;
     Transaction t = getTransaction();
 	  if (!iterMode_)
@@ -77,10 +75,10 @@ public class RemoveFrom extends    AbstractFunc
 	  }
 	  else
 	  {
-	  	// If we are doing a <remove-iter> then we are
-	  	// nested inside a <for-each> and the context node
-	  	// is the one being removed.
-	  	node = a;
+	  	// If we are doing a removeiter() then we are
+	  	// nested inside a foreach and the node
+	  	// being removed is $loop
+	  	node = t.getLoop();
 	  	
 	  	parentNode_ = (Composite)t.getIter().getIterRoot();
 	  }
@@ -103,13 +101,6 @@ public class RemoveFrom extends    AbstractFunc
 																									raiseEvent_,
 																									BooleanI.class);
 																									
-  	//System.out.println ("Removing " + node + " " + key);
-  	
-    //if ((raiseEvent.getValue()) &&
-				//(node instanceof EventGenerator))
-    //if (raiseEvent.getValue())
-    //{
-      
   	// Before actually doing the removal, try to determine the
   	// parent's name for this node, and the parent itself
     // First the parent name:

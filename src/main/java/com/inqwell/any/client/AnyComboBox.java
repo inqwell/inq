@@ -313,7 +313,7 @@ public class AnyComboBox extends AnySortView
   
   public void setEditable(boolean editable)
 	{
-    super.setEditable(editable);
+    // TODO: remove super.setEditable(editable);
     c_.setEditable(editable);
     if (renderInfo_ != null)
       renderInfo_.setEditable(editable);
@@ -331,6 +331,14 @@ public class AnyComboBox extends AnySortView
       addAdaptedEventListener(docListener_);
     }
 	}
+
+  public boolean isEditable()
+  {
+    if (renderInfo_ == null)
+      return c_.isEditable();
+
+    return renderInfo_.isEditable();
+  }
 
 	public JComponent getBorderee()
 	{

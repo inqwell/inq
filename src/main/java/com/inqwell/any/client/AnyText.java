@@ -67,18 +67,6 @@ public class AnyText extends AnyDocView
     textProperties__.add(docEventsWhenNotEditable__);
 	}
 
-	/**
-	 * No-args constructor for XML
-	 */
-  public AnyText()
-  {
-	}
-
-  public AnyText(Container c)
-  {
-  	super(c);
-	}
-
 	public void setObject(Object o)
 	{
 		if (o instanceof JPanel)

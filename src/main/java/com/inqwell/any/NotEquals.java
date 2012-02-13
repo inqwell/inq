@@ -95,7 +95,7 @@ public class NotEquals extends RelationalOperator
 		if (Globals.isServer() && m.hasIdentity() && m2.hasIdentity())
       result_ = getBooleanResult(m != m2);
     else
-      result_ = getBooleanResult(!(m.getMap().equals(m2.getMap())));
+      result_ = getBooleanResult(!(m.valueEquals(m2)));
   }
   
   public void visitSet(Set s)

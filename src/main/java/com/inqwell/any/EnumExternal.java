@@ -43,9 +43,20 @@ public class EnumExternal extends    AbstractFunc
     Any last   = expr_.getPath();
     
     Descriptor d = parent.getDescriptor();
-
-    if (!d.isEnum(last))
-      operandError(expr_, "is not an enumerated field");
+    
+    if (d == Descriptor.degenerateDescriptor__)
+    {
+      if (!(expr instanceof NativeDescriptor.NativeEnumProto))
+        operandError(expr_, "Cannot determine operand's type");
+      
+      d = ((NativeDescriptor.NativeEnumProto)expr).getDescriptor();
+      last = d.getName();
+    }
+    else
+    {
+      if (!d.isEnum(last))
+        operandError(expr_, "is not an enumerated field");
+    }
     
     if (expr instanceof Value)
     {

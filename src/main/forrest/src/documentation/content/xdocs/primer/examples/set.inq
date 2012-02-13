@@ -1,0 +1,17 @@
+// declare a set and initialise it with three items
+set s = (1,2,3);
+
+// Adding an item that already exists has no effect
+s += 3;
+
+// Add another item
+s += 4;
+
+// Remove an item
+s -=2;
+
+// The set does contain 4...
+contains(s, 4);
+
+// ...but it doesn't contain 5
+contains(s, 5);

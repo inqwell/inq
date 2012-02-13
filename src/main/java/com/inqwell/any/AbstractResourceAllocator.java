@@ -431,7 +431,13 @@ public abstract class AbstractResourceAllocator extends    AbstractAny
           }
           catch (InterruptedException e)
           {
-            AnyException.throwExternalException (e); // we were interrupted
+            // we were interrupted or killed
+            if (Globals.getProcessForCurrentThread().killed())
+            {
+              throw new ProcessKilledException(e);
+            }
+            else
+              throw new ContainedException(e);
           }
         }
         

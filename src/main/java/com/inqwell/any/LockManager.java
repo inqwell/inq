@@ -50,6 +50,10 @@ public final class LockManager
   // the object.
   private Map pendingNotify_ = AbstractComposite.simpleMap();
   
+  // Relating to the above, whether the notification should
+  // be all or just one.
+  private Set notifyAll_     = AbstractComposite.set();
+  
   // List of process in deadlock with each other.
   Array list_ = AbstractComposite.array();
 
@@ -241,7 +245,11 @@ public final class LockManager
             {
               removeLockWait(p, a);
               p.setLockWaitObject(null, 0);
-              throw new ContainedException(e);
+              
+              if (p.killed())
+                throw new ProcessKilledException(e);
+              else
+                throw new ContainedException(e);
             }
           }
 
@@ -354,16 +362,20 @@ public final class LockManager
           {
             Array waiters = (Array)wait_.get(a);
             Process wp = (Process)waiters.get(0);
+            boolean all = notifyAll_.contains(a);
+            
             // Just in case of value-based equality semantics.
             Any na = wp.getWaitingObject();
-        //System.out.println("Pended notify on " + a);
-        //System.out.println("a is now " + na + " from process " + wp);
             synchronized(na)
             {
-              //System.out.println(Thread.currentThread().getName() + " pended notify on " + a);
-              na.notify();
+              if (all)
+                na.notifyAll();
+              else
+                na.notify();
             }
             pendingNotify_.remove(a);
+            if (all)
+              notifyAll_.remove(a);
           }
 
           // Check for any process waiting to acquire the lock.  If there are
@@ -552,10 +564,6 @@ public final class LockManager
     Any   ret       = AnyBoolean.TRUE;
     int   lockCount = 0;
 
-    // We synchronize on mutex_ even though wait() is a different
-    // piece of functionality. [  When a process locks an object
-    // we check if there would be deadlock because of any wait()
-    // operations in progress. bollocks ]
     synchronized (mutex_)
     {
       // Check if the specified process holds any lock(s) on the
@@ -623,10 +631,13 @@ public final class LockManager
     }
     catch (InterruptedException ie)
     {
-      // Deadlock victim - another process about to perform
+      // Killed or deadlock victim - another process about to perform
       // a lock() operation sees that we hold the lock and
-      // are waiting indefinitely for notificaiton.
-      throw new ContainedException(ie);
+      // are waiting indefinitely for notification.
+      if (p.killed())
+        throw new ProcessKilledException(ie);
+      else
+        throw new ContainedException(ie);
     }
     finally
     {
@@ -657,7 +668,7 @@ public final class LockManager
    * <code>false</code> if there were no processes waiting
    * on the specified object.
    */
-  public boolean notifyVia(Any a, Process p)
+  public boolean notifyVia(Any a, Process p, boolean all)
   {
     boolean ret    = false;
     boolean pended = false;
@@ -669,10 +680,10 @@ public final class LockManager
         ret = true;
         Array waiters = (Array)wait_.get(a);
         Process wp = (Process)waiters.get(0);
+        
         // Just in case of value-based equality semantics.
-        //System.out.println("Notifying on " + a);
         a = wp.getWaitingObject();
-        //System.out.println("a is now " + a + " from process " + wp);
+        
         // If there is a lock on the object then we must hold it.
         // If so pend the notify until we release the lock.  As
         // with waitFor above, it is not compulsory for a notifying
@@ -691,7 +702,10 @@ public final class LockManager
           {
             // consider removing test as should never be violated
             pendingNotify_.add(a, p);
-            //System.out.println(Thread.currentThread().getName() + " pending notify on " + a);
+            
+            if (all)
+              notifyAll_.add(a);
+            
             pended = true;
           }
           else
@@ -709,8 +723,10 @@ public final class LockManager
     {
       synchronized(a)
       {
-        //System.out.println(Thread.currentThread().getName() + " unpended notify on " + a);
-        a.notify();
+        if (all)
+          a.notifyAll();
+        else
+          a.notify();
       }
     }
     return ret;

@@ -1,0 +1,435 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright 2006 Inqwell Ltd.
+-->
+<!DOCTYPE document PUBLIC "-//APACHE//DTD Documentation V2.0//EN" "http://forrest.apache.org/dtd/document-v20.dtd">
+<document>
+  <header>
+  <title>Inq Hierarchical Data Structures</title>
+  </header>
+  <body>
+    <section id="containment">
+      <title>The Containment Hierarchy</title>
+      <p>
+        Inq uses the recursively defined data structure of a node that
+        can contain any number of named child nodes to represent all aspects
+        of an application. All entities, whether data, algorithms, user
+        interface components, indeed anything accessible from the Inq
+        language are represented by such nodes.
+        The exact type of a node, and therefore the operations that can be
+        performed on it, is not known until runtime.
+      </p>
+      <p>
+        Nodes that can contain named children are Maps, that is, such a node yields
+        a chosen child by the application of some key.
+      </p>
+    </section>
+    <section id="nodepaths">
+      <title>Node Paths</title>
+      <p>
+        To address a particular node a node path is applied from some starting point. The
+        simplest type of node path takes the form
+      </p>
+      <source>foo.bar</source>
+      <p>
+        A path consists of a number of elements, each separated by a delimiter. In the
+        above example the elements are Inq identifiers and the delimiter is the period
+        character.
+      </p>
+      <figure src="images/path.png" alt="Node path"/>
+      <p>
+        When applied to the structure shown in the diagram the result is the
+        string <code>"Hello, World"</code>.
+      </p>
+      <p>
+        If a path does not resolve then its result
+        is <em>unresolved null</em> (discussed further when considering
+        the <a href="types.html#nullconst">null constant</a>).
+
+      </p>
+      <!--
+      <p>
+        This is known as <em>strict</em> path resolution. The delimiter character
+        <code>"*"</code> can also be used, and these two delimiters can be mixed
+        within a path specification. The use of <code>"*"</code> switches the
+        resolution to <em>lazy</em>. When lazy resolution is in effect and the
+        current path element cannot be found a scan is performed from the current
+        node in an attempt to find a matching node name.
+      </p>
+      <p>
+        The children of the current node are examined in turn and each is tested
+        for the presence of a child with the desired name. If one is found it
+        is chosen as the current node for the application of
+        the next path element. However, the order of iteration at the current
+        node is not defined. Consider the following structure:
+      </p>
+      <p>
+        If a path of <code>p.q*s</code> is applied starting from <code>node1</code>
+        it is undefined whether <code>node7</code> or <code>node9</code> would be
+        the resolved target. An Inq node path can only return a single node,
+        or <code>null</code> if the path cannot be resolved. No attempt is made
+        to report ambiguity or to create a set of qualifying nodes.
+      </p>
+      -->
+      <!--
+      <p>
+        Although an ambiguous node path may not appear to be of much use, there are
+        occasions when it does not matter what the target node is, in particular
+        when node events are solicited. This is discussed further when
+        considering event specifications.
+      </p>
+      -->
+    </section>
+    <section id="contextnode">
+      <title>The Context Node</title>
+      <p>
+        An Inq process environment provides a root node under which all aspects
+        of the application running within that process are built. Inq script runs
+        against a specific node, known as
+        the <em>context node</em>. This is analogous
+        to the concept of a 'current working directory'.
+      </p>
+      <figure src="images/path2.png" alt="Node path"/>
+      <p>
+        The context node is
+        the node from which all path specifications qualified with
+        the <code>$this</code> prefix will be applied. In the above diagram, for
+        example, if the
+        context node were specified by the path <code>p.q.x</code> then the context
+        node would be <code>node4</code>. A context node typically defines the
+        root of a particular sub-division of an application. Two different contexts
+        may hold similar items beneath them, if they represent two instances of,
+        say, a Customer Editor tool.
+      </p>
+      <p>
+        Because the context node is a descendent of a process's root node, any
+        structure built there remains accessible for the lifetime of the process
+        or until wilfully removed.
+      </p>
+    </section>
+    <section id="thestack">
+      <title>The Stack</title>
+      <p>
+        When Inq script runs a call stack is established. The stack is used
+        to pass arguments and hold temporary variables. Subsequent stack frames are
+        created as functions are called.
+      </p>
+      <p>
+        The stack can be referenced with paths of the form <code>$stack.p.q</code>
+        but because the stack is referenced most often it is the default starting
+        point for path resolution and the <code>$stack.</code> prefix is optional.
+      </p>
+      <p>
+        Stack frames are unwound as functions return to their caller. Anything
+        built on the stack becomes unreferenced once its frame is unwound.
+      </p>
+    </section>
+    <section id="pathprefices">
+      <title>Path Prefices</title>
+      <p>
+        If a path contains no special prefix then it is applied relative to
+        the stack. However, there are a number of prefix tokens that have the
+        following meanings
+      </p>
+      <table>
+        <tr>
+          <th>Token</th>
+          <th>Meaning</th>
+        </tr>
+        <tr>
+          <td><code>$this</code></td>
+          <td>
+            Resolves to the current context node.
+          </td>
+        </tr>
+        <tr>
+          <td><code>$root</code></td>
+          <td>Resolves to the process's root node.</td>
+        </tr>
+        <tr>
+          <td><code>$stack</code></td>
+          <td>
+            Resolves to the current stack frame. This is the default.
+          </td>
+        </tr>
+        <tr>
+          <td><code>$process</code></td>
+          <td>Resolves to the executing process.</td>
+        </tr>
+        <tr>
+          <td><code>$loop</code></td>
+          <td>Resolves to the iteration loop child.</td>
+        </tr>
+        <tr>
+          <td><code>$path</code></td>
+          <td>Resolves to a <a href="#pathfn"><code>path</code></a> which is the path specification to the
+          node given by <code>$this</code>.
+          </td>
+        </tr>
+        <tr>
+          <td><code>$catalog</code></td>
+          <td>Resolves to the global catalog available to all processes.</td>
+        </tr>
+        <tr>
+          <td><code>$properties</code></td>
+          <td>Provides access to the Java<sup>TM</sup> system properties</td>
+        </tr>
+          <tr>
+            <td><code>$uidefaults</code></td>
+            <td>Provides access to the User Interface default property settings.</td>
+          </tr>
+      </table>
+    </section>
+    <!--
+    <section id="pathsyntax">
+      <title>Specifying Paths in Inq Source</title>
+      <p>
+        A node path is the simplest form of expression in Inq source and represents
+        a reference to a variable. An example usage is
+      </p>
+      <source>a.b.c = p.q.r + 32;</source>
+      <p>
+
+      </p>
+    </section>
+    -->
+    <section id="idkeywords">
+      <title>Identifiers and Reserved Words</title>
+      <p>
+        Inq has a significant number of reserved words arising from
+        its syntax and built-in functions.
+        A path containing more than one element is always recognised as such
+        because the presence of delimiters remove any ambiguity, however
+        single-element, stack-assumed paths will generate an error
+        if they use a reserved word. This can be resolved by the (benign)
+        prefix of the period character. For example, Inq supports
+        a <code>length</code> function to return the length of a string.
+        The following paths are legal:
+      </p>
+      <source>
+vars.length;
+.length;
+</source>
+      <p>
+        However this is not:
+      </p>
+      <source>
+length;
+</source>
+    </section>
+    <section id="complexpath">
+      <title>Complex Path Formats</title>
+      <p>
+        Inq supports a syntax in node paths for substitution of path
+        elements and node access by vector.
+      </p>
+      <section id="elementsub">
+        <title>Path Element Substitution</title>
+        <p>
+          A simple path specification is appropriate where a node path is known in
+          advance and does not require run-time substitution. Under some circumstances,
+          however, it is desirable to evaluate one or more components of a path
+          specification as the result of other path references. Paths of this nature
+          take the form
+        </p>
+        <source>a.{p.q.r}.c;</source>
+        <p>
+          A path element contained within braces is itself evaluated and the result
+          used as the key applied at the current step in path resolution. In the
+          example, the result of the path <code>p.q.r</code> is applied to the node
+          at <code>a</code> to yield the appropriate child node. This node, in turn,
+          then has the path <code>c</code> applied to it.
+        </p>
+        <p>
+          If the path <code>p.q.r</code> resolves to
+          a <code>path()</code> (see below) then its elements are used to continue
+          the resolution. As a convenience, if a string is yielded then it is
+          tokenized into individual path elements.  In the above example,
+          if <code>p.q.r</code> resolves to <code>x.y.z</code> then the
+          effective node specification overall is <code>a.x.y.z.c</code>
+        </p>
+        <p>
+          The substitution does not have to result in a path or a string and a
+          result of any other type is applied as a single path component. An
+          example of the use of this type of substitution is given when
+          discussing <a href="structures.html">building node structures</a>.
+        </p>
+      </section>
+      <section id="vectoraccess">
+        <title>Vector Access</title>
+        <p>
+          If a map is orderable then its
+          children can be accessed by a zero-based vector index as well as by name.
+          The syntax for such a path is as follows
+        </p>
+        <source>customers[3].ContactDetails.Fax;</source>
+        <p>
+        The square bracket can contain either
+        </p>
+        <ol>
+          <li>the literal string <code>@first</code></li>
+          <li>the literal string <code>@last</code></li>
+          <li>a literal integer, (<code>0</code> is not equivalent
+              to <code>@first</code>, see below)</li>
+          <li>a node path that resolves to an integer</li>
+        </ol>
+        <p>
+          An index that is out of range generates an exception. This includes
+          the value zero when the vector is empty, however sometimes it is
+          desirable to allow this case to result in unresolved null. Applying
+          a path of the form <code>customers[@first]</code> results in the
+          zero-th vector entry or unresolved null when the vector is empty:
+        </p>
+        <source>
+any firstEntry = customers[@first];
+if (firstEntry)
+{
+  // Do something with firstEntry
+}
+</source>
+        <p>
+          Using <code>@last</code> is a more succinct and efficient expression
+          of
+        </p>
+        <source>
+any entries = count(customers) - 1;
+customers[entries]
+</source>
+        <p>
+          As well as ordered maps, Inq also supports arrays which offer vector access
+          only. The capabilities of the various container nodes available are
+          discussed in the section
+          on <a href="types.html#containertypes">Container Types</a>.
+          A run-time error occurs if the node at which the vector access is applied
+          does not support vector addressing.
+        </p>
+      </section>
+      <section id="lazy">
+        <title>Lazy Evaluation</title>
+        <p>
+          Path elements may be delimited with the <code>*</code> character, which
+          indicates <em>lazy evaluation</em> of the node path. In this case, if the
+          current node does not contain the following element a breadth-wise iteration
+          is performed to search for it.
+          Referring to the above diagram, if a path of <code>p.q*s</code> is
+          applied starting from <code>node1</code>
+          it is undefined whether <code>node7</code> or <code>node9</code> would be
+          returned.
+        </p>
+        <p>
+          Lazy evaluation can be used to address nodes, however it is more often
+          applied when specifying paths as a way of discriminating events. This
+          is covered when discussing how Inq scripts can
+          explicitly <a href="events.html#evlisten">listen for events</a>.
+        </p>
+      </section>
+    </section>
+    <section id="pathfn">
+      <title>The path Function</title>
+      <p>
+        Certain Inq functions require a path argument, rather than the node it
+        resolves to. The <code>path</code> function protects a path from being
+        resolved:
+      </p>
+      <source>
+path(p.q.r);
+</source>
+      <p>
+        If the argument contains substitutions then <code>path</code> attempts
+        to resolve them. Those that succeed are placed in the resulting path,
+        however any that fail remain unresolved in the path until it is applied
+        somehow. Vector access is always resolved every time a path is applied.
+        Here are some examples
+        in <a class="fork" href="examples/pathtests.inq">pathtests.inq</a> that
+        illustrate these outcomes. Output is interspersed where appropriate:
+      </p>
+      <source>
+// Set up some node structure to test our paths against.
+// First, create an ordered map (so we can show vector access as well)
+omap g.h;
+
+// Add some nodes. Use numbers that make vector tests obvious
+// (ok vectors start from zero but you know...)
+int g.h.a1.n = 11;
+int g.h.a2.n = 22;
+int g.h.a3.n = 33;
+
+// Value to test vector access with. Should result in node a3
+int m = 2;
+
+// Declare a vector path.
+any vp = path(g.h.[m].n);
+<strong>$stack.g.h.[$stack.m].n</strong>
+
+// Apply it
+{vp};
+<strong>33</strong>
+
+// Change the variable used for vectoring
+m = 1;
+
+// Apply the path again. Now 22 is returned
+{vp};
+<strong>22</strong>
+
+// Declare a substitution path. At the moment $stack.x does not exist
+any sp = path(g.h.{x}.n);
+<strong>$stack.g.h.{$stack.x}.n</strong>
+
+string x = "a2";
+
+// Now we've got $stack.x apply the path.
+{sp};
+<strong>22</strong>
+
+// Change x and apply the path again. Because the substitution was not
+// resolved when the path was created the new value of x is honoured
+x = "a1";
+{sp};
+<strong>11</strong>
+
+// Perform a similar test, this time with the substitution resolved
+// when the path is declared.
+string y = "a3";
+any sp = path(g.h.{y}.n);
+<strong>$stack.g.h.a3.n</strong>
+
+// Apply it
+{sp};
+<strong>33</strong>
+
+// Change y and apply the path again. There's no change - we still get 33.
+y = "a1";
+{sp};
+<strong>33</strong>
+
+// Finally, note that it is an error if a path substution, when applied,
+// does not resolve
+any sp = path(g.h.{z}.n);
+{sp};
+<strong>file:/C:/.../pathtests.inq
+com.inqwell.any.AnyRuntimeException: Substitution did not resolve {$stack.z}
+      at com.inqwell.any.LocateNode$ResolvePathComponent.visitFunc(LocateNode.java:1091)
+      at com.inqwell.any.AbstractFunc.accept(AbstractFunc.java:108)
+      at com.inqwell.any.LocateNode$LocateAction.resolvePathItem(LocateNode.java:563)
+      at com.inqwell.any.LocateNode$LocateAction.visitMap(LocateNode.java:649)
+      at com.inqwell.any.AbstractMap.accept(AbstractMap.java:75)
+      at com.inqwell.any.LocateNode.apply(LocateNode.java:382)
+      at com.inqwell.any.LocateNode.doLocate(LocateNode.java:366)
+      at com.inqwell.any.LocateNode.exec(LocateNode.java:199)
+      at com.inqwell.any.AbstractFunc.execFunc(AbstractFunc.java:86)
+      at com.inqwell.any.EvalExpr.evalFunc(EvalExpr.java:112)
+      at com.inqwell.any.EvalExpr.evalFunc(EvalExpr.java:149)
+      at com.inqwell.any.parser.Inq.main(Inq.java:516)
+file:/C:/.../pathtests.inq &lt;parser&gt;(54)
+
+Inq done</strong>
+</source>
+      <p>
+        The <code>path</code> function is used in the <code>add</code> function,
+        covered in the section on <a href="events.html">Events</a>, and
+        when specifying GUI rendering information.
+      </p>
+    </section>
+  </body>
+</document>

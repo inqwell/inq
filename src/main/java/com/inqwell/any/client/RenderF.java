@@ -82,7 +82,7 @@ public class RenderF extends    AbstractFunc
     
     AnyFormat af = AnyFormat.makeFormat(ar, format.toString());
     
-    return new ConstString(af.format(ar));
+    return new AnyString(af.format(ar));
   }
 
   public Iter createIterator ()

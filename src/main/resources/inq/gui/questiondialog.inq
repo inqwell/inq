@@ -36,7 +36,7 @@
 
 package inq.gui.util;
 
-// Older - to be removed when apps like xylinq have been modified. Do not use.
+// @deprecated Older - to be removed when apps like xylinq have been modified. Do not use.
 function createQuestionDialog(string dialogName = "questionDialog", any parent)
 {
   if ($this.{dialogName})
@@ -50,20 +50,32 @@ function createQuestionDialog(string dialogName = "questionDialog", any parent)
   dialog;
 }
 
-// Use this one, as it allows the dialog to be placed anywhere rather than
-// assuming it will be placed at $this.
+/**
+ * Create (if not already existing) a utility question dialog
+ * and place it at the given path.
+ * @param dialogPath an optional path() expression where to
+ * place the dialog. If not provided then path($root.questionDialog)
+ * is assumed
+ * @parent the dialog's parent
+ * @return the dialog
+ */
 function createQuestionDialogAt(any dialogPath, any parent)
 {
   if (!dialogPath)
     any dialogPath = path($root.questionDialog);
 
-	gDialog(parent) dialog;
-
-  call createDialog(dialog, parent);
-
-  add(dialog, dialogPath);
-
-  dialog;
+  if (!{dialogPath})
+  {
+  	gDialog(parent) dialog;
+  
+    call createDialog(dialog, parent);
+  
+    add(dialog, dialogPath);
+  
+    dialog;
+  }
+  else
+    {dialogPath};
 }
 
 local function createDialog(any dialog, any parent)

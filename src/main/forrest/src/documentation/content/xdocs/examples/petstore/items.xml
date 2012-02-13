@@ -1,0 +1,641 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright 2006 Inqwell Ltd.
+-->
+<!DOCTYPE document PUBLIC "-//APACHE//DTD Documentation V2.0//EN" "http://forrest.apache.org/dtd/document-v20.dtd">
+<document>
+  <header>
+    <title>Browse Items</title>
+  </header>
+  <body>
+    <section id="intro">
+      <title>Introduction</title>
+      <p>
+        The Browse Items window expands on the examples presented so far, presenting
+        the following:
+      </p>
+      <dl>
+        <dt><strong>Using the Attribute Editor</strong></dt>
+        <dd>
+          An Inq bundled dialog that, like
+          the <a href="neworder.html#itemChooser">Item Chooser</a>, offers
+          significant GUI functionality applications can use through
+          a simple programming interface. Browse Items uses the Attribute Editor to
+          adjust the <code>Status</code>, <code>Price</code> and <code>Attr1</code>
+          fields of a set of <code>Item</code>s.
+        </dd>
+        <dt><strong>Timers</strong></dt>
+        <dd>
+          Inq supports timers with its <code>timer</code> data type. Browse
+          Items uses a timer to flash an icon in the table's <em>Last Price</em>
+          column, providing a subtle alert that a pet's price has gone up
+          or down.
+        </dd>
+        <dt><strong>Database-enabled combo boxes</strong></dt>
+        <dd>
+          In the examples presented so far, combo boxes have been used
+          to select from a static list of enumerations. Browse Items
+          shows a pattern for creating a combo box whose list is a node
+          set.
+        </dd>
+      </dl>
+      <figure src="images/psbrowseitems1.png" alt="itemsbrowser"/>
+      <p>
+        The items browser is implemented in <code>gui/browseItems.inq</code>.
+      </p>
+    </section>
+    <section id="attreditor">
+      <title>Using The Attribute Editor</title>
+      <p>
+        The Attribute Editor is a reusable element contained within the Inq
+        distribution Jar file. It is an example of how significant levels
+        of (in this case GUI) functionality can be written ahead of time
+        and applied in unrelated applications designed much later.
+      </p>
+      <p>
+        Attribute Editor is a dialog that supports the bulk-update of
+        specified attributes within tabular data. Depending on their
+        data type, attributes can be increased or decreased by an absolute
+        amount or a percentage, or set to a value (which must be amongst the
+        enumerations when present). Its deployment in petstore shows all
+        these features. 
+      </p>
+      <note>To use the Attribute Editor the application must first have
+        parsed its source. In petstore this is done
+        in <code>gui/userStart.inq</code> with the
+        statement <code>exec("cp:///inq/gui/attrEditor.inq");</code>.
+      </note>
+      <section id="attrinter">
+        <title>Attribute Editor's Interface</title>
+        <p>
+          The Attribute Editor has only one global function: 
+        </p>
+        <source>
+function editAttrs(any  parent,
+                   any  table,
+                   any  columns,
+                   any  renderers,
+                   any  title,
+                   any  keyri,
+                   func okExpr,
+                   func cancelExpr)
+</source>
+        <table>
+          <caption>Attribute Editor Arguments</caption>
+          <tr>
+            <th>Name</th>
+            <th>Description</th>
+          </tr>
+          <tr>
+            <td><code>parent</code></td>
+            <td>
+              The Attribute Editor is a dialog, so it needs a parent
+              window - see <a href="neworder.html#abtdialogs">About Dialogs</a>.
+              The dialog is made PARENT_MODAL.
+            </td>
+          </tr>
+          <tr>
+            <td><code>table</code></td>
+            <td>
+              The <code>gTable</code> rendering the data being edited. The
+              row selection defines the set of items.
+            </td>
+          </tr>
+          <tr>
+            <td><code>columns</code></td>
+            <td>
+              An <code>array</code> of column names, where the names are those
+              used in the <code>map</code> supplied as the
+              table's <code>columns</code> property. These names identify
+              the attributes among those rendered by the table to be edited.
+            </td>
+          </tr>
+          <tr>
+            <td><code>renderers</code></td>
+            <td>
+              An <code>array</code> of <code>renderinfo</code> expressions. When
+              the desired attributes are not being rendered by the table (and
+              their meta data is therefore not available from the table) they
+              can instead be specified this way. Either of <code>columns</code>
+              or <code>renderers</code> may be absent but at least one
+              attribute should be specified.
+            </td>
+          </tr>
+          <tr>
+            <td><code>title</code></td>
+            <td>The title for the dialog</td>
+          </tr>
+          <tr>
+            <td><code>keyri</code></td>
+            <td>A <code>renderinfo</code> the Attribute Editor will use
+            to label the items being edited.</td>
+          </tr>
+          <tr>
+            <td><code>okExpr</code></td>
+            <td>
+              A <code>func</code> Attribute Editor calls when OK is
+              clicked.
+            </td>
+          </tr>
+          <tr>
+            <td><code>cancelExpr</code></td>
+            <td>
+              A <code>func</code> Attribute Editor calls when Cancel is
+              clicked. Optional argument.
+            </td>
+          </tr>
+        </table>
+        <p>
+          Browse Items uses the Attribute Editor to adjust the rendered
+          columns <code>itemstatus</code> (<code>Item.Status</code>),
+          <code>listprice</code> (<code>Item.ListPrice</code>)
+          and <code>Item.Attr1</code>, which is not part of the table:
+        </p>
+        <source>
+array columns = ("itemstatus", "listprice");
+array renderers = (renderinfo(typedef=Item.Attr1));
+
+call inq.gui.util:editAttrs(parent = $this,
+                            table  = $this.itemTable,
+                            columns,
+                            renderers,
+                            title  = $catalog.{$root.i18n}.ps.title.EDIT_ITEMS,
+                            keyri  = renderinfo(typedef=Item.Item),
+                            okExpr = func f = call attrCb(results));
+</source>
+        <p>
+          Say we want to adjust the price of all cats. The user can group
+          the cats by sorting the table by category (or filter by this category),
+          select those rows and use File->Edit to bring up the attribute editor:
+        </p>
+        <figure src="images/attredit.png" alt="attredit"/>
+      </section>
+      <section id="attruse">
+        <title>The Attribute Editor GUI</title>
+        <p>
+          To change an attribute, an action must be selected. If the
+          attribute is numeric the choices are increase, decrease and set. The
+          value to use is entered into the editable <em>Value</em> cell.
+        </p>
+        <figure src="images/attredit1.png" alt="attredit1"/>
+        <p>
+          The <em>Units</em> cell is a drop-down selection to determine
+          the value's meaning:
+        </p>
+        <figure src="images/attredit2.png" alt="attredit2"/>
+        <p>
+          If the attribute is an enumeration then the value is a selection:
+        </p>
+        <figure src="images/attredit3.png" alt="attredit3"/>
+        <p>
+          Individual values can be edited in the <em>New</em> table or
+          reset to their original value by double-clicking in the cell
+          of the <em>Old</em>. The current state of the <em>Attributes</em>
+          settings can be replayed using the arrow button.
+        </p>
+      </section>
+      <section id="attrcb">
+        <title>The Callback Interface</title>
+        <p>
+          When <code>inq.gui.util:editAttrs()</code> was called
+          the <code>okExpr</code> argument used
+          was <code>call attrCb(results)</code>.
+          Attribute Editor calls the user-supplied function
+          passing <code>results</code>, which is a new node set
+          containing instances of the typedef(s) being edited.
+        </p>
+        <source>
+local function attrCb(any results)
+{
+  send updateItems(items = results,
+                   thing = path($this.Item));
+}
+</source>
+        <p>
+          A general <code>updateItems</code> service is called - here is
+          what that does:
+        </p>
+        <source>
+service updateItems(any items, any thing)
+{
+  foreach(items)
+  {
+    // Get the managed instance
+    any i = read(typeof($loop.{thing}), $loop.{thing});
+    i = $loop.{thing};
+  }
+}
+</source>
+        <p>
+          If there are no exceptions thrown then normal Inq event propagation
+          will update the affected cells in the parent table view.
+        </p>
+      </section>
+    </section>
+    <section id="datacombo">
+      <title>Database-Enabled Combo Boxes</title>
+      <p>
+        The filter bar in Browse Items includes a combo-box to select
+        a category of pets. This is driven by the available instances of
+        the <code>Category</code> typedef.  
+      </p>
+      <figure src="images/category.png" alt="category"/>
+      <p>
+        The following steps are the pattern for creating such a combo box:  
+      </p>
+      <ol>
+        <li>
+          Create the combo-box and configure it with appropriate properties.
+        </li>
+        <li>
+          Establish a <code>gContext</code> event handler on the combo-box.
+        </li>
+        <li>
+          In the event handler (which runs in the combo-box's context)
+          invoke a service to yield its item list.
+        </li>
+      </ol>
+      <p>
+        To illustrate how to make such a component a reusable feature of
+        an application's GUI, petstore factors these steps out into a
+        function (local to <code>gui/psItem.inq</code> in this case but
+        perhaps global and in a utilities module more generally). Here
+        are all the related functions: 
+      </p>
+      <source>
+local function createFilterBar(any context, any i18n)
+{
+  // Create the data the filter bar components will operate on.
+  // This is an instance of Item.Filter
+  any context.vars.filter = new(Item.Filter);
+  
+  // Create a combo box whose contents are the available Category instances
+  any cbCategory = call categoryCombo(renderInfo    = renderinfo($this.vars.filter.Category,
+                                                                 typedef=Category.Category),
+                                      modelRoot     = path($this.vars.categoryList),
+                                      anyComboValue = {i18n}.ps.general.ALL
+                                     );
+     .
+     .
+     .
+}
+
+local function categoryCombo(any     renderInfo,
+                             any     modelRoot,
+                             string  anyComboValue,
+                             boolean load = true)
+{
+  gComboBox cbCategory;
+  
+  any model.internal               = renderinfo(typedef = Category.Category);
+  any model.external               = renderinfo(typedef = Category.Name);
+  cbCategory.properties.model      = model;
+  cbCategory.properties.renderInfo = renderInfo;
+  
+  cbCategory.properties.modelRoot = modelRoot;
+
+  if (anyComboValue)
+    cbCategory.properties.nullText = anyComboValue;
+
+  // Order the data
+  array order = ( path($loop.Category.Name) );
+  cbCategory.properties.modelSort = order;
+
+  // By default send to the server to acquire the data for the
+  // combo box list. This can only be done when the component
+  // is placed into the context
+  if (load)
+    gEvent(cbCategory, call categoryInContext(), event=(gContext));
+
+  // returns
+  cbCategory;
+}
+
+local function categoryInContext()
+{
+  send loadCategories(at = @component.properties.modelRoot);
+}
+</source>
+      <p>
+        If you have read the previous sections about petstore then there
+        is nothing new here.
+      </p>
+      <p>
+        The event handler function, <code>categoryInContext()</code> invokes
+        the service <code>loadCategories()</code>. This service places the
+        list at the specified node path, raising an event to propagate the
+        list to the client with a flow analogous to that discussed
+        in <a href="myorders.html#serverapply">My Orders</a>. The script
+        for this can be found in <code>psCategory.inq</code>. Although not
+        set up in this example, since the list content is server-side
+        state it is not uncommon to establish a <em>listener</em> for
+        the creation of new categories so that the combo-box can be maintained
+        behind the scenes. As things are, if a category is deleted it will
+        be removed from the combo's list automatically. 
+      </p>
+    </section>
+    <section id="timers">
+      <title>Using Timers</title>
+      <p>
+        Inq has the ability to run timers, calling a function at some
+        future time or after a delay, either as a one-shot or, if
+        the timer's <code>period</code> property has been set, at
+        regular intervals. Browse Items uses a timer to alert the user
+        that an item's <code>LastPrice</code> field has changed, flashing
+        an icon in the table cell.
+      </p>
+      <section id="timerprops">
+        <title>Timer Properties</title>
+        <p>
+          The timer is set up in <code>setupPriceListener()</code>:
+        </p>
+        <source>
+local function setupPriceListener()
+{
+  timer t;
+  t.properties.period   = 500;     // timer runs every 1/2 second
+  t.properties.syncGui  = true;    // dispatches to GUI thread
+  t.properties.userInfo = set s;   // the set of rows being timed
+      .
+      .
+</source>
+        <p>
+          A timer carries an item of data set up with the <code>userInfo</code>
+          property. This data is opaque to the timer itself and can be any
+          Inq type. In this example a <code>set</code> is used to make a note
+          of the rows currently being flashed.
+        </p>
+        <p>
+          Timers are supported in both client and server environments, but in the
+          client the <code>syncGui</code> property is supported and determines whether
+          the timer will run in the graphics thread. In fact, as we see below,
+          this timer does not directly manipulate the GUI so this property is not
+          important in this case.
+        </p>
+        <p>
+          The timer will fire repeatedly, every 500ms, by setting
+          the <code>period</code> property. Not used in this example, a future
+          time for the timer to fire can be established by setting
+          the <code>nextRuns</code> property to a <code>date</code> value.
+        </p>
+      </section>
+      <section id="timerfunc">
+        <title>Timer Action</title>
+        <p>
+          A timer's action is established by setting its <code>func</code>
+          property to a <code>func</code> variable.
+        </p>
+        <note>
+          A <code>func</code>, not a <code>cfunc</code>, is provided
+          in this example because the action makes reference to <code>$this</code>
+          and the context in which the timer's action will run is
+          encapsulated.
+        </note>
+        <p>
+          Browse Items sets its timer action with this function:
+        </p>
+        <source>
+  // Leave the timer in the context for later access
+  any $this.svars.lastPriceTimer = t;
+  
+  // 1 or 0 whether the icon is on or off
+  int $this.svars.timerState;
+
+  t.properties.func = func f = {
+                                 any userInfo = fromTimer.properties.userInfo;
+  
+                                 // Decrement the counter in each rowRoot
+                                 // being flashed. If it has reached zero then
+                                 // remove it from the set.
+                                 foreach(userInfo)
+                                 {
+                                   if ($loop.ValueHelper.Count)
+                                     --$loop.ValueHelper.Count;
+                                   else
+                                     removeiter();
+                                 }
+  
+                                 // If the userInfo set has no items
+                                 // left in it then stop the timer.
+                                 // Otherwise leave it running.
+                                 if (count(userInfo) == 0)
+                                 {
+                                   canceltimer(fromTimer);
+                                 }
+                                 
+                                 $this.svars.timerState = !$this.svars.timerState;
+                               };
+</source>
+        <p>
+          When the timer fires it places itself at <code>$stack.fromTimer</code>
+          so that the action can extract any user information it carries and
+          manipulate the timer as required. As explained further below,
+          this timer's <code>userInfo</code> property is a set of the node set
+          children whose <em>Last Price</em> cell is being flashed. Within
+          each such child a counter has been set up that the timer action
+          decrements. On reaching zero the cell is no longer flashed, so its
+          node is removed from the set. If the set becomes empty the timer
+          is cancelled, meaning it will not run again.
+        </p>
+      </section>
+      <section id="timerstart">
+        <title>Starting The Timer</title>
+        <p>
+          A timer is started with Inq's <code>starttimer()</code> function. In
+          the context of this example, how do we know when to do this? To flash
+          the <em>Last Price</em> cell a certain number of times (determined by
+          the counter discussed above) we need to know
+          that <code>Item.LastPrice</code> in any particular row has changed.
+          When discussing My Orders we saw how the client
+          can <a href="myorders.html#clientlisten">listen</a> for the order
+          items list being <em>replaced</em> so it could recalculate the order's total value.
+          We can also arrange to listen for specific <em>updates</em> occurring within
+          the node space - Browse Items does that for updates
+          to <code>Item.LastPrice</code>:
+        </p>
+        <source>
+listen ($this,
+        func f = 
+        {
+          any nodes = nodesof($this, @eventId.path);
+          any rowRoot = nodes[3];
+          
+          // Put a counter into the row
+          any rowRoot.ValueHelper = new(ValueHelper);
+
+          // The icon will flash 5 times. By using timerState we make
+          // all icons flash together. May be that is the best effect.
+          rowRoot.ValueHelper.Count = $this.svars.timerState + 10;
+          
+          // Put the rowRoot into the set of those currently being
+          // flashed by the timer.
+          any userInfo = $this.svars.lastPriceTimer.properties.userInfo;
+          userInfo + rowRoot;
+          
+          // If this was the first entry then start the timer
+          if (count(userInfo) == 1)
+            starttimer($this.svars.lastPriceTimer, 500);
+        },
+        event  = (update),
+        path   = $this.vars.itemList.%.Item,
+        fields = (LastPrice));
+</source>
+        <p>
+          The arguments to <code>listen()</code> effect the desired event dispatch
+          as follows:
+        </p>
+        <ol>
+          <li>
+            The specified event type is <code>update</code>.
+          </li>
+          <li>
+            Discrimination of the event includes the <em>path</em> it has
+            traversed from within the structure. This path is specified
+            relative to the node being listened
+            to - typically <code>$this</code>. The special
+            character <code>%</code> consumes the node-set child (whose
+            map key we don't know and want to wild-card).
+          </li>
+          <li>
+            The <code>fields</code> argument is a comma-separated list of
+            literal field names. If the fields carried in the event overlap
+            those specified in the argument the listener will fire.
+          </li>
+        </ol>
+        <note>
+          Exactly the same event discrimination would have resulted if
+          the <code>path</code> argument were replaced
+          with <code>typedef = Item</code>.  
+        </note>
+        <p>
+          The environment required by the timer action is established
+          by the listener dispatch function, so its job is to determine the
+          row the event originated in, initialise its counter and
+          add it to the set of rows being flashed. If this is the first
+          such row, the timer must be started.
+        </p>
+        <p>
+          The dispatch code makes use of the <code>nodesof()</code>
+          function. This function takes two arguments - a <em>node</em>
+          and a <em>path</em>.
+          Starting at the node, the path is applied yielding each successive
+          node and returning them as an <code>array</code>.
+        </p>
+        <p>
+          When dispatching events to an event listener Inq places something on the
+          stack it calls <code>@eventId</code>. This is a map that includes
+          the following:
+        </p>
+        <dl>
+          <dt><strong>type</strong></dt>
+          <dd>The basic event type, that is <em>update</em>, <em>create</em>,
+            <em>delete</em>, <em>add</em>, <em>remove</em> or <em>replace</em>.</dd>
+          <dt><strong>fields</strong></dt>
+          <dd>When the event is of type <em>update</em> the <code>set</code> of
+            fields that were changed in the instance.</dd>
+          <dt><strong>path</strong></dt>
+          <dd>The path the event took from its point of origination to the point
+            of dispatch.</dd>
+        </dl>
+        <p>
+          The dispatch node is <code>$this</code> so applying the event path
+          to it returns the following array
+        </p>
+        <source>
+     $this.vars.itemList.%.Item
+       ^    ^     ^      ^  ^
+nodes[ 0    1     2      3  4 ]
+</source>
+        <p>
+          and <code>nodes[3]</code> is the node set child (or the "row root"). The
+          dispatch function can then create a counter for the row, initialise it
+          and, if there are currently no rows being flashed, start the timer.
+        </p>
+      </section>
+      <section id="render">
+        <title>Rendering The Cell</title>
+        <p>
+          Having set up the counter and run the timer, how is the cell actually
+          flashed? For this example an up or down arrow icon is used to indicate
+          the direction of the price move. Once the row counter has reached zero
+          and the flashing stops, the cell foreground colour is left to indicate
+          the last direction (modeled by enumeration <code>Item.LastPriceMove</code>).
+        </p>
+        <p>
+          Accordingly, the cell must be rendered not only
+          when <code>Item.LastPrice</code> changes, but also as the counter
+          decrements. This is achieved with the <code>renderinfo</code> for the
+          cell, which refers to both these fields:
+        </p>
+        <source>
+any columns.lastprice   = renderinfo({
+                                       $this.ValueHelper.Count;
+                                       $this.Item.LastPrice;
+                                     },
+                                     typedef=Item.LastPrice);  // TODO
+</source>
+        <p>
+          The presence of both <code>ValueHelper.Count</code>
+          and <code>Item.LastPrice</code> in the <code>renderinfo</code>'s
+          expression (a block statement) means that the cell will be
+          rendered when either of these values change. The value of the
+          expression is the last statement it executed, so this expression
+          returns <code>Item.LastPrice</code> for the cell's value.
+        </p>
+        <p>
+          To render the icon and value a complex renderer component is
+          establised in a similar way to that used in
+          the <a href="neworder.html#celledit">New Order</a> window.
+          Similarly the icon and foreground colours are established with
+          a <em>style function</em>:  
+        </p>
+        <source>
+  itemTable.properties.columns.lastprice.renderer.properties.style = cfunc f =
+    call renderLastPrice();
+    .
+    .
+
+local function renderLastPrice(any component,
+                               any rowRoot)
+{
+  switch
+  {
+    when (rowRoot.Item.LastPriceMove == enum(LastPriceMove, UP))
+    {
+      any .style = $catalog.ps.styles.up;
+      any icon   = $catalog.icons.arrowup;
+    }
+    when (rowRoot.Item.LastPriceMove == enum(LastPriceMove, DOWN))
+    {
+      any .style = $catalog.ps.styles.down;
+      any icon   = $catalog.icons.arrowdown;
+    }
+    otherwise
+    {
+      any .style = $catalog.ps.styles.none;
+      any icon   = $catalog.icons.clear16;
+    }
+  }
+    
+  component.price.properties.style = .style;
+
+  if (rowRoot.ValueHelper.Count &amp;&amp; $this.svars.timerState)
+    component.icon.properties.icon = icon;
+  else
+  {
+    // If we always put an icon in (instead of setting it to null)
+    // then the cell width must always include enough space for it.
+    component.icon.properties.icon   = $catalog.icons.clear16;
+  }
+  
+  // returns no style for Inq to apply - everything required is already done
+  null;
+}
+</source>
+      </section>
+      <p>
+        <a href="orderprocessor.html"><icon src="../images/nextpage.gif" alt="nextpage"/></a>
+      </p>
+    </section>
+  </body>
+</document>

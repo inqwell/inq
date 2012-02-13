@@ -79,6 +79,20 @@ public final class RemoteDescriptor extends    AbstractAny
     }
 	}
 
+  public void join(Map m, Transaction t) throws AnyException
+  {
+    startUse();
+    try
+    {
+      abortNoDelegate();
+      delegate_.join(m, t);
+    }
+    finally
+    {
+      endUse();
+    }
+  }
+
 	public void mutate(Map newVal,
                      Map oldVal,
                      Map context,

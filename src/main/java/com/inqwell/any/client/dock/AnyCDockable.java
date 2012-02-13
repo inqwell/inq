@@ -44,6 +44,8 @@ public abstract class AnyCDockable extends    AnyView
                                    implements WindowF
 {
   private CDockable d_;
+  private DockActionContainer actions_;
+  
   private int       defaultCloseOperation_ = AnyWindow.HIDE_ON_CLOSE.getValue();
   
   //private NotifyWindow notifyWindow_;
@@ -89,7 +91,7 @@ public abstract class AnyCDockable extends    AnyView
   }
 
   @Override
-  protected RenderInfo getRenderInfo()
+  public RenderInfo getRenderInfo()
   {
     // TODO Auto-generated method stub
     return null;
@@ -276,35 +278,43 @@ public abstract class AnyCDockable extends    AnyView
   
   public void setActions(Any actions)
   {
+    if (actions instanceof DockRootActionContainer)
+    {
+      if (AnyNull.isNull(actions))
+        return;
+      
+      // Add given actions. If layout was used to compose the actions then
+      // find them in the AnyRootActionContainer
+      ArrayList<CAction> cactions = ((DockRootActionContainer)actions).getActions();
+      replaceActions(cactions);
+    }
+  }
+  
+  private void applyActions(RootActionContainer actions)
+  {
+    replaceActions(actions.getActions());
+  }
+  
+  private void replaceActions(ArrayList<CAction> cactions)
+  {
     DefaultCDockable d = getDefaultCDockable();
     
     // Clear existing actions
     int i = d.getActionCount();
     while(i > 0)
       d.removeAction(--i);
+
+    // Put in new ones
+    for (CAction action : cactions)
+      d.addAction(action);
+  }
+  
+  public Any getActions()
+  {
+    if (actions_ == null)
+      actions_ = new DockActionContainer();
     
-    if (AnyNull.isNull(actions))
-      return;
-    
-    // Add given actions. If layout was used to compose the actions then
-    // find them in the AnyRootActionContainer
-    if (actions instanceof AnyRootActionContainer)
-    {
-      ArrayList<CAction> cactions = ((AnyRootActionContainer)actions).getActions();
-      for (CAction action : cactions)
-      {
-        d.addAction(action);
-      }
-    }
-    else
-    {
-      Iter ii = actions.createIterator();
-      while (ii.hasNext())
-      {
-        AnyCAction action = (AnyCAction)ii.next();
-        d.addAction(action.getCAction());
-      }
-    }
+    return new DockRootActionContainer(actions_);
   }
 
   public void setDefaultCloseOperation(IntI closeOperation)
@@ -388,6 +398,22 @@ public abstract class AnyCDockable extends    AnyView
         //   1 remove from CControl
         //   2 should orphan the node?
       }
+    }
+  }
+  
+  private class DockActionContainer extends RootActionContainer
+  {
+    public void afterLayout()
+    {
+      AnyCDockable.this.applyActions(this);
+    }
+  }
+  
+  static private class DockRootActionContainer extends AnyRootActionContainer
+  {
+    private DockRootActionContainer(RootActionContainer actions)
+    {
+      super(actions);
     }
   }
 

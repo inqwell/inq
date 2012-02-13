@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright 2006 Inqwell Ltd.
+-->
+<!DOCTYPE document PUBLIC "-//APACHE//DTD Documentation V2.0//EN" "http://forrest.apache.org/dtd/document-v20.dtd">
+<document>
+  <header>
+    <title>Running Hello World</title>
+  </header>
+  <body>
+    <section id="reqs">
+      <title>Requirements</title>
+      <p>
+        Inq requires Java<sup>TM</sup> J2SE 1.6. If necessary, download
+        it for your platform from <a class="fork" href="ext:j2sedl">JavaSoft</a>.
+      </p>
+    </section>
+    <section id="server">
+      <title>Start The Server</title>
+      <p>
+        Change directory to the root of the distribution.
+        Assuming the distribution's <code>bin</code> directory is on the path, start
+        the server as follows:
+      </p>
+      <source>
+inq -server
+</source>
+      <p>
+        The by default, the server binds to port 6556, so this needs to be available.
+        You should then see output like this:
+      </p>
+      <source>
+Inq Server
+Copyright (c) InqWell Ltd 2002-2008
+Java Compiler Compiler Version 3.2 Copyright (c) 2003 Sun Microsystems, Inc. All Rights Reserved.
+DeadlockScanner Started
+Server Started
+speakinq Socket Listener Started on port 6556
+</source>
+    </section>
+    <section id="load">
+      <title>Load The Hello World Server Script</title>
+      <p>
+        In a separate terminal window, change to the same directory. Load the
+        hello world application into the server as follows:
+      </p>
+      <source>
+inq -load
+    -u admin
+    -p inqwell
+    -server speakinq://localhost
+    -url file:app/examples/helloworld/helloSrv.inq
+</source>
+      <p>
+        Note that the <code>-url</code> argument specifies a <em>relative</em>
+        URL. This is primarily to make these instructions the same on all platforms
+        but, as noted elsewhere, this URL is resolved by the server, not the
+        loader client. The relative resolution is thus with respect to
+        the <em>server's</em> current working directory.
+      </p>
+    </section>
+    <section id="client">
+      <title>Start The Client</title>
+      <p>
+        To start the client enter the following
+      </p>
+      <source>
+inq -client
+</source>
+      <p>
+        The login window should then appear - fill it in as shown:
+      </p>
+      <figure src="images/hellologin.png" alt="Hello World Login"/>
+      <p>
+        The password field cannot be blank but anything will do.
+        All being well the application window will then show.
+      </p>
+      <p>
+        Typing something in the text field and hitting <code>return</code>
+        will cause the label to update. Bring up a second client and you
+        will see that text entered in one is shown in the other.
+      </p>
+    </section>
+    <section id="landf">
+      <title>Try Different Look and Feels</title>
+      <p>
+        Unless specified otherwise the Inq client sets the default look and feel
+        for the platform. The Java look and feel can be specified like this:
+      </p>
+      <source>
+inq -client -lookandfeel none
+</source>
+      <figure src="images/metal.png" alt="Metal"/>
+      <p>
+        May be you have Nimbus:
+      </p>
+      <source>
+inq -client -lookandfeel nimbus
+</source>
+      <figure src="images/hellonimbus.png" alt="Hello World Nimbus"/>
+      <p>
+        Or even CDE/Motif:
+      </p>
+      <source>
+inq -client -lookandfeel cde/motif
+</source>
+      <figure src="images/loginmotif.png" alt="Hello World Nimbus"/>
+      <!--
+      <p>
+        Take a look at the next example, a <a href="../chat/index.html">chat</a>
+        application, to discover more of Inq's capabilities.
+      </p>
+      -->
+    </section>
+  </body>
+</document>

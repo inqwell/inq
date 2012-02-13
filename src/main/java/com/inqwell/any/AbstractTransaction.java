@@ -266,6 +266,11 @@ public abstract class AbstractTransaction extends    AbstractAny
     throw new UnsupportedOperationException();
   }
   
+  public boolean isModifying(Map m) throws AnyException
+  {
+    throw new UnsupportedOperationException();
+  }
+  
   public Map getCreateList(Descriptor d)
   {
     throw new UnsupportedOperationException();
@@ -293,8 +298,6 @@ public abstract class AbstractTransaction extends    AbstractAny
     Process p = getProcess();
     if (p != null)
     {
-    	//System.out.println("setLineMumber " + line);
-    	//AbstractAny.stackTrace();
       p.setLineNumber(line);
     }
   }

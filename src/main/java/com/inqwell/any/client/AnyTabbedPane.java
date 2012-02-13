@@ -27,7 +27,7 @@ import javax.swing.Icon;
 import com.inqwell.any.client.swing.SwingInvoker;
 import java.util.HashMap;
 
-public class AnyTabbedPane extends    AnyComponent
+public class AnyTabbedPane extends AnySimpleComponent
 {
   public static IntI TOP    = new ConstInt(SwingConstants.TOP);
   public static IntI BOTTOM = new ConstInt(SwingConstants.BOTTOM);
@@ -249,15 +249,11 @@ public class AnyTabbedPane extends    AnyComponent
 	
 	private int indexOfComponent(Component c)
 	{
-		//System.out.println ("Tab " + t_);
-		//System.out.println ("Tab Children " + t_.getComponents());
 		return t_.indexOfComponent(c);
 	}
 
 	private int indexOfComponent(AnyComponent c)
 	{
-		//System.out.println ("Tab " + t_);
-		//System.out.println ("Tab Children " + t_.getComponents());
     return t_.indexOfComponent(c.getBorderee());
 	}
 
@@ -343,7 +339,6 @@ public class AnyTabbedPane extends    AnyComponent
 		{
 	    name_.setNull();
 		}
-		//System.out.println ("AnyTabbedPane.updateModel: -------- " + modelVars_);
 	}
 
   protected void setValueToComponent(Any v)
@@ -398,7 +393,6 @@ public class AnyTabbedPane extends    AnyComponent
     modelVars_.add(SelectionF.prev__, old_);
 		//modelVars_.add(SelectionF.prev__, old_);
 		
-		//System.out.println ("AnyTabbedPane.initUpdateModel ");
 		addAdaptedEventListener(new TabSelectedListener(changeEventType__));
 	}
 

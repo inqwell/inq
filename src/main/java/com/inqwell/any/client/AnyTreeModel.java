@@ -154,8 +154,6 @@ public class AnyTreeModel implements TreeModel,
 
   public Object getChild(Object parent, int index)
   {
-    //System.out.println("AnyTreeModel.getChild() " + parent);
-    //System.out.println("AnyTreeModel.getChild() index " + index);
   	try
   	{
       // respect that the context of the root tree level
@@ -171,7 +169,6 @@ public class AnyTreeModel implements TreeModel,
 
   public int getChildCount(Object parent)
   {
-    //System.out.println("AnyTreeModel.getChildCount()");
   	if (parent == dummyRoot__)
   	  return 0;
 
@@ -179,7 +176,6 @@ public class AnyTreeModel implements TreeModel,
   	{
       rootTreeLevel_.setContext(context_);
   	  int i = rootTreeLevel_.getChildCount(parent);
-      //System.out.println("AnyTreeModel.getChildCount() returning " + i);
       return i;
   	}
   	catch (AnyException e)
@@ -190,7 +186,6 @@ public class AnyTreeModel implements TreeModel,
 
   public int getIndexOfChild(Object parent, Object child)
   {
-    //System.out.println("AnyTreeModel.getIndexOfChild()");
     if (parent == null || child == null)
       return -1;
 
@@ -198,7 +193,6 @@ public class AnyTreeModel implements TreeModel,
   	{
       rootTreeLevel_.setContext(context_);
       int i = rootTreeLevel_.getIndexOfChild(parent, child);
-      //System.out.println("AnyTreeModel.getIndexOfChild() returning " + i);
       return i;
   	}
   	catch (AnyException e)
@@ -225,11 +219,9 @@ public class AnyTreeModel implements TreeModel,
 
   public Object getRoot()
   {
-    //System.out.println("AnyTreeModel.getRoot()");
   	if (rootTreeLevel_ == null)
   	  return dummyRoot__;
 
-    //System.out.println("AnyTreeModel.getRoot 2");
   	try
   	{
       rootTreeLevel_.setContext(context_);
@@ -268,7 +260,6 @@ public class AnyTreeModel implements TreeModel,
 
   public boolean isLeaf(Object node)
   {
-  	//System.out.println("AnyTreeModel.isLeaf() " + node);
   	if (node == dummyRoot__)
   	  return true;
 
@@ -285,12 +276,8 @@ public class AnyTreeModel implements TreeModel,
 
   public void valueForPathChanged(TreePath path, Object newValue)
   {
-		//System.out.println ("AnyTreeModel.valueForPathChanged() " + path);
-		//System.out.println ("AnyTreeModel.valueForPathChanged() " + path.getPathCount());
   	Any a  = getResponsibleValueForPath(path);
 		Any sv = (Any)newValue;
-
-		//System.out.println ("AnyTreeModel.valueForPathChanged() " + newValue + " " + ((newValue != null) ? newValue.getClass().toString() : null));
 
     if (a != null)
       a.copyFrom(sv);
@@ -317,8 +304,6 @@ public class AnyTreeModel implements TreeModel,
     childArray[0] = child;
     indexArray[0] = index;
     
-    //System.out.println ("AnyTreeModel.valueForPathChanged() " + child);
-    //System.out.println ("AnyTreeModel.valueForPathChanged() " + index);
     TreeModelEvent tme = new AnyTreeModelEvent(this,
                                                parentPath,
                                                indexArray,
@@ -340,10 +325,8 @@ public class AnyTreeModel implements TreeModel,
     {
     	// presumably never called if the rootRenderer_ is
     	// null as this means root is not visible.
-    	//System.out.println("AnyTreeModel rendering root 1 " + tree.isRootVisible());
     	//if (!tree.isRootVisible())
     	//  return null;
-    	//System.out.println("AnyTreeModel rendering root 1 " + tree.isRootVisible());
 
       // Note that we don't actually use the passed value for the
       // root rendering.  Its not necessary except to know that we
@@ -360,7 +343,6 @@ public class AnyTreeModel implements TreeModel,
     rootTreeLevel_.setContext(context_);
     
     AnyTreeNode node = (AnyTreeNode)value;
-    //System.out.println("AnyTreeModel rendering SUB 1 " + tree.isRootVisible());
 		return rootTreeLevel_.getTreeCellRendererComponent(tree,
 		                                                   node,
 		                                                   selected,
@@ -381,12 +363,8 @@ public class AnyTreeModel implements TreeModel,
 	  TreePath       tp = tree.getPathForRow(row);
     TreeLevel      l  = this.getTreeLevelForPath(tp);
     Any            a  = l.getResponsibleFor(v);
-		//System.out.println ("AnyTreeModel.getTreeCellEditorComponent() " + tp);
-		//System.out.println ("AnyTreeModel.getTreeCellEditorComponent() " + tp.getPathCount());
 
     lastEditor_ = l.getTreeCellEditor(v);
-  	//System.out.println("AnyTreeModel.getTreeCellEditorComponent " + lastEditor_ + " " + a);
-  	//System.out.println("AnyTreeModel.getTreeCellEditorComponent rv = " + a);
 
 		Component ret = lastEditor_.getTreeCellEditorComponent(tree,
 				                                                   a,
@@ -410,13 +388,11 @@ public class AnyTreeModel implements TreeModel,
 
 	public void cancelCellEditing()
 	{
-		//System.out.println ("AnyTreeModel.cancelCellEditing()");
 		lastEditor_.cancelCellEditing();
 	}
 
 	public Object getCellEditorValue()
 	{
-		//System.out.println ("AnyTreeModel.getCellEditorValue()");
 		return lastEditor_.getCellEditorValue();
 	}
 
@@ -437,7 +413,6 @@ public class AnyTreeModel implements TreeModel,
 
 	public boolean shouldSelectCell(EventObject anEvent)
 	{
-		//System.out.println ("AnyTreeModel.shouldSelectCell() " + anEvent);
 		//return lastEditor_.shouldSelectCell(anEvent);
 		lastComponent_.requestFocus();
 		return true;
@@ -445,7 +420,6 @@ public class AnyTreeModel implements TreeModel,
 
 	public boolean stopCellEditing()
 	{
-		//System.out.println ("AnyTreeModel.stopCellEditing()");
 		return lastEditor_.stopCellEditing();
 	}
 
@@ -454,10 +428,21 @@ public class AnyTreeModel implements TreeModel,
    */
 	public void setRenderInfo(RenderInfo r)
 	{
-		//System.out.println("AnyTreeModel.setRenderInfo " + r);
 		rootRenderer_ = new AnyCellRenderer(r, new DefaultTreeCellRenderer());
 	}
 
+	public RenderInfo getRenderInfo()
+	{
+	  RenderInfo ret = null;
+	  
+	  if (rootRenderer_ != dummyRenderer__)
+	  {
+	    ret = rootRenderer_.getRenderInfo();
+	  }
+	  
+	  return ret;
+	}
+	
   /**
    * Set the tree level(s) this model should represent.
    */
@@ -466,7 +451,6 @@ public class AnyTreeModel implements TreeModel,
     l.setModel(this);
 
     rootTreeLevel_ = l;
-		//System.out.println("AnyTreeModel.setLevels " + l);
 
     // If there were any names discovered during the creation of
     // the TreeLevel objects then put them here.
@@ -523,14 +507,11 @@ public class AnyTreeModel implements TreeModel,
   		return rootRenderer_.isEditable();
   	}
 
-    //System.out.println("AnyTreeModel.isPathEditable " + path);
     TreeLevel level = rootTreeLevel_.getTreeLevelForPath(path);
-    //System.out.println("AnyTreeModel.isPathEditable 2" + level);
     if (level != null)
     {
       Any a = (Any)path.getLastPathComponent();
       boolean ret = level.isEditable(a);
-      //System.out.println("AnyTreeModel.isPathEditable : " + ret);
       return ret;
     }
     return false;
@@ -559,11 +540,9 @@ public class AnyTreeModel implements TreeModel,
     }
     catch (AnyException e)
     {
-      //System.out.println("AnyTreeModel.getResponsibleValueForPath: caught exception");
       e.printStackTrace();
       cellValue = null;
     }
-    //System.out.println("AnyTreeModel.getResponsibleValueForPath: cellValue " + cellValue);
     return cellValue;
   }
   
@@ -714,8 +693,6 @@ public class AnyTreeModel implements TreeModel,
     AnyTreeModelEvent tme = null;
     short treeEvent       = CHANGED;
 
-  	//System.out.println("AnyTreeModel.translateEvent childIndex " + childIndex);
-  	//System.out.println("AnyTreeModel.translateEvent path " + path);
     // The path array will now contain the list
     // of children that we would return to the view.
     // If the event pertains to the root then this
@@ -760,8 +737,6 @@ public class AnyTreeModel implements TreeModel,
     	if (baseType.equals(EventConstants.NODE_REMOVED))
     	{
     		//IntI vector = (IntI)id.get(EventConstants.EVENT_VECTOR);
-        //System.out.println("TREE REMOVAL *** " + childIndex);
-        //System.out.println("EVENT VECTOR *** " + vector);
     		//childIndex    = vector.getValue();
     		treeEvent = REMOVED;
     	}
@@ -825,8 +800,6 @@ public class AnyTreeModel implements TreeModel,
       	treeEvent = STRUCTURE;
       }
     }
-
-  	//System.out.println("AnyTreeModel.translateEvent childIndex " + childIndex);
 
     if (treeEvent == REMOVED)
       fireRemovedEvent(tme);
@@ -901,7 +874,6 @@ public class AnyTreeModel implements TreeModel,
 
   public AnyTreeNode sort(TreePath p, boolean depthSort)
   {
-    //System.out.println("Sorting for " + p);
     TreeLevel l = getTreeLevelForPath(p);
     AnyTreeNode n = (AnyTreeNode)p.getLastPathComponent();
     l.sort(n, depthSort);
@@ -918,7 +890,6 @@ public class AnyTreeModel implements TreeModel,
 
 	boolean isRootVisible()
 	{
-		//System.out.println("******************isRootVisible " + (rootRenderer_ != dummyRenderer__));
 		return rootRenderer_ != dummyRenderer__;
 	}
 
@@ -956,7 +927,6 @@ public class AnyTreeModel implements TreeModel,
 
   private void fireRemovedEvent(TreeModelEvent tme)
   {
-  	//System.out.println("AnyTreeModel.fireRemovedEvent " + tme);
   	for (int i = 0; i < listeners_.size(); i++)
   	{
   		TreeModelListener tml = (TreeModelListener)listeners_.get(i);
@@ -966,7 +936,6 @@ public class AnyTreeModel implements TreeModel,
 
   private void fireInsertedEvent(TreeModelEvent tme)
   {
-  	//System.out.println("AnyTreeModel.fireInsertedEvent " + tme);
   	for (int i = 0; i < listeners_.size(); i++)
   	{
   		TreeModelListener tml = (TreeModelListener)listeners_.get(i);
@@ -976,7 +945,6 @@ public class AnyTreeModel implements TreeModel,
 
   private void fireChangedEvent(TreeModelEvent tme)
   {
-  	//System.out.println("AnyTreeModel.fireChangedEvent " + tme);
   	for (int i = 0; i < listeners_.size(); i++)
   	{
   		TreeModelListener tml = (TreeModelListener)listeners_.get(i);
@@ -994,7 +962,6 @@ public class AnyTreeModel implements TreeModel,
   
   public boolean expandPaths(AnyTreeNode rootNode, JTree tree, int level)
   {
-    //System.out.println("Checking for expansion at level " + level);
     // Find the deepest expanded nodes under the given node.  For
     // each such node, evaluate its path and expand it.
     boolean thisExpanded = false;
@@ -1017,8 +984,6 @@ public class AnyTreeModel implements TreeModel,
         // Nothing expanded underneath us.  We are expanded so
         // expand to this level.
         TreePath tp = rootNode.makeTreePath();
-        //System.out.println("Expanding to " + tp);
-        //System.out.println("at level " + level);
         tree.expandPath(tp);
       }
     }
@@ -1149,7 +1114,6 @@ public class AnyTreeModel implements TreeModel,
 
   public void fireStructureEvent(TreeModelEvent tme)
   {
-  	//System.out.println("AnyTreeModel.fireStructureEvent " + tme);
     for (int i = 0; i < listeners_.size(); i++)
     {
       TreeModelListener tml = (TreeModelListener)listeners_.get(i);

@@ -1,0 +1,29 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright 2006 Inqwell Ltd.
+-->
+<!DOCTYPE document PUBLIC "-//APACHE//DTD Documentation V2.0//EN" "http://forrest.apache.org/dtd/document-v20.dtd">
+<document>
+  <header>
+    <title>Support</title>
+  </header>
+  <body>
+    <section id="support">
+      <title>Support</title>
+      <p>
+        If you would like to use Inq and require help
+        please <a href="../about.html">contact us</a>.
+        <!--<a href="ext:mailinqwell/infoatinqwell">info@inqwell.com</a>-->
+      </p>
+      <p>
+        Queries or contributions can be posted
+        in the <a href="ext:forums/home" class="fork">forums</a>.
+      </p>
+      <!--
+      <p>
+        Bugzilla will be added in due course.
+      </p>
+      -->
+    </section>
+  </body>
+</document>

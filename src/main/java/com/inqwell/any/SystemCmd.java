@@ -143,37 +143,46 @@ public class SystemCmd extends    AbstractFunc
 	    
 			if (cmdOutput != null)
 			{
-        stdout = new CommandReader("syscmd_stdout", p.getInputStream(), cmdOutput);
-        stdout.start();
+        stdout = new CommandReader(Thread.currentThread().getName() + "_syscmd_stdout", p.getInputStream(), cmdOutput);
       }
       else
       {
-        // Always provide thread to read all the command o/p, sinking
+        // Always provide a thread to read all the command o/p, sinking
         // it to a NullOutputStream
-        stdout = new CommandReader("syscmd_stdout",
+        stdout = new CommandReader(Thread.currentThread().getName() + "_syscmd_stdout",
                                    p.getInputStream(),
                                    new NullOutputStream());
-        stdout.start();
       }
       
       if (cmdError != null)
 			{
-        stderr = new CommandReader("syscmd_stderr", p.getErrorStream(), cmdError);
-        stderr.start();
+        // If err is the same as out then we already have a thread
+        // writing to it. That thread will close the stream so this
+        // one doesn't need to.
+        stderr = new CommandReader(Thread.currentThread().getName() + "_syscmd_stderr",
+                                   p.getErrorStream(),
+                                   cmdError,
+                                   cmdError != cmdOutput);
       }
       else
       {
         // Always provide thread to read all the command o/p, sinking
         // it to a NullOutputStream
-        stderr = new CommandReader("syscmd_stderr",
+        stderr = new CommandReader(Thread.currentThread().getName() + "_syscmd_stderr",
                                    p.getErrorStream(),
                                    new NullOutputStream());
-        stderr.start();
       }
+
+      stderr.start();
+      // If out and err are the same then join with the err thread so
+      // we don't close the stream prematurely and lose anything
+      stdout.start(cmdError == cmdOutput ? stderr : null);
       
       if (cmdInput != null)
       {
-        stdin = new CommandWriter(p.getOutputStream(), cmdInput);
+        stdin = new CommandWriter(Thread.currentThread().getName() + "_syscmd_stdin",
+                                  p.getOutputStream(),
+                                  cmdInput);
         stdin.start();
       }
       else
@@ -203,6 +212,19 @@ public class SystemCmd extends    AbstractFunc
         int exitValue = p.waitFor();
         ret = new AnyInt(exitValue);
       }
+    }
+    catch(InterruptedException ie)
+    {
+      // If we are interrupted then check if we have
+      // also been killed. If so attempt to destroy the
+      // underlying Process
+      if (getTransaction().getProcess().killed())
+      {
+        p.destroy();
+        throw new ProcessKilledException(ie);
+      }
+      else
+        throw new ContainedException(ie);
     }
     catch(Exception e)
     {
@@ -257,15 +279,26 @@ public class SystemCmd extends    AbstractFunc
 		private InputStream    is_;
 		private OutputStream   cmdOutput_;
     private AbstractStream inqOutput_;
+    private boolean        close_;
+    private CommandReader  joinWith_;
     private Throwable      t_;
-		
+
     private CommandReader(String name, InputStream is, AbstractStream cmdOutput)
+    {
+      this(name, is, cmdOutput, true);
+    }
+    
+    private CommandReader(String         name,
+                          InputStream    is,
+                          AbstractStream cmdOutput,
+                          boolean        close)
     {
       setDaemon(true);
       setName(name);
       is_ = is;
       inqOutput_ = cmdOutput;
       cmdOutput_ = cmdOutput.getUnderlyingOutputStream();
+      close_     = close;
     }
     
     // For when no explicit stream is provided to collect command o/p. Then
@@ -277,6 +310,12 @@ public class SystemCmd extends    AbstractFunc
       is_ = is;
       inqOutput_ = null;
       cmdOutput_ = os;
+    }
+    
+    private void start(CommandReader joinWith)
+    {
+      joinWith_  = joinWith;
+      start();
     }
     
 		public void run()
@@ -299,10 +338,16 @@ public class SystemCmd extends    AbstractFunc
         	// its output stream.
           cmdOutput_.flush();
           
-          if (inqOutput_ != null)
-            inqOutput_.close();
-          else
-            cmdOutput_.close();
+          if (joinWith_ != null)
+            joinWith_.join();
+          
+          if (close_)
+          {
+            if (inqOutput_ != null)
+              inqOutput_.close();
+            else
+              cmdOutput_.close();
+          }
         }
         catch(Exception e)
         {
@@ -325,10 +370,10 @@ public class SystemCmd extends    AbstractFunc
     private InputStream   cmdInput_;
     private Throwable     t_;
     
-    private CommandWriter(OutputStream os, AbstractStream cmdInput)
+    private CommandWriter(String name, OutputStream os, AbstractStream cmdInput)
     {
       setDaemon(true);
-      setName("syscmd_stdin");
+      setName(name);
       os_ = os;
       cmdInput_ = cmdInput.getUnderlyingInputStream();
     }

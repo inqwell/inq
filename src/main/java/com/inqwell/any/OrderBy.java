@@ -36,8 +36,8 @@ public class OrderBy extends    AbstractFunc
 {
   private static final long serialVersionUID = 1L;
   
-  public static IntI NULL_HIGH = new ConstInt(OrderComparator.NULL_HIGH);
-  public static IntI NULL_LOW  = new ConstInt(OrderComparator.NULL_LOW);
+  public static final IntI NULL_HIGH = new ConstInt(OrderComparator.NULL_HIGH);
+  public static final IntI NULL_LOW  = new ConstInt(OrderComparator.NULL_LOW);
 
   private Any orderBy_;    // the items we will order by; resolves to an Array
 	private Any orderNode_;  // the root from which we will order; Orderable

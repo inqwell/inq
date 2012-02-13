@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright 2008 Inqwell Ltd.
+-->
+<!DOCTYPE document PUBLIC "-//APACHE//DTD Documentation V2.0//EN" "http://forrest.apache.org/dtd/document-v20.dtd">
+<document>
+  <header>
+    <title>About Us</title>
+  </header>
+  <body>
+    <!--
+    <section id="about">
+      <title>About Us</title>
+      <p>
+        Inqwell was founded by Tom Sanders and Bharat Bedia. Tom
+        and Bharat have a background based on many years of designing,
+        implementing and supporting financial trading systems mainly in
+        the Equity and Equity Derivatives e.g. Securities Finance and Prime
+        Brokerage areas.
+      </p>
+    </section>
+    -->
+    <section id="contact">
+      <title>Contact Inqwell</title>
+      <p>
+        You can ask us questions through
+        the <a href="ext:forums/home" class="fork">Inqwell Forums</a> or
+        email us at <code>inq&#64;inqwell&#46;&#99;&#111;&#109;</code>
+      </p>
+      <!--
+      <ul>
+        <li>Tom Sanders: <code>&#116;om&#46;san&#100;ers&#64;inqwell&#46;&#99;&#111;&#109;</code></li>
+        <li>Bharat Bedia: <code>&#98;harat&#46;&#98;edia&#64;inqwell&#46;&#99;&#111;&#109;</code></li>
+      </ul>
+      <p>
+        Finally, you can connect with us directly via LinkedIn:
+      </p>
+      <ul>
+        <li>Bharat Bedia: <a class="fork" href="ext:in/bharat">http://www.linkedin.com/in/bharatbedia</a></li>
+      </ul>
+    </section>
+    <section id="privacy">
+      <title>Privacy Statement</title>
+      <p>
+        Your privacy is important to us so we only use the information you
+        provide about yourself and your company when using this Website to
+        answer your enquiry or to assist us in improving our service to you.
+        We do not share your information with any third party except to the
+        extent necessary to answer your enquiry if that enquiry requires
+        the involvement of a third party. We use return email addresses to
+        answer the email we receive. Such addresses are not used for any other
+        purpose and are not shared with outside parties.
+      </p>
+      <p>
+        To prevent unauthorised access, maintain data accuracy, and
+        ensure the correct use of information, we have put in place
+        appropriate physical, electronic and managerial procedures to
+        safeguard and secure the information we collect on line.
+      </p>
+    </section>
+    <section id="terms">
+      <title>Terms and Conditions</title>
+      <p>
+        These terms are drawn up in the English language and governed by English
+        law. If these terms are translated into another language, the English
+        language text shall in any event prevail. The courts of England and
+        Wales shall have exclusive jurisdiction over any dispute arising in
+        relation to these terms or to the use of this Website.
+      </p>
+      <p>
+        <strong>Intellectual property</strong>
+      </p>
+      <p>
+        The content of this Website is the copyright of Inqwell Limited.
+        Inqwell Limited's copyright sign must remain on all reproductions
+        of material taken from this Website ("Material").
+      </p>
+      <p>
+        You may download, store and use the Material for your own personal
+        use and research or that of your firm or company. You may not
+        republish, retransmit, redistribute or otherwise make the Material
+        available to any other party or make the same available on any
+        website, on-line service or bulletin board or make the same available
+        in hard copy or on any other media without Inqwell Limited's express
+        prior written consent.
+      </p>
+      <p>
+        <strong>Terms of use</strong>
+      </p>
+      <p>
+        Nothing on this Website constitutes advice, nor does the transmission,
+        downloading or sending of any information or the Material create
+        any contractual relationship.
+      </p>
+      <p>
+        You may not misuse the Website (including, without limitation, by
+        unauthorised access to Inqwell's computer systems).
+      </p>
+      <p>
+        <strong>Disclaimer</strong>
+      </p>
+      <p>
+        Although Inqwell exercises reasonable care to ensure that the information
+        on the Website is accurate, Inqwell does not guarantee, and makes no
+        representations or warranties of any kind (whether express or implied)
+        about the accuracy or completeness of the information and opinions
+        provided through this Website. The information on this Website may
+        become out of date over time.
+      </p>
+      <p>
+        Inqwell reserves the right to make changes and corrections at any time,
+        without notice. Inqwell accepts no liability for any inaccuracies or
+        omissions in the Website and any decisions based on information and
+        opinions contained in the Website are at the sole discretion and
+        full responsibility of the visitor.
+      </p>
+      <p>
+        This Website may contain third party owned content and links to other
+        websites which are provided for your convenience. Inqwell is not responsible
+        for the contents of any external websites which link to this Website or
+        which are linked from it.
+      </p>
+      <p>
+        Inqwell accepts no liability for any direct, special, indirect or
+        consequential damages, or any other damages of whatsoever kind resulting
+        from whatever cause through the use of any information and opinions
+        obtained either directly or indirectly from this Website.
+      </p>
+      <p>
+        While Inqwell takes reasonable care to ensure that this Website and the
+        Materials that are made available for you to download are free from any
+        computer viruses, Inqwell cannot be held liable if any of the Materials
+        you download from this Website are affected by a virus. Before
+        downloading files from the internet you should use a suitable virus
+        checker to check for yourself that the Materials are virus free.
+      </p>
+      <p>
+        Inqwell shall not be liable if for any reason this Website is unavailable at
+        any time or for any period. Access to this Website may be suspended
+        temporarily and without notice in the case of system failure,
+        maintenance or repair or for reasons beyond the control of Inqwell.
+      </p>
+      <p>
+        Inqwell does not represent that anything on this Website is appropriate
+        for use or permitted by local laws in any jurisdictions. Those who
+        access this Website do so on their own initiative, and are responsible
+        for compliance with applicable local laws or regulations. Users
+        should obtain local legal advice in cases of doubt.
+	    </p>
+      -->
+    </section>
+  </body>
+</document>

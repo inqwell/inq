@@ -92,9 +92,7 @@ public class ServerListener extends    AbstractProcess
   	  try
   	  {
   	    s = ss.accept();
-				System.out.println (ph_.getProtocolName() +
-				                    " Socket Listener accepted on socket " +
-				                    s);
+  	    logger.log(Level.INFO, ph_.getProtocolName() + " Socket Listener accepted on socket " + s);
   	    
   	    try
   	    {

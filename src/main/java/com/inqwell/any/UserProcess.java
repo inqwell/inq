@@ -22,6 +22,8 @@ import java.net.InetSocketAddress;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.Timer;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import javax.net.ssl.SSLHandshakeException;
 
@@ -49,40 +51,44 @@ public class UserProcess extends    BasicProcess
 										     implements Process,
 										                Runnable
 {
-  private static final long serialVersionUID = 1L;
+  private static Logger logger = Logger.getLogger("inq");
 
-  public  static Any loginName__   = AbstractValue.flyweightString("loginName");
-  public  static Any package__     = AbstractValue.flyweightString("package");
-  public  static Any address__     = AbstractValue.flyweightString("address");
-	public  static Any passwd__      = AbstractValue.flyweightString("passwd");
-	public  static Any url__         = AbstractValue.flyweightString("url");
-	public  static Any host__        = AbstractValue.flyweightString("host");
-	public  static Any cert__        = AbstractValue.flyweightString("cert");
-  public  static Any exit__        = AbstractValue.flyweightString("exit");
-  public  static Any privLevel__   = AbstractValue.flyweightString("privLevel");
-  public  static Any ID            = AbstractValue.flyweightString("id");
-	public  static Any expired__     = AbstractValue.flyweightString("expired");   // pwd expired
-	public  static Any expiresIn__   = AbstractValue.flyweightString("expiresIn"); // pwd expiring
-	public  static Any suspended__   = AbstractValue.flyweightString("suspended"); // acc suspended
-	public  static Any denied__      = AbstractValue.flyweightString("denied");    // login denied (no special reason)
-	public  static Any badpwd__      = AbstractValue.flyweightString("badpwd");    // login denied (pwd incorrect)
-	public  static Any reason__      = AbstractValue.flyweightString("reason");    // login denied (pwd incorrect)
-  public  static Any ignoreExpiring__  = AbstractValue.flyweightString("ignoreExpiring"); // ignore pwd expiring
-  public  static Any keepAlivePeriod__ = AbstractValue.flyweightString("keepAlivePeriod"); // useful for internet sockets
-  public  static Any lastFromClient__  = AbstractValue.flyweightString("lastFromClient");
+  public  static final Any loginName__   = AbstractValue.flyweightString("loginName");
+  public  static final Any package__     = AbstractValue.flyweightString("package");
+  public  static final Any address__     = AbstractValue.flyweightString("address");
+	public  static final Any passwd__      = AbstractValue.flyweightString("passwd");
+	public  static final Any url__         = AbstractValue.flyweightString("url");
+	public  static final Any host__        = AbstractValue.flyweightString("host");
+	public  static final Any cert__        = AbstractValue.flyweightString("cert");
+  public  static final Any exit__        = AbstractValue.flyweightString("exit");
+  public  static final Any privLevel__   = AbstractValue.flyweightString("privLevel");
+  public  static final Any ID            = AbstractValue.flyweightString("id");
+  public  static final Any ochannel__    = AbstractValue.flyweightString("ochannel");
+	public  static final Any expired__     = AbstractValue.flyweightString("expired");   // pwd expired
+	public  static final Any expiresIn__   = AbstractValue.flyweightString("expiresIn"); // pwd expiring
+	public  static final Any suspended__   = AbstractValue.flyweightString("suspended"); // acc suspended
+	public  static final Any denied__      = AbstractValue.flyweightString("denied");    // login denied (no special reason)
+	public  static final Any badpwd__      = AbstractValue.flyweightString("badpwd");    // login denied (pwd incorrect)
+	public  static final Any reason__      = AbstractValue.flyweightString("reason");    // login denied (pwd incorrect)
+  public  static final Any ignoreExpiring__  = AbstractValue.flyweightString("ignoreExpiring"); // ignore pwd expiring
+  public  static final Any keepAlivePeriod__ = AbstractValue.flyweightString("keepAlivePeriod"); // useful for internet sockets
+  public  static final Any lastFromClient__  = AbstractValue.flyweightString("lastFromClient");
+  
+  public  static final Any KILLED        = AbstractValue.flyweightConst(new ConstInt(255));
 
-  private static Any postLoginsvc__ = AbstractValue.flyweightString("system.client.services.PostLogin");
 
-  public  static Any loginContext__ = AbstractValue.flyweightString("$root.login");
-  private static Any loginWindow__  = AbstractValue.flyweightString("$root.login.login");
+  private static final Any postLoginsvc__ = AbstractValue.flyweightString("system.client.services.PostLogin");
 
-  public  static Array     loginOKEventTypes__;
-  public  static Array     loginDeniedEventTypes__;
-  public  static Array     serverLostEventTypes__;
+  public  static final Any loginContext__ = AbstractValue.flyweightString("$root.login");
+  private static final Any loginWindow__  = AbstractValue.flyweightString("$root.login.login");
 
-  private static Array     loginDetailsEventTypes__;
-  private static Array     loginRequestEventTypes__;
-  private static Array     loginServiceEventTypes__;
+  public  final static Array     loginOKEventTypes__;
+  public  final static Array     loginDeniedEventTypes__;
+  public  final static Array     serverLostEventTypes__;
+
+  private final static Array     loginDetailsEventTypes__;
+  private final static Array     loginRequestEventTypes__;
+  private final static Array     loginServiceEventTypes__;
 
 	private Thread           thread_;
   
@@ -104,6 +110,7 @@ public class UserProcess extends    BasicProcess
 
 	private volatile boolean deadlockVictim_;
 	private volatile boolean killed_;
+	private volatile boolean killedProperty_;
 
 	private ExceptionHandler eh_;
 
@@ -231,7 +238,6 @@ public class UserProcess extends    BasicProcess
 	  eh_.setInputChannel(ic_);
     eh_.setServerConnected(true);  // there's no connection really.
 		initCommon();
-    //debugDecorate();
 	}
 
 	/**
@@ -277,7 +283,6 @@ public class UserProcess extends    BasicProcess
 		// make sure our members are not garbage collected!
 		Process p = this;
 
-		//System.out.println ("User Process Started");
 		boolean channelClosed = false;
 
 		initInThread();
@@ -293,7 +298,6 @@ public class UserProcess extends    BasicProcess
 
   	    a = ic_.read(); // wait, can therefore be interrupted
 
-//				System.out.println ("Received: " + a);
 
 				// Everything received through the input channel must be
 				// an event.
@@ -302,8 +306,7 @@ public class UserProcess extends    BasicProcess
 
 			catch (ChannelClosedException cce)
 			{
-				//System.out.println ("Client went away!");
-				//cce.printStackTrace();
+				// Client has gone
 				channelClosed = true;
 		  }
 
@@ -357,6 +360,10 @@ public class UserProcess extends    BasicProcess
       }
   	}
 
+	  // Clear the flag so any end function does not throw
+	  // interrupted exceptions
+	  killed_ = false;
+	  
     if (sync_ == null)
       terminateProcess();
     else
@@ -476,7 +483,6 @@ public class UserProcess extends    BasicProcess
             System.out.print("Undeadlocked ");
             deadlockVictim_ = false;
           }
-          //System.out.println ("transaction aborting...");
           getTransaction().abort();
           setContext(null);
           setContextPath(null);
@@ -484,7 +490,6 @@ public class UserProcess extends    BasicProcess
         else
         {
           // All OK - commit transaction
-          //System.out.println ("transaction commiting...");
           try
           {
             getTransaction().commit();
@@ -493,12 +498,11 @@ public class UserProcess extends    BasicProcess
           }
           catch(Exception e)
           {
-            System.out.println ("exception during commit");
+            // exception during commit
             ContainedException ce = new ContainedException(e);
             ce.fillInCallStack(getTransaction());
             eh_.handleException(ce, getTransaction());
             eh_.setHandlerProcess(null);
-            //System.out.println ("transaction aborting...");
             getTransaction().abort();
             setContext(null);
             setContextPath(null);
@@ -531,7 +535,6 @@ public class UserProcess extends    BasicProcess
     // has gone.
     if (!isClient_ && rootEd_ != null)
     {
-      //System.out.println ("Removing ClientPropagator");
       EventGenerator eg = (EventGenerator)getRoot();
       eg.removeEventListener(rootEd_);
     }
@@ -596,7 +599,7 @@ public class UserProcess extends    BasicProcess
     }
     catch (Exception ex)
     {
-      ex.printStackTrace();
+      eh_.handleException (new ContainedException(ex), getTransaction());
       abort = true;
     }
     finally
@@ -606,7 +609,6 @@ public class UserProcess extends    BasicProcess
         ic_.close();
         if(oc_ != null)
           oc_.close();
-        //System.out.println("Channel closed");
         if (abort)
           getTransaction().abort();
         
@@ -673,6 +675,8 @@ public class UserProcess extends    BasicProcess
 
     // When we are a server we wait to drain the o/p channel
     // before dying
+	  // TODO: This relates to http tunnelled client/server connections,
+	  // which are being retired.
     if (!isClient_ && oc_ != null && oc_.getSessionId() != null)
     {
     	Any sessionId = oc_.getSessionId();
@@ -683,13 +687,17 @@ public class UserProcess extends    BasicProcess
       if (!oc_.hasPendingOutput())
       {
       	// If all o/p has drained we can be officially killed.
+        this.replaceItem(Process.STATUS, KILLED);
       	killed_ = true;
+      	killedProperty_ = true;
       	Globals.sessionList__.deleteSession(sessionId);
       }
     }
     else
     {
+      this.replaceItem(Process.STATUS, KILLED);
   		killed_ = true;
+    	killedProperty_ = true;
     }
     
 		if (p != this)
@@ -729,6 +737,18 @@ public class UserProcess extends    BasicProcess
       return false;
     
     return thread_.isAlive();
+  }
+  
+  public boolean killed()
+  {
+    return killed_;
+  }
+  
+  boolean resetKilled(boolean killed)
+  {
+    boolean ret = killed_;
+    killed_ = killed;
+    return ret;
   }
   
 	public void setSupervisor (boolean b)
@@ -874,6 +894,14 @@ public class UserProcess extends    BasicProcess
     return new ConstInt(hashCode());
   }
   
+  public Any getKilled()
+  {
+  	// The killed_ flag can be temporarily reset to allow
+  	// finally {} blocks to execute so check killedProperty_
+  	
+    return killedProperty_ ? AnyBoolean.TRUE : AnyBoolean.FALSE;
+  }
+  
   // --- Start PropertyAccessMap ---
 
   public Any get (Any key)
@@ -959,7 +987,10 @@ public class UserProcess extends    BasicProcess
     }
     catch(InterruptedException e)
     {
-      throw new RuntimeContainedException(e);
+      if (killed())
+        throw new ProcessKilledException(e);
+      else
+        throw new RuntimeContainedException(e);
     }
   }
 
@@ -1137,12 +1168,10 @@ public class UserProcess extends    BasicProcess
         this.add(Process.STARTED, new ConstDate());
         if (parentProcess_ != null)
         {
-          //System.out.println("I'm a child process of " + parentProcess_);
           catalogPath_ = new ConstString(parentProcess_.getCatalogPath().toString() +
                                          "." +
                                          IdentityOf.identityOf(this).toString());
           parentProcess_.addChildProcess(this, getTransaction());
-          //System.out.println("at " + catalogPath_);
         }
         else
         {
@@ -1189,8 +1218,6 @@ public class UserProcess extends    BasicProcess
     if (!contains(ID))
       add(ID, getId());
     
-		//bn.build(ServerConstants.OWNPROCESS, this, root_);
-
 		deadlockVictim_ = false;
 		killed_         = false;
 
@@ -1228,7 +1255,6 @@ public class UserProcess extends    BasicProcess
 		if (rootListener != null)
 		{
 	    rootEd_ = new EventDispatcher();
-	    //System.out.println ("Setting forward to ClientPropagator");
 	    EventGenerator eg = (EventGenerator)getRoot();
 	    eg.addEventListener(rootEd_);
 	    rootEd_.addEventListener(rootListener);
@@ -1365,7 +1391,6 @@ public class UserProcess extends    BasicProcess
     // Leave the disconnected event dispatcher in effect,
     // just throw an exception
     LocateNode l = new LocateNode("$catalog.guiFuncs.loginDenied");
-    //System.out.println("Context ID " + System.identityHashCode(getContext()));
     AnyFuncHolder.FuncHolder handler = (AnyFuncHolder.FuncHolder)
                   EvalExpr.evalFunc(getTransaction(),
                                     Catalog.instance().getCatalog(),
@@ -1423,10 +1448,6 @@ public class UserProcess extends    BasicProcess
       }
       catch (ContainedException e)
       {
-        //System.out.println("****************** EE " + e.getMessage());
-        //System.out.println(e.getThrowable().getClass());
-
-        //e.printStackTrace();
         if (e.getThrowable() instanceof SSLHandshakeException)
         {
           // This is what comes out when the TrustManager throws
@@ -1444,14 +1465,12 @@ public class UserProcess extends    BasicProcess
 
           // Locate the handler
           LocateNode l = new LocateNode("$catalog.guiFuncs.certificateError");
-          //System.out.println("Context ID " + System.identityHashCode(getContext()));
           AnyFuncHolder.FuncHolder handler = (AnyFuncHolder.FuncHolder)
                         EvalExpr.evalFunc(getTransaction(),
                                           Catalog.instance().getCatalog(),
                                           l,
                                           AnyFuncHolder.FuncHolder.class);
 
-          //System.out.println("HANDLER IS " + handler);
           throw new RuntimeContainedException(t,
                                               t.getMessage(),
                                               loginSpec,
@@ -1626,34 +1645,8 @@ public class UserProcess extends    BasicProcess
     if (oc_ == null)
       return;
     
-    String inqhome = System.getProperty("inq.home");
-    if (inqhome == null)
-      throw new AnyRuntimeException("inq.home is undefined");
-    
-    String separator = System.getProperty("file.separator");
-    
-    try
-    {
-      File log = new File(inqhome + separator + "log" + separator + "server.log");
-      
-      File logdir = log.getParentFile();
-      logdir.mkdirs();
-      
-      if (!log.exists())
-        log.createNewFile();
-      
-      PrintStream p = new PrintStream(new FileOutputStream(log, true));
-      
-      java.net.Socket s = ((AnyChannel)oc_).getSocket();
-      
-      p.println(msg + " from " + s.getRemoteSocketAddress().toString());
-      p.println(loginSpec);
-      p.println("");
-      p.close();
-    }
-    catch(IOException ioe)
-    {
-    }
+    java.net.Socket s = ((AnyChannel)oc_).getSocket();
+    logger.log(Level.INFO, msg + " from " + s.getRemoteSocketAddress().toString());
   }
 
 	private void runLoginService(Event e) throws AnyException
@@ -1730,8 +1723,6 @@ public class UserProcess extends    BasicProcess
 
     public boolean processEvent(Event e) throws AnyException
     {
-      //System.out.println("UserProcess$LoginDetails.processEvent");
-
       // Retrieve the login details from the event and attempt
       // to connect to the server specified therein
       login((Map)e.getContext());
@@ -1772,8 +1763,6 @@ public class UserProcess extends    BasicProcess
 
     public boolean processEvent(Event e) throws AnyException
     {
-      //System.out.println("UserProcess$LoginRequest.processEvent");
-
       // Server - retrieve the login details from the event
       // and create an invocation event for the login service
       // for the specified package.
@@ -1794,7 +1783,6 @@ public class UserProcess extends    BasicProcess
 
     public boolean processEvent(Event e) throws AnyException
     {
-      //System.out.println("UserProcess$LoginOK.processEvent");
       loginOK(e);
       return true;
     }
@@ -1812,7 +1800,6 @@ public class UserProcess extends    BasicProcess
 
     public boolean processEvent(Event e) throws AnyException
     {
-      System.out.println("UserProcess$LoginDenied.processEvent");
       loginDenied((Map)e.getContext());
       return true;
     }
@@ -1830,7 +1817,6 @@ public class UserProcess extends    BasicProcess
 
     public boolean processEvent(Event e) throws AnyException
     {
-      //System.out.println("UserProcess$LoginService.processEvent");
       runLoginService(e);
       return true;
     }

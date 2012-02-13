@@ -98,9 +98,7 @@ public class SetPrivilege extends    AbstractFunc
                                      a,
                                      privileges.get(k));
 
-        ShortI thisLevel = new ConstShort(priv);
-
-        level = thisLevel;
+        level = (ShortI)AbstractValue.flyweightConst(new ConstShort(priv));
       }
       else
       {

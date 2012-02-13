@@ -33,7 +33,7 @@ import javax.swing.JDesktopPane;
 import javax.swing.event.ChangeListener;
 import javax.swing.event.ChangeEvent;
 
-public class AnyDesktopPane extends AnyComponent
+public class AnyDesktopPane extends AnySimpleComponent
 {
   private JDesktopPane    d_;
 

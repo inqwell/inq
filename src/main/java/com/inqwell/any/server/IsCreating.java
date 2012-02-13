@@ -5,12 +5,6 @@
  * the README file.
  */
 
-/*
- * $Archive: /src/com/inqwell/any/server/IsCreating.java $
- * $Author: sanderst $
- * $Revision: 1.4 $
- * $Date: 2011-04-07 22:18:21 $
- */
 package com.inqwell.any.server;
 
 import com.inqwell.any.AbstractComposite;
@@ -24,12 +18,10 @@ import com.inqwell.any.Iter;
 import com.inqwell.any.Map;
 
 /**
- * IsCreating the given object in the current transaction context.  When
- * the transaction is committed the object will become transactional
- * and managed.
- * <p>
- * @author $Author: sanderst $
- * @version $Revision: 1.4 $
+ * If the argument is being created in the transaction then
+ * return the transaction instance, otherwise return null.
+ * Any non-key fields of the instance can be modified. Key
+ * fields are made const and cannot be changed. 
  */
 public class IsCreating extends    AbstractFunc
                         implements Cloneable
@@ -50,7 +42,7 @@ public class IsCreating extends    AbstractFunc
 																					 Map.class);
 
     if (toCreate == null)
-      nullOperand(toCreate);
+      nullOperand(toCreate_);
 
     Map ret;
     

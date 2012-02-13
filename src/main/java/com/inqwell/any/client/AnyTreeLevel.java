@@ -1173,6 +1173,20 @@ public class AnyTreeLevel extends AbstractTreeLevel
               // TODO: What happens if the operation is to add a typedef
               // instance at {k}.<alias> ?? That creates a new node
               // in an illegal way... 
+              
+              // Further case - adding an inq node that will become
+              // a nested nodeset. Choose to ignore all these cases.
+              
+              if (current.getNodeSet() != null)
+              {
+                if (path.entries() == 0)
+                  return -1;    // The root node, so dispatch as a structure change
+                else
+                  return -2;    // Somewhere under the root, ignore
+              }
+              
+              // Here dispatching as a structure is a bit heavy. Consider
+              // classing as an UPDATE (what would the index be?)
               return -1;
             }
           }

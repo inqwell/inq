@@ -1,0 +1,940 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright 2006 Inqwell Ltd.
+-->
+<!DOCTYPE document PUBLIC "-//APACHE//DTD Documentation V2.0//EN" "http://forrest.apache.org/dtd/document-v20.dtd">
+<document>
+  <header>
+    <title>The Inq Transaction Model</title>
+  </header>
+  <body>
+    <section id="oview">
+      <title>Overview</title>
+      <p>
+        The Inq transaction model ensures that processes running in an Inq
+        server environment cooperate when creating, mutating and destroying
+        instances of typedef entities. To effect mutual exclusion and
+        instance safety, an Inq transaction implements the following:
+      </p>
+      <ul>
+        <li>locks instances on mutation and destruction;</li>
+        <li>prevents unique key violation on creation and mutation;</li>
+        <li>hides mutation, creation and destruction from other processes until
+          the transaction is committed.</li>
+      </ul>
+      <p>
+        As a transaction commits, Inq manages the key caches and, if the typedefs
+        are persistent, creates, updates or deletes instances
+        from their persistent storage. Finally, Inq raises events to
+        signal the results of the transaction. These events are propagated
+        by User processes to their connected client, where Inq handles them to
+        synchronise any locally held corresponding instances. As well,
+        a process can establish its own event listeners to execute functions
+        in its own node space.
+      </p>
+      <p>
+        Every process has an implicit transaction into which actions are joined while
+        a process is active. At the minimum, there is no script syntax or statements
+        required to perform transaction handling.
+      </p>
+    </section>
+    <section id="mutate">
+      <title>Instance Mutation</title>
+      <p>
+        To discuss what happens when an instance is mutated we introduce a
+        service called <code>updateInstance</code> that accepts the modified
+        instance <code>i</code> as an argument. Such a service could be invoked
+        from a client like this:
+      </p>
+      <source>
+send updateInstance(i = fooInstance);
+</source>
+      <p>
+        where <code>fooInstance</code> is a typedef instance that the client
+        has previously received from the server (either by a service request
+        in the opposite direction or
+        a <a href="process.html#eventflows">mirrored event</a>).
+      </p>
+      <section id="mutateGeneric">
+        <title>A Generic Mutation Service</title>
+        <p>
+          The service shown here is the most basic form of instance update possible.
+        </p>
+        <source>
+service updateInstance(any i)
+{
+  // Read out the managed instance
+  read(typeof(i), i, alias="managed");
+
+  // update it from the argument
+  managed = i;
+}
+</source>
+        <p>
+          This service will update the server's managed instance of the typedef
+          represented by the argument <code>i</code>.
+        </p>
+        <p>
+          Recall from the discussion on defining services that arguments are
+          either declared as a value type, a field reference or as an
+          opaque <code>any</code>, as here.
+        </p>
+        <p>
+          The first step any such service must perform is to read the server's
+          managed instance of the argument. Even though the client has passed
+          its modified version to the service, the argument is a benign object
+          to the server and the managed instance must be read from the i/o
+          system (or cache). The <code>read</code> function takes at least
+          two arguments:
+        </p>
+        <ol>
+          <li>The typedef to read - this can either be a symbolic reference
+            to the typedef name, with an explicit package if required, or if (as
+            here) there is an instance available, the typedef it carries.</li>
+          <li>A key value - this can be any map that contains values by the same
+            names as the fields of the key being used. In this case, a key name
+            is not specified so Inq will use the primary. The value is an instance
+            of the typedef itself so we know it must satisfy the requirements of
+            the primary key.</li>
+        </ol>
+        <p>
+          When applying a unique key and unless directed otherwise, <code>read</code>
+          places any instance returned on the stack by its typedef name.<!--(or
+          entity alias if one has been defined). --> As we want to make this
+          service completely generic, this name is overridden by supplying the
+          optional <code>alias</code> argument.
+        </p>
+        <p>
+          The service then assigns the argument to the managed instance. If
+          the <code>read</code> was unsuccessful because the managed instance
+          had previously been deleted by another process then this statement
+          would generate a run-time exception. We may be happy with that, since
+          the window is small, however we could make the service a little more
+          friendly by checking for this condition and throwing an exception
+          for it:
+        </p>
+        <source>
+service updateInstance(any i)
+{
+  // Read out the managed instance, checking if we were successful
+  if (read(typeof(i), i, alias="managed"))
+    managed = i;  // update it from the argument
+  else
+    throw("Generic Update Error",
+          "Instance does not exist: " + i,
+          func f = call util:unexpectedError());
+}
+</source>
+        <p>
+          The return value of a unique <code>read</code> is either <code>null</code>
+          or the managed instance but here we are just interested in its implicit
+          boolean conversion.
+        </p>
+        <p>
+          If the instance does not exist the service throws an exception to state
+          this.
+        </p>
+          <note>Exceptions in Inq carry a message, some user-supplied
+          information (in this example another string) and
+          an optional function to be called where the exception is handled (which
+          can be in the Client process). Again, we will discuss this in detail
+          when we look more closely at exceptions.</note>
+        <p>
+          Inq commits the process's implicit transaction at the end of the service.
+          Any errors at this stage, such as a unique key violation, an attempt to modify
+          the primary key or system problems like underlying database errors, will be
+          signalled by a system-generated exception (as opposed to one thrown by user
+          script as above). This kind of exception is handled by a default handler which
+          may be set per process. <!--(XXX look at this)--> All being well, Inq will
+          successfully write the instance and raise an event on it to inform other
+          observers of which fields were updated.
+        </p>
+      </section>
+      <section id="nested">
+        <title>Using a Nested Transaction</title>
+        <p>
+          An Inq service request is a one-way, "fire and forget" invocation. There is no
+          response sent to the invoker and service execution is asynchronous, that is
+          the invoker does not wait for the service to finish. In the first example we
+          saw how we can use exceptions to signal failure - what if we would like to
+          send an acknowledgement that the update was successful? The implicit transaction
+          is not committed until the service has completed, so we have no opportunity
+          to send something to say everything worked. There are two ways to solve this
+          problem - one is to force the implicit transaction to commit early using
+          the <code>commit</code> function, or better we can use an explicit transaction.
+          Here is a version of <code>updateInstance</code> which does that:
+        </p>
+        <source>
+service updateInstance(any i, func okCallback)
+{
+  if (read(typeof(i), i, alias="managed"))
+  {
+    transaction
+    {
+      managed = i;  // update from the argument
+    }
+    if (okCallback)
+      send util:updateOk(i = managed, okCallback);
+  }
+  else
+    throw("Generic Update Error",
+          "Instance does not exist: " + i,
+          func f = call util:unexpectedError());
+}
+</source>
+        <p>
+          The nested transaction is committed when its code block is closed, so any
+          any system exceptions will occur at that time. If the transaction commits
+          successfully, execution continues and we can issue an acknowledgement.
+        </p>
+        <p>
+          In the previous example we touched on the fact that exceptions
+          incurred by a User process can be handled in the client. To issue a
+          positive acknowledgement we invoke a service in the client using
+          the <code>send</code> function. By default, <code>send</code> posts a
+          service request to the process's output channel which, for a User process,
+          is connected to the peer Client process's input channel.
+        </p>
+        <p>
+          Client/server exceptions and acknowledgements are discussed in their own
+          section,
+        </p>
+        <fixme author="tom"> to be written</fixme>
+        <p>
+          however for now, the last thing to note in these examples is that
+          we can send (implicitly via an exception or explicitly in a service request)
+          statements to be executed in the peer environment. This version
+          of <code>updateInstance</code> defines the argument <code>okCallback</code>.
+          This is a function that is passed back to the client in the invocation
+          of the <code>updateOk</code> service. This technique means
+          that <code>updateInstance</code> can still be generic, because what
+          exactly happens when <code>updateOk</code> runs is under the control
+          of the client in its original invocation of <code>updateInstance</code>.
+        </p>
+      </section>
+      <section id="mutator">
+        <title>The Mutator Statement</title>
+        <p>
+          If a typedef defines a <code>mutate</code> statement then this will be
+          executed during a transaction's commit phase. If some type-specific
+          validation is required or audit data kept up to date, say, then we can keep
+          our services generic by scripting such logic as the mutate statement.
+          Considering the <code>Entity</code> <!--XXX link--> typedef example, suppose
+          we wanted to ensure that the <code>GlobalLimit</code> field is always positive
+          or <code>null</code>. To achieve this and update the audit data the mutate
+          statement would look like this:
+        </p>
+        <source>
+mutate (
+         {
+           if ($this.new.GlobalLimit &lt;= 0)
+             throw("Validation Update Error",
+                   fqname($this.new) + " GlobalLimit must be null or greater than zero",
+                   func f = call util:validationError());
+
+           // Update the audit data
+           $this.new.LastUpdated = getdate();
+           $this.new.User        = $process.loginName;
+         }
+       )
+</source>
+        <p>
+          The mutator is called once for every object undergoing mutation. We cannot,
+          therefore, use it as a place to perform any operation that we want to
+          happen when the commit completes, like sending an acknowledgement. Furthermore,
+          the mutate statement runs before any i/o has been performed, so errors
+          can still occur after the mutator has run for any given instance.
+        </p>
+        <p>
+          The mutator runs with a temporary node for <code>$this</code> containing
+          the original and modified instances as <code>$this.old</code>
+          and <code>$this.new</code>. The mutator can check that any modifications
+          are consistent and decide to silently veto some or all of them, or throw
+          an exception.
+        </p>
+        <p>
+          In this example, if validation fails the exception carries a message
+          stating the reason. The <code>fqname()</code> function returns the
+          fully qualified name of the argument: the package and typedef name.
+        </p>
+      </section>
+      <section id="mutateevent">
+        <title>Mutation Events</title>
+        <p>
+          When a transaction commits and after any persistent storage updates
+          have completed successfully, Inq raises events on all the mutated
+          instances. The events originate from the instances themselves and so
+          propagate upward through any structure that is built on
+          the <code>hmap</code> <a href="types.html#containertypes">container type</a>.
+          This kind of structure is termed <em>event-live</em> because
+          the <code>hmap</code> is both an event listener (of its children) and
+          an event generator (to its single parent)
+        </p>
+        <p>
+          Applications typically build event-live structures in their User
+          Process (i.e. server-side) node space. Mutation events then propagate
+          up to <code>$root</code> for dispatch to the Client Process, where
+          any observers, such as GUI components, use them for refresh.
+          All User Processes observing a particular instance in an event-live
+          structure will receive an event. We discuss building structures,
+          Inq's built-in event processing and how processes can arrange to
+          handle these events themselves in the
+          sections <a href="structures.html">Building Node Structures</a>
+          and <a href="events.html">Events</a>.
+        </p>
+      </section>
+    </section>
+    <section id="create">
+      <title>Instance Creation</title>
+      <p>
+        Instance creation involves the use of the the <code>new</code>
+        and <code>create</code> functions. The simplest script fragment
+        to create a new instance is as follows:
+      </p>
+      <source>
+create(new(Entity));
+</source>
+      <p>
+        The <code>new</code> function makes a new value of the specified typedef.
+        At this stage, the instance is unmanaged, so it is benign in the face
+        of field mutations and is not yet joined into the enclosing transaction.
+      </p>
+      <p>
+        The <code>create</code> function submits the value to the
+        transaction after running any <code>construct</code> statement
+        defined in the typedef, which can contain any steps
+        required to ensure that the candidate instance is correctly
+        initialised.
+      </p>
+      <p>
+        The <code>create</code> function is only valid in the server
+        environment and candidate value must have been obtained by
+        calling <code>new</code> in the server also. However the <code>new</code>
+        function itself is valid in the client - all it does is to create a map
+        comprising the typedef fields. It is thus possible to write a
+        generic creation service similar to the update service described
+        above, driven by an argument from the client:
+      </p>
+        <source>
+service createInstance(any i, func okCallback)
+{
+  transaction
+  {
+    any newI = new(typeof(i), i);
+    any created = create(newI);  // in fact an alias for newI
+  }
+
+  if (okCallback)
+  {
+    send util:createOk(i = created, okCallback);
+
+    // To obtain the managed instance we can do:
+    read(typeof(i), i, alias="managed");
+  }
+}
+</source>
+      <p>
+        The optional second argument to <code>new</code> is used to
+        initialise the return value. If absent, the fields will contain
+        any defaults defined in the typedef, or the <code>null</code>
+        value otherwise. The initialiser must be assignment compatible with
+        the return value. When creating typedef instances, this means
+        that it must be a map, but there are no other restrictions. Only
+        overlapping fields will be used.
+      </p>
+      <p>
+        The return value of <code>create</code> is the value we entered
+        into the transaction after any <code>construct</code> statement
+        has run. It is not the managed instance because that is not
+        available until after the transaction has successfully committed.
+        Inq safeguards itself by entering a <em>copy</em> of the constructed
+        value into the transaction, so any changes made after
+        calling <code>create</code> cannot undermine the integrity
+        of the transaction. In fact, it is ligitimate to use
+        <code>newI</code> any number of times in subsequent calls
+        to <code>create</code>. Of course, its the responsibility of
+        the <code>construct</code> statement to ensure that any unique
+        keys are appropriately initialised, say by allocating ascending
+        values or throwing an exception if a user-supplied value
+        violates uniqueness.
+      </p>
+      <section id="copies">
+        <title>Creating Managed Instance Copies</title>
+        <p>
+          Inq considers it an error if an already managed instance is
+          passed to <code>create</code>. Where a managed instance
+          is used to initialise a new candidate value, it can be
+          passed as the optional second argument to <code>new</code>.
+        </p>
+      </section>
+      <section id="construct">
+        <title>An Example Construct Statement</title>
+        <p>
+          The construct statement runs with the instance being constructed
+          yielded by <code>$this</code>. There are no direct ways to pass
+          parameters to the construct statement and the stack is that at
+          which <code>create</code> is called, with its contents accessible
+          via normal stack-implicit paths.
+          Here is what the <code>construct</code> statement would look like
+          for the example <code>Entity</code> typedef:
+        </p>
+        <source>
+construct (
+            {
+              // Check there is not already an Entity with the given unique key
+              if (read(typeof($this), $this))
+                throw("Create Error",
+                      "There is already an Entity with the name " + $this.Entity,
+                      func f = call util:creationError());
+
+              if ($this.GlobalLimit &lt;= 0)
+                throw("Create Error",
+                      "An Entity's Global Limit must be blank or greater than zero",
+                      func f = call util:creationError());
+
+              // Set the audit data
+              $this.LastUpdated = getdate();
+              $this.User        = $process.loginName;
+            }
+          )
+</source>
+        <p>
+          The primary key is supplied by the user, so we check that it is unique.
+          Inq does this internally, but putting a check in the construct statement
+          means that we get a more graceful error message.
+        </p>
+        <p>
+          If the transaction commits successfully then the instance is written to
+          any persistent i/o and an event raised to signal the instance creation.
+        </p>
+      </section>
+      <section id="createevent">
+        <title>Creation Events</title>
+        <p>
+          As discussed above, instance mutation events are raised on the instance
+          itself, propagating through any event-live structures containing it. When
+          object creation is committed, the event is raised not on the instance,
+          as there can be no observers of it, but on the typedef.
+        </p>
+        <p>
+          All typedefs parsed into the server reside in the system catalog,
+          given by the path <code>$catalog</code>. The catalog is an event-live
+          structure, so creation events propagate through it. Server processes
+          wishing to handle these events can set up listeners on the catalog
+          including filters to discriminate on the desired typedef.
+          <!--
+          The <code>create</code> function accepts an optional second argument
+          which is carried in the creation event. A
+          listening process can choose to receive only events relevant to its
+          current state, based on cooperation between its filtering and
+          the creator's event data.-->
+          This subject is covered in the section
+          on <a href="events.html">event handling</a>.
+        </p>
+      </section>
+    </section>
+    <section id="identity">
+      <title>Explicit Instance Identity</title>
+      <section id="idcreate">
+        <title>On Creation</title>
+        <p>
+          When an instance is submitted for creation and after any construct
+          statement has executed the transaction checks that no unique keys
+          will be violated, either of existing managed instances or other
+          candidates already joined. This ensures that unique
+          key integrity is maintained and, in the absence of specifically
+          scripted checks, generates an exception if any unique key is
+          violated.
+        </p>
+        <p>
+          In many cases, during application analysis a typedef's primary key
+          is derived from its <em>real-world</em> identity, that is the primary key
+          fields have meaning in the application domain. Sometimes, however,
+          there are no fields that are unique and none that can be used
+          for instance identity. In these circumstances it is common to
+          manufacture the primary unique key, say by allocating ascending
+          integers, but with no domain uniqueness, how can we ensure that
+          processing input data does not in fact result in real-world duplicates?
+        </p>
+        <p>
+          An example of this type of problem is the modeling of financial securities.
+          Consider the following typedef fragment:
+        </p>
+        <source>
+typedef Security
+{
+  fields
+  (
+    int    Security;
+    string ExchangeId;
+
+    string LongName;   // e.g. "Acme Widgets plc"
+
+    // External codes
+    string Isin;
+    string Sedol;
+    string Cusip;
+    string RIC;
+      .
+      .
+
+  )
+
+  construct ( { $this.Security = call getUniqueId(); } )
+
+  pkey
+  (
+    fields (Security)
+
+    #include &lt;{db}/Security.pkey.sql&gt;
+  )
+
+  key ByIsin
+  (
+    fields(Isin)
+    auxcfg( map(
+    "prepared", true,
+    "read-sql",
+      "
+        {select-stmt}
+        where Isin  = ?
+      "
+    ))
+  )
+
+  // Further keys for Sedol, Cusip and RIC codes
+      .
+      .
+}
+</source>
+        <p>
+          Securities are identfied in their application domain by various
+          code types. Conventions for their use have sprung up but
+          in spite of efforts to standardise their allocation the sheer volume
+          of data, often gathered together from a number of sources, means that
+          there are often inconsistencies and violations of any standards.
+        </p>
+        <p>
+          Suppose experience of processing feeds from a variety of data providers
+          has shown us that no individual code type can be used as a
+          unique identifier. To satisfy the needs of Inq and our data model
+          we define the primary key as simply the integer <code>Security</code>
+          field, which is allocated a value on creation. This has the benefit of not
+          relying on domain semantics we cannot be certain of, but when processing
+          input data from providers we must have some way of recognising a potential
+          duplicate rather than simply loading everything.
+        </p>
+        <p>
+          The vagaries of mixed quality data mean that we cannot and would
+          not want to model domain identity in a fixed way using unique keys.
+          In the likely event that data from different providers each have their
+          own idiosyncrasies, having determined what these are empirically Inq
+          allows an identity function to be declared for a specific type and
+          for the duration of the transaction.
+        </p>
+        <p>
+          Suppose we are processing an input stream to maintain a large database
+          of securities. As an initial effort, we say that identity is defined by
+          the combination of the Isin code and the ExchangeId. The following script
+          expresses this:
+        </p>
+        <source>
+// Fetch the Security typedef so we can access its properties
+any d = typedef(Security);
+
+// Set an identity function on the Security typedef
+d.properties.identity = func f =
+  {
+    // return a concatenation of the Isin and ExchangeId fields
+    any id = $this.Isin + $this.ExchangeId;
+  };
+</source>
+        <p>
+          Setting the value of <code>identity</code> property of a typedef (which
+          must be a function) establishes a script block that is executed after
+          any construct statement has been run and after the candidate instance
+          has passed all unique key checks. The return value is held in the
+          transaction and used to verify that instances subsequently created
+          do not have the same identity. Identity violation generates an exception.
+          Consider the following input records (occurring in this order but
+          not necessarily consecutively in the stream)
+        </p>
+        <table>
+          <tr>
+            <th>ExchangeId</th>
+            <th>RIC</th>
+            <th>Long Name</th>
+            <th>Description</th>
+            <th>Sedol</th>
+            <th>Isin</th>
+            <th>Currency</th>
+            <th>Country</th>
+          </tr>
+          <tr>
+            <td>LSE</td>
+            <td>ASF.L</td>
+            <td>ASFARE GROUP PLC</td>
+            <td>ORD 25P</td>
+            <td>3399738</td>
+            <td>GB0033997387</td>
+            <td>GBP</td>
+            <td>GB</td>
+          </tr>
+          <tr>
+            <td>LSE</td>
+            <td>ASTO.L</td>
+            <td>ASSETCO PLC</td>
+            <td>ORD 25P</td>
+            <td>3399738</td>
+            <td>GB0033997387</td>
+            <td>GBP</td>
+            <td>GB</td>
+          </tr>
+        </table>
+        <p>
+          The second record generates the same identity as the first and would
+          cause the transaction to throw an exception. Rather than abort the
+          transaction in this way, we would prefer to have some control over which
+          instance should remain in the transaction. Manipulating instances already
+          in the transaction is covered <a href="#manip">below</a>.
+        </p>
+        <p>
+          After a representative set of data has been processed and duplicate
+          instance creation reported, we can examine the results and refine
+          the identity function. Suppose we note that the Sedol code appears
+          to be invariant though not present for all types of security. Further,
+          we see that the RIC is generally related to the name (the real-world
+          difference between the records in our example). Changes in RIC code
+          do not therefore confer different securities in the face of the same
+          Sedol, Isin and ExchangeId. The identity function could then be
+          modified as shown:
+        </p>
+        <source>
+// Fetch the Security typedef so we can access its properties
+any d = typedef(Security);
+
+// Set an identity function on the Security typedef
+d.properties.identity = func f =
+  {
+    // return a concatenation of the Isin and ExchangeId fields
+    any id = $this.Isin + $this.ExchangeId;
+
+    // If there's a sedol then suffix that too. Experience
+    // with data feeds has shown that Isin+ExchangeId is not
+    // always sufficient.
+    if (!isnull($this.Sedol))
+      id += $this.Sedol;
+
+    // Return the identity
+    id;
+  };
+</source>
+      </section>
+      <section id="idmutate">
+        <title>On Mutation</title>
+        <p>
+          An identity function is also called after any mutate statement has
+          been executed, during the transaction's commit phase. The function's
+          return value is used to ensure that no two instances <em>that are
+          participating in the transaction</em> have the same identity. It is
+          important to be aware that, unlike a unique key, an identity value
+          cannot be applied to the cache (or i/o system) to see if the
+          identity is in use by an instance <em>not</em> involved in the
+          transaction.
+        </p>
+        <p>
+          Identity violation occuring because of instance mutation always aborts
+          the transaction with an exception.
+        </p>
+      </section>
+    </section>
+    <section id="delete">
+      <title>Instance Deletion</title>
+      <p>
+        If a server process holds a reference <code>i</code> to a managed instance then it
+        can request deletion using the <code>delete</code> function:
+      </p>
+      <source>
+delete(i);
+</source>
+      <p>
+        After a process has deleted an instance, that instance will no longer be
+        returned by calling the <code>read</code> function prior
+        to committing the transaction, although until then, other processes can still
+        retrieve a managed reference this way. When the transaction is committed,
+        Inq performs the following steps:
+      </p>
+      <ul>
+        <li>if the typedef defines one, its <code>destroy</code> statement is executed;</li>
+        <li>the instance is deleted from any persistent i/o;</li>
+        <li>an event is raised to signal the deletion.</li>
+      </ul>
+      <section id="deleteevent">
+        <title>Deletion Events</title>
+        <p>
+          A deletion event is raised on the instance and propagates through
+          event-live structures containing it. In addition to propagating
+          events arriving at the User Process <code>$root</code> to its client,
+          Inq may remove the child structure containing the instance. Inq
+          does this when the instance is part of a so-called <code>node set</code>
+          and is of the typedef that defines that node set. This topic is covered
+          in the discussion
+          on <a href="structures.html#eventdel">building structures</a>
+          and <a href="events.html">handling events</a>.
+        </p>
+      </section>
+    </section>
+    <section id="manip">
+      <title>Transaction State</title>
+      <section id="stcreate">
+        <title>Created Instances</title>
+        <p>
+          Instances that have been joined into the current transaction for
+          creation are not returned by the <code>read</code> function. Instead,
+          a process can check if a candidate instance it would like to create
+          would cause primary key or identity violation, when an identity
+          function is in effect.
+        </p>
+        <section id="iscreating">
+          <title>iscreating</title>
+          <p>
+            The <code>iscreating(&lt;instance&gt;)</code> function performs this check,
+            returning the instance within the transaction if there is one,
+            or <code>null</code> otherwise. If an identity function
+            has been established then only this is used to check for an instance
+            already in creation. Otherwise the primary key is checked,
+            but the <code>iscreating</code> function does not run any
+            construct statement (where typically the primary key is initialised)
+            on <code>&lt;instance&gt;</code> so application
+            script must ensure that it is initialised
+            appropriately.
+          </p>
+          <p>
+            If <code>iscreating(&lt;instance&gt;)</code> returns the instance
+            joined in the transaction it is permitted to change any of the
+            instance's non-key fields.
+          </p>
+        </section>
+        <section id="createiscreating">
+          <title>Combining create() and iscreating()</title>
+          <p>
+            The syntax of the <code>create</code> statement is:
+          </p>
+          <source>
+create(instance [, event-data [, CREATE_ERROR | CREATE_REPLACE | CREATE_LEAVE ] ]);
+</source>
+          <note>
+              When a transaction containing instance creations commits an event is
+              raised for each created instance. If <code>event-data</code> is supplied
+              then this data will be carried in the event and may be used by listeners
+              to discriminate interest. This topic is covered in the section
+              on <a href="events.html">Events</a>.
+          </note>
+          <p>
+            The default is <code>CREATE_ERROR</code>, meaning that unique (or identity)
+            violation generates an exception.
+          </p>
+          <p>
+            Specifying <code>CREATE_REPLACE</code> causes the given instance to replace
+            one already joined in the transaction. The instance is returned and may
+            be reused.
+          </p>
+          <p>
+            Specifying <code>CREATE_LEAVE</code> causes the instance already joined in the
+            transaction to remain. The return value is a map whose mutable fields
+            are the instance's non-key fields.
+          </p>
+        </section>
+        <section id="delcreate">
+          <title>Deleting Created Instances</title>
+          <p>
+            An instance previously submitted for creation can be deleted using
+            the <code>delete</code> function. The instance is not yet managed,
+            so no cache management, i/o or event generation takes place. The
+            effect of deleting an instance in this state is to remove it from
+            the transaction so that when the transaction is finally committed the
+            instance does not enter the managed state with all that entails.
+          </p>
+          <p>
+            When an instance is submitted for creation, the transaction takes
+            out locks on all unique key values. Deleting an instance in this
+            state requires that all locks (and identity tagging if there is an
+            identity function) be removed. The instance passed
+            to <code>delete</code> must therefore be fully initialised, and is
+            typically the value returned by <code>iscreating</code>.
+          </p>
+        </section>
+        <p>
+          Returning to the example of handling duplicate securities, application
+          script can decide whether to leave an earlier instance already in
+          creation or remove it in favour of a later one by
+          using the <code>iscreating</code> and <code>delete</code> fuctions
+          or using the <code>CREATE_REPLACE</code> or <code>CREATE_LEAVE</code>
+          options.
+        </p>
+      </section>
+      <section id="stdelete">
+        <title>Mutated and Deleted Instances</title>
+        <p>
+          Managed instances that have been joined into the current transaction for
+          deletion are not returned by the <code>read</code> function. There
+          is no way to remove a delete candidate from a transaction other
+          than by aborting it entirely.
+        </p>
+        <p>
+          Managed instances that have been joined for mutation cannot be removed
+          from the transaction, however a mutate statement can veto all changes
+          if it contains the statement <code>$this.new = $this.old</code>.
+          If so, no i/o takes place and no events will be raised during the
+          commit phase.
+        </p>
+      </section>
+   </section>
+   <section id="morenested">
+      <title>More About Nested Transactions</title>
+      <p>
+        In the earlier examples, we saw how a nested transaction could be used to commit
+        the actions of a script block. In these cases, using a nested transaction meant
+        that we could perform more processing within the service request on condition
+        that the transaction committed successfully. In general, we can use a nested
+        transaction to handle a unit of work we would like committed, but which is
+        subordinate to the overall service request.
+      </p>
+      <section id="uniqueallocator">
+        <title>A Unique Key Allocator</title>
+        <p>
+          To illustrate this, consider a package defined to allocate unique integers for the
+          purpose of manufactured unique keys. Here is a suitable typedef:
+        </p>
+        <source>
+package inq.util;
+
+import inq.boot as BOOT;
+
+typedef Unique
+{
+  fields
+  (
+    string      Name;
+    int         Value;
+    date        LastUsed;
+  )
+
+  construct ( { $this.LastUsed     = getdate(); } )
+  mutate    ( { $this.new.LastUsed = getdate(); } )
+
+  pkey
+  (
+    fields (Name)
+
+    <a href="examples/mysql/inqUnique.pkey.sql">#include &lt;{db}/inqUnique.pkey.sql&gt;</a>
+  )
+
+  iobind (SimpleSqlIO, BOOT:inq)
+}
+</source>
+        <p>
+          A sequence is identified by its <code>Name</code>. An instance
+          of <code>Unique</code> represents that sequence's most recently
+          allocated value and when it was allocated. Users can create any
+          number of sequences according to their needs.
+        </p>
+        <p>
+          The package needs to provide an implementation and interface to
+          safely allocate and return unique integers. This is scripted
+          in <a href="examples/inqUniqueSrv.inq"><code>inqUniqueSrv.inq</code></a>
+          and consists of the global function <code>getUniqueId</code> and
+          one helper function <code>allocateId</code>,
+          which as such is declared <code>local</code>.
+        </p>
+        <p>
+          To obtain a new value the application calls <code>getUniqueId</code>,
+          passing the name of the sequence. Save for exceptions due to
+          the environment or bad user arguments, this function is guaranteed to
+          return the next integer in the sequence to the requesting
+          processes. The following points explain how it works:
+        </p>
+        <section id="uniqfunc">
+          <title>The Function Call and Return Interface</title>
+          <p>
+            The <code>getUniqueId</code> function can be called passing
+            only the <code>Name</code> argument, as all the others have
+            default values for the most anticipated use case. The statement</p>
+            <source>
+any newId = call getUniqueId(Name="VehicleId");
+</source>
+          <p>
+            will return the next value in the sequence <code>VehicleId</code>,
+            creating it if it does not already exist with the initial value
+            of <code>1</code>.
+          </p>
+        </section>
+        <section id="uniqlocks">
+          <title>Transaction Locks and User Locks</title>
+          <p>If the <code>allocateId</code> function needs to create the
+            sequence then there is a possibility that two processes could collide
+            in a race to do so. Inq takes out locks to protect the integrity
+            of the server environment but the loser will incur a system exception.
+            To guard against this an explicit lock is taken out with the statement:
+          </p>
+          <source>
+lock("__unique" + Name);
+</source>
+          <p>
+            If the sequence name is <code>Trade</code> then a lock is
+            requested on the value <code>__uniqueTrade</code>, thus
+            associating the lock with the sequence in question. The
+            purpose of this lock is to prevent a system exception
+            occurring when two processes try to create the
+            same <code>Unique</code> instance simultaneously by
+            guarding the region of script at the application level, rather
+            than relying on the system level. Inq releases both system
+            and user locks when the transaction
+            in which they were taken out commits or aborts.
+          </p>
+          <p>
+            This example
+            shows how server processes can passively cooperate through the
+            use of locks. Inq supports a wait/notify mechanism, so
+            that processes, commonly amongst a detached group, can
+            cooperate actively also. This is discussed in the section
+            covering detached process examples.
+          </p>
+          <fixme author="Tom">Job Control example application to be added.</fixme>
+        </section>
+      </section>
+    </section>
+    <section id="ripping">
+      <title>Field Ripping</title>
+      <p>
+        Whether field mutations cause their map container to be entered into
+        a transaction depends on whether the map is a managed instance or not.
+        Earlier we saw how a aliases to existing values can be set up using
+        an anonymous declaration <!--XXX link--> What happens when we do this with
+        managed instance fields? If <code>e</code> is an instance
+        of <code>Entity</code> then this declaration rips
+        the <code>GlobalLimit</code> field from it, creating an
+        alias <code>f</code>:
+      </p>
+      <source>
+any f = e.GlobalLimit;
+</source>
+      <p>
+        The variable <code>f</code> is just a "field" of the current stack
+        frame and access to it is therefore not seen at all by the
+        process's transaction. Mutating <code>f</code> would
+        mean that <code>GlobalLimit</code> could take on a new value
+        without its containing instance being locked, persisted or observers
+        being notified. Inq guards against this by making <code>f</code>
+        a constant reference and any mutation through it generates an exception:
+      </p>
+      <source>
+com.inqwell.any.AnyRuntimeException: Attempt to mutate a value that has become const
+</source>
+      <p>
+        Field ripping is less serious in the Client Process, although it is
+        guarded against in the same way.
+      </p>
+    </section>
+  </body>
+</document>

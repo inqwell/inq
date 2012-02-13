@@ -62,7 +62,7 @@ service Login(string loginName, string passwd, string .package)
       call initWebTimeout();
       
       // Call an internal routine to proceed with the login sequence,
-      // specifying the initial gui screen to be shown.
+      // specifying the initial client-side script
       call system:LoginOK(url="gui/userStart.inq");
 
       $catalog.ps.vars.numUsers++;

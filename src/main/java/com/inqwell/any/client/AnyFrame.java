@@ -68,15 +68,6 @@ public class AnyFrame extends    AnyWindow
     preferredListenerTypes__.add(ListenerConstants.COMPONENT);
   }
 
-  public AnyFrame(JFrame f)
-  {
-		super(f);
-	}
-
-  public AnyFrame()
-  {
-	}
-
 	public void setObject(Object f)
 	{
 		if (!(f instanceof JFrame))

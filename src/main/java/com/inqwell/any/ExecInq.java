@@ -74,9 +74,9 @@ public class ExecInq extends    AbstractFunc
                                       root,
                                       inq_);
 
-    Any aBaseURL    = EvalExpr.evalFunc (getTransaction(),
-                                         root,
-                                         baseURL_);
+    Any aBaseURL  = EvalExpr.evalFunc (getTransaction(),
+                                       root,
+                                       baseURL_);
 
     if (inqSource == null)
       throw new AnyException("Could not resolve source operand " + inq_);
@@ -97,8 +97,15 @@ public class ExecInq extends    AbstractFunc
     if (!(inqSource instanceof AnyByteArray))
     {
       au = new AnyURL(inqSource.toString()); // the source operand
-      u  = au.getURL(baseURL);
-      au.setValue(u);
+      if ((u = au.getURL()) != null && u.getProtocol().equals("string"))
+      {
+          au = baseURL;
+      }
+      else
+      {
+        u  = au.getURL(baseURL);
+        au.setValue(u);
+      }
     }
     else
       au = baseURL;
@@ -217,9 +224,6 @@ public class ExecInq extends    AbstractFunc
     }
     else
     {
-      // Assume its a URL.  Although usually resolved to
-      // an absolute URL by now, local script exec can specify
-      // a relative one so resolve w.r.t. given base anyway.
       is = u.openStream();
     }
 

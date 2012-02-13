@@ -34,4 +34,5 @@ public interface IoConstants
   static Any dateAsTime__  = AbstractValue.flyweightString("dateastimestamp");
 	static Any cardinality__ = AbstractValue.flyweightString("cardinality");
   static Any initStmts__   = AbstractValue.flyweightString("init");
+  static Any onException__ = AbstractValue.flyweightString("onexception");
 }

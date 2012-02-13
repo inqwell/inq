@@ -590,12 +590,9 @@ public class SimpleSqlIO extends    AbstractAny
 	
 	public void useSqlServer(Any a) throws AnyException
 	{
-		//System.out.println ("useSqlServer: " + a);
 		sqlLogin_     = EvalExpr.evalFunc(Transaction.NULL_TRANSACTION,
 																					 Catalog.instance().getCatalog(),
 																					 a);
-		//System.out.println ("useSqlServer: " + sqlLogin_);
-		//System.out.println ("useSqlServer: toString() " + toString());
     
     Map m = (Map)SqlManager.instance().getSpec(sqlLogin_);
     if (m.contains(IoConstants.cardinality__))

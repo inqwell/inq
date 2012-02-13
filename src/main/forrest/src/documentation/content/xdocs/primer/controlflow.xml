@@ -1,0 +1,779 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright 2006 Inqwell Ltd.
+-->
+<!DOCTYPE document PUBLIC "-//APACHE//DTD Documentation V2.0//EN" "http://forrest.apache.org/dtd/document-v20.dtd">
+<document>
+  <header>
+    <title>Execution, Statements and Control Flow</title>
+  </header>
+  <body>
+    <section id="stmts">
+      <title>Statements</title>
+      <p>
+        Inq script controls execution through <em>statements</em>, which
+        have a value and may also have an effect. A statement contains
+        one or more <em>expressions</em>, which include node references,
+        combinations of operators and any of the built-in functions.
+        Having a value as it does, a statement is also an expression.
+        Here are some examples:
+      </p>
+      <source>
+// Returns the value at the given path. Has no effect
+x.y.z;
+
+// Returns the square root of the value at the given path.
+sqrt(x.y.z);
+
+// Has the effect of creating a new variable r.s.t that
+// is p raised to the power q. The result is returned
+// and is of type double.
+any r.s.t = p ^^ q;
+
+// Evaluate the path $this.a.b.c using it to compute the
+// path to node z. Convert the result to a boolean and either
+// call function foo() or set m.n.o to 3, j.k.l to 6 and
+// call bar() passing the argument barval.
+// The result is the return value of foo() or bar().
+if (x.{$this.a.b.c}.z)
+  call foo();
+else
+{
+  m.n.o = 3;
+  call bar(barval = j.k.l = 6);
+}
+</source>
+      <p>
+        A statement is either a single expression, an expression group or
+        a statement group, also known as a <em>block statement</em>.
+        A block statement is a set of statements contained within
+        matched braces <code>{ ... }</code>. Statements comprising
+        expression (groups) are delimited by the semi-colon, which
+        on its own is the null statement.
+      </p>
+      <p>
+        An expression group is any number of expressions combined by
+        operators, as arguments to built-in functions or calls
+        to scripted functions. An expression group is, itself, an
+        expression and the recursive semantics of Inq creates some
+        small grammar ambiguities. The following statement (an example
+        of the Regular Expression <em>matches</em> operator)
+        returns <code>true</code>:
+      </p>
+      <source>
+("A shot in the dark" ~~ "^A.*dark$");
+</source>
+      <p>
+        The block statement version has to be written like this:
+      </p>
+      <source>
+{ ("A shot in the dark" ~~ "^A.*dark$"); }
+</source>
+      <p>
+        in order to differentiate the <code>{</code>
+        token from its use in paths of the
+        form <code>x.{$this.a.b.c}.z</code>.
+      </p>
+      <!--
+      <note>In fact, this is more a limitation of the parser than the
+      grammar. If fixed, the semi-colon becomes harmlessly redundant</note>
+      -->
+      <p>
+        Secondly, numeric constants can be prefixed with the minus
+        sign <code>"-"</code>. The construct <code>-3</code> is
+        parsed to a constant, whereas <code>-a</code> is the
+        unary negation operator applied to the value resolved at
+        the path <code>$stack.a</code>. This gives rise to the
+        following, which rarely cause problems in practice and are
+        included for completeness:
+      </p>
+      <ul>
+        <li><strong>4-3</strong> causes a parse error - a constant
+        followed by another constant is an illegal expression. This
+        can legally be written using white space
+        as <strong>4 - 3</strong> to become
+        an expression of the binary subtraction operator.</li>
+        <li><strong>4+3</strong> is legal expression which,
+        when evaluated, yields the value 7.</li>
+        <li><strong>a-b</strong> is legal and syntactically equivalent
+        to <strong>a - b</strong>, because identifiers must begin
+        with an alpha character.</li>
+      </ul>
+      <p>
+        Finally, there are similar issues with the multiplication
+        operator <code>*</code> and that symbol's use in a lazy
+        path specification:
+      </p>
+      <ul>
+        <li><strong>4*3</strong> is the expression <em>four
+        times three</em>, and so is <strong>4 * 3</strong>.</li>
+        <li><strong>a*b</strong> is the lazy path
+        between <code>$stack.a</code> and the first discovered
+        descendant named <code>b</code>,
+        whereas <strong>a&nbsp;*&nbsp;b</strong> is <code>$stack.a</code>
+        multiplied by <code>$stack.b</code></li>
+      </ul>
+      <p>
+        An expression group that generates a value creates a new variable. For
+        example, the statement shown above
+      </p>
+      <source>
+any r.s.t = p ^^ q;
+</source>
+      <p>
+        the value at <code>r.s.t</code> is a new <code>double</code>. The
+        same variable would have resulted from the
+        declaration
+      </p>
+      <source>
+double r.s.t;
+</source>
+      <p>
+      </p>
+    </section>
+    <section id="blockstmt">
+      <title>Block Statements</title>
+      <p>
+        The result of a block statement is that of the last statement
+        within it that was <em>actually executed</em>. Consider the following:
+      </p>
+      <source>
+any vars.cunning = "fox";
+any vars.lazy    = "dog";
+string s =
+{
+  if (vars.lazy == "dog")
+    renderf("The quick brown {0} jumps over the lazy {1}", vars.cunning, vars.lazy);
+  else
+    "The " + vars.lazy + " is not a lazy animal";
+};
+</source>
+      <p>
+        As shown, the string <code>s</code> is initialised
+        to <code>The quick brown fox jumps over the lazy dog</code>.
+        Callable functions have as their body a block statement, so
+        this aspect of the Inq language is most frequently relevant
+        as determining a function's return value.
+      </p>
+      <p>
+        The values yielded
+        by Inq built-in functions are documented in the function
+        reference [TODO]. <!--XXX link-->
+        Where a function does not have a meaningful
+        value, the <code>null</code> constant is returned.
+      </p>
+    </section>
+    <section id="conditional">
+      <title>Conditional Statements</title>
+      <section id="ifstmt">
+        <title>The if Statement</title>
+        <p>
+          The <code>if</code> statement allows conditional execution of
+          one statement or a conditional choice of two,
+          executing one or the other but not both:
+        </p>
+        <source>
+if (&lt;expression&gt;)
+  &lt;statement&gt;
+[ else &lt;statement&gt; ]
+</source>
+        <p>
+          The condition expression is evaluated and converted
+          to the <code>boolean</code> type. If <code>true</code>
+          the associated statement is executed,
+          if <code>false</code> it is not. In this case, if
+          the <code>else</code> clause is present it is executed.
+          The <code>if</code> statement returns the value of the
+          statement it executed or <code>false</code> when no
+          statement is executed.
+        </p>
+        <p>
+          In common with other languages, where there are
+          cascaded <code>if</code> statements, Inq associates
+          an <code>else</code> clause with the nearest <code>if</code>:
+        </p>
+        <source>
+if (a.b)
+  if (e.f)
+    if (x.y)
+      writeln("a.b, e.f and x.y are all true");
+    else
+      writeln("a.b and e.f are true, while x.y is false");
+</source>
+        <p>
+          If the conditions in the above example are not as stated
+          in the <code>writeln</code> statements then this example
+          outputs nothing and the outermost <code>if</code> statement
+          returns <code>false</code>.
+        </p>
+      </section>
+      <section id="switchstmt">
+        <title>The switch Statement</title>
+        <p>
+          The <code>switch</code> statement allows conditional execution of
+          one and only one statement amongst a choice of many:
+        </p>
+        <source>
+switch
+{
+  when (&lt;expression&gt;) &lt;statement&gt;
+  [ when (&lt;expression&gt;) &lt;statement&gt; ...]
+  [ otherwise &lt;statement&gt; ]
+}
+</source>
+        <p>
+          The <code>when</code> clauses are evaluated in order until
+          the first to convert to boolean <code>true</code>, whose
+          statement is then executed. Any subsequent <code>when</code>
+          clauses are ignored.
+        </p>
+        <p>
+          If  an <code>otherwise</code> clause is present and
+          none of the <code>when</code> clauses returned <code>true</code>
+          it is executed. There must be at least one <code>when</code>
+          clause, in which case the <code>switch</code> statement
+          is equivalent to <code>if [else]</code>.
+        </p>
+      </section>
+    </section>
+    <section id="loops">
+      <title>Loop Constructs</title>
+      <p>
+        Inq supports looping
+        with <code>while</code>, <code>do ... while</code>
+        and <code>for</code> statements. In addition, script can loop
+        over the children of a specified node using <code>foreach</code>.
+      </p>
+      <section id="lwhile">
+        <title>The while Statement</title>
+        <p>
+          The <code>while</code> construct executes its statement
+          zero or more times based on a condition which is tested
+          prior to each execution. While the condition converts
+          to boolean <code>true</code> execution of the statement
+          repeats. When the condition converts to
+          boolean <code>false</code> execution passes to
+          any statement following.
+        </p>
+        <source>
+while (&lt;expression&gt;)
+  &lt;statement&gt;
+</source>
+        <p>
+        The result is that of the statement, or <code>false</code> if the
+        statement was never executed.
+        </p>
+      </section>
+      <section id="ldo">
+        <title>The do Statement</title>
+        <p>
+          The <code>do...while</code> construct executes its statement
+          one or more times based on a condition which is tested
+          subsequent to each execution. While the condition converts
+          to boolean <code>true</code> execution of the statement
+          repeats. When the condition converts to
+          boolean <code>false</code> execution passes to
+          any statement following.
+        </p>
+        <source>
+do
+  &lt;statement&gt;
+while (&lt;expression&gt;);
+</source>
+        <p>
+        The result is that of the statement.
+        </p>
+      </section>
+      <section id="lfor">
+        <title>The for Statement</title>
+        <p>
+          The <code>for</code> construct executes its initial
+          expression. Its statement is executed
+          zero or more times based on its condition which is tested
+          prior to each execution. While the condition converts
+          to boolean <code>true</code> execution of the statement
+          repeats. When the condition converts to
+          boolean <code>false</code> execution passes to
+          any statement following. After each execution
+          the <code>for</code> statement's final expression is
+          executed.
+        </p>
+        <source>
+for (&lt;initial-expression&gt; ; &lt;condition-expression&gt; ; &lt;final-expression&gt;)
+  &lt;statement&gt;
+</source>
+        <p>
+        The result is that of the statement, or <code>false</code> if the
+        statement was never executed.
+        </p>
+      </section>
+      <section id="lforeach">
+        <title>The foreach Statement</title>
+        <p>
+          The <code>foreach</code> construct executes its statement
+          once for each child of the specified node:
+        </p>
+        <source>
+foreach (&lt;expression&gt; ["," &lt;boolean-literal&gt;])
+  &lt;statement&gt;
+</source>
+        <p>
+          There is no condition in the conventional sense, rather
+          execution passes to any following statement when the
+          iteration over the specified node's immediate children
+          is complete.
+        </p>
+        <p>
+          The statement does not execute at all if the expression:
+        </p>
+        <ol>
+          <li>does not resolve;</li>
+          <li>resolves to a node that does not support children;</li>
+          <li>resolves to a node that has no children.</li>
+        </ol>
+        <p>
+          During each execution of the statement, <code>$loop</code>
+          resolves to the current child node. Here is an example
+          node space fragment and script:
+        </p>
+        <table class="plain">
+          <tr><td class="centred">
+          <img src="images/foreach.png" alt="foreach node space"/>
+          </td></tr>
+        </table>
+        <source>
+any swapPosLatest = new(SwapPos);
+any tradeMargin = new(xy:SwapPosLatest.Margin, 0);
+foreach ($this.vars.tradeList)
+{
+  // total up the TradeQty...
+  swapPosLatest.TradeQty += $loop.Trade.Quantity;
+
+  // ...and the Margin
+  tradeMargin += ($loop.Trade.Quantity * $loop.Trade.Price * $loop.Trade.FXRate);
+}
+</source>
+        <note>
+          This kind of structure is an example of a <em>node set</em>
+          made by Inq when applying typedef non-unique keys. The
+          name of each node set child, denoted in the above diagram
+          as <code>&lt;k&gt;</code>, is the unique key value of the
+          primary (and in this example only) typedef instance contained in
+          the child. We will be looking at node sets when
+          discussing <a href="structures.html">Building Node Structures</a>.
+        </note>
+        <p>
+          When the statement is executing the following special paths
+          are available
+        </p>
+        <dl>
+          <dt><strong>@name</strong></dt>
+          <dd>The name of the current child node (returned
+          by <code>$loop</code>) in the loop parent. Referring to
+          the above diagram, the current value
+          of <code>&lt;k&gt;</code>.</dd>
+          <dt><strong>@count</strong></dt>
+          <dd>The number of times the statement has executed.
+          On the first iteration this value is zero and on
+          the last it is one less than the number of children.</dd>
+          <dt><strong>@first</strong></dt>
+          <dd><code>true</code> when the statement is executing for
+          the first time, <code>false</code> for all other
+          executions.</dd>
+          <dt><strong>@last</strong></dt>
+          <dd><code>true</code> when the statement is executing for
+          the last time, <code>false</code> for all other
+          executions.</dd>
+        </dl>
+        <p>
+          These paths are unavailable when the loop has terminated,
+          whether normally or abnormally (see below). When <code>foreach</code>
+          loops are nested, the paths (and <code>$loop</code> always refer
+          to the enclosing statement and any values relevant to an outer
+          loop are unavailable until the inner one terminates. If they are
+          required by the inner loop statement then they must be
+          explicitly aliased:
+        </p>
+        <source>
+foreach(outerNode)
+{
+  .
+  .
+  any outerCount = @count;
+  any outerChild = $loop;
+
+  foreach($loop.innerNode)
+  {
+    .
+    .  // now we can see @count and $loop from the outer loop
+    .  // as outerCount and outerChild
+    .
+  }
+}
+</source>
+        <p>
+          Although the prominent type of container node is a
+          map, <code>foreach</code> will iterate over the
+          types <code>set</code> and <code>array</code> also,
+          but <code>@name</code> is unavailable in
+          these cases.
+        </p>
+        <p>
+          The <code>foreach</code> statement returns <code>true</code>
+          if the loop statement executed at least once (even if
+          this execution was only partial) and <code>false</code>
+          if it never executed.
+        </p>
+        <section id="removeiter">
+          <title>Removing The Current Iteration</title>
+          <p>
+            Within the loop body, the current child node can be removed from the
+            iteration set with the <code>removeiter([&lt;boolean-literal&gt;])</code>
+            statement. If the optional argument is <code>true</code> and the
+            child is capable of <a href="events.html">raising events</a> then
+            a <em>remove</em> event will be raised on the child.
+          </p>
+        </section>
+        <section id="concursafe">
+          <title>Concurrent Safe Iteration</title>
+          <p>
+            If the iteration set must be altered other than by <code>removeiter()</code>,
+            for example if new children must be added, concurrent-safe
+            iteration can be performed by specifying <code>true</code>
+            as <code>foreach</code>'s optional second argument. In this case the
+            iteration will proceed across the children present at the start of
+            the loop. Any children added will not be visited. If a child
+            that has not yet been visited is removed the result is undefined.
+          </p>
+        </section>
+      </section>
+      <section id="loopterm">
+        <title>Abnormal Termination</title>
+        <p>
+          A loop makes the prescribed number of iterations and
+          its statement executes completely each time unless any of the
+          abortive actions of <code>break</code>, <code>continue</code>
+          or <code>return</code> are taken.
+        </p>
+        <section id="lbreak">
+          <title>The break Statement</title>
+          <p>
+            The <code>break</code> statement causes both the loop statement
+            and the loop itself to terminate. There will be no further iterations
+            and execution passes to any following statement. The
+            syntax of <code>break</code> is
+          </p>
+          <source>
+break( [&lt;expression&gt;] );
+</source>
+          <p>
+            If an expression is specified, its value becomes the return value
+            of the loop, overriding the values of <code>true</code>
+            or <code>false</code> as stated above.
+          </p>
+        </section>
+        <section id="lcontinue">
+          <title>The continue Statement</title>
+          <p>
+            The <code>continue</code> statement causes the current execution
+            of the loop statement (that is, iteration of the loop) to terminate.
+            For <code>while</code> and <code>do...while</code> the condition
+            is evaluated to determine if the loop itself has terminated
+            naturally and <code>foreach</code> sets its special variables if
+            there are still children remaining.
+            The
+            syntax of <code>continue</code> is
+          </p>
+          <source>
+continue;
+</source>
+          <p>
+            The <code>break</code> and <code>continue</code> statements
+            are only valid inside a loop statement. Note, however, that this is
+            enforced only at run-time. Should these statements be executed outside
+            of a loop context an exception is generated.
+          </p>
+        </section>
+        <section id="lreturn">
+          <title>The return Statement</title>
+          <p>
+            Use of the <code>return</code> statement is not restricted
+            to the context of a loop statement, however it is included
+            here for completeness and to affirm that, in this
+            context, the loop and loop statement are terminated as
+            for <code>break</code>, as well as terminating the enclosing
+            function.<!-- Functions and their return values are discussed
+            here XXX link-->
+          </p>
+        </section>
+      </section>
+    </section>
+    <section id="callfunc">
+      <title>Function Call and Return</title>
+      <p>
+        A function call has the syntax
+      </p>
+      <source>
+"call" &lt;function-name&gt; "(" [ [&lt;argument&gt;] "," &lt;argument&gt; ... ] ")";
+
+&lt;function-name&gt; = [ &lt;name-space&gt;":" ]&lt;identifier&gt;
+
+&lt;name-space&gt; = ( &lt;package-specification&gt;
+               | &lt;package-import-alias&gt;
+               | "global"
+               )
+
+&lt;argument&gt; = ( &lt;identifier&gt; "=" &lt;expression&gt;
+             | &lt;path&gt;
+             )
+</source>
+      <p>
+        An argument using the <code>&lt;path&gt;</code> form assumes that
+        the last path component is also the argument name. Here are some
+        examples:
+      </p>
+      <source>
+call foo(arg1 = x.y.z, arg2 = r.s.t);
+
+call bar(a.b.c, arg2 = length(f.g.h));
+
+call from.elsewhere:fred(arg1 = 3, arg2 = call foo(arg1 = x.y.z, t = a));
+</source>
+      <p>
+        Execution passes to a function's statement when a <code>call</code>
+        statement is successfully executed. The target function is located
+        prior to evaluating any arguments:
+      </p>
+      <ol>
+        <li>No <code>&lt;name-space&gt;</code> qualifier is present and there is
+        a function of the specified name defined with the <code>local</code>
+        qualifier in the referring parse module.</li>
+        <li>No <code>&lt;name-space&gt;</code> qualifier is present, there is
+        no <code>local</code> function in the referring parse module however
+        there is a function with the specified name defined in the current
+        parse module or another parse module with the same package.
+        </li>
+        <li>When <code>&lt;package-specification&gt;</code>
+        or <code>&lt;package-import-alias&gt;</code> is present the referred
+        function is that defined in a parse module with the specified
+        package.</li>
+        <li>The <code>global</code> name-space qualifier can be used to
+        force case 2, above, when a local function would be preferred
+        otherwise.</li>
+      </ol>
+      <p>
+        It is a run-time error if the target function cannot be resolved.
+        Arguments, when present, are
+        then <a href="expressions.html#scriptfunc">evaluated and processed</a>.
+      </p>
+      <p>
+        The result of a <code>call</code> statement is the result of the
+        referred function's statement, which may terminate normally or
+        abnormally, with the use of a <code>return</code> statement.
+      </p>
+    </section>
+    <section id="xfunc">
+      <title>Function Variables</title>
+      <p>
+        Any statement (frequently a <code>call</code> statement, but there is
+        no restriction) can be held as a variable of type <code>func</code>
+        or <code>cfunc</code>. Such a variable is initialised with a
+        statement, rather than the value that execution of the statement would
+        produce. The statement can then be passed as an argument in
+        function calls or service requests.
+      </p>
+      <p>
+        Both <code>func</code> and <code>cfunc</code> have the same declaration
+        form. Here are some examples:
+      </p>
+      <source>
+func textCallback = call myFunc(text);
+
+cfunc window.menu.closeMenu.callback = call eventClose();
+
+cfunc block = {
+                $this.vars.total = total;
+                send rollDate(total);
+              };
+</source>
+      <section id="cfuncfunc">
+        <title>func and cfunc</title>
+        <p>
+          The <code>func</code> and <code>cfunc</code> data types differ only
+          in that, when executed, a <code>func</code> statement
+          runs with the context node prevailing when the <code>func</code> variable
+          was defined, whereas a <code>cfunc</code> statement runs in
+          the context the statement was invoked in. The choice is
+          made clear by the usage circumstances. In the discussion below the
+          term <em>func</em> to mean both <code>func</code> and <code>cfunc</code>.
+        </p>
+      </section>
+      <section id="funcexec">
+        <title>Invoking the Statement</title>
+        <p>
+          A func's statement executes when
+          invoked from script using an <code>xfunc</code> statement or
+          by built-in functions that can accept (or require) a statement
+          as an argument.
+        </p>
+        <section id="usingxfunc">
+          <title>Using xfunc</title>
+          <p>
+            The <code>xfunc</code> statement has the syntax:
+          </p>
+          <source>
+xfunc(&lt;func&gt; [, &lt;call-args&gt; ]);
+</source>
+          <p>
+            where <code>&lt;func&gt;</code> is an expression that evaluates to
+            a <code>func</code> variable and <code>&lt;call-args&gt;</code>
+            are as documented
+            for <a href="module.html#funcargs">function arguments</a>. If
+            arguments are specified, these are evaluated and placed on a
+            new stack frame. If there are no arguments then no new stack
+            frame is created, see further discussion below.
+          </p>
+          <p>
+            Control passes to the func's statement, establishing the context
+            in the case of <code>func</code>. The value of <code>xfunc</code>
+            is the value of the func statement.
+          </p>
+        </section>
+        <section id="funcarg">
+          <title>func Variables as Built-in Function Arguments</title>
+          <p>
+            When scripted functionality is specified or required for a
+            built-in function it is passed as a func argument. One of
+            the built-ins used to manipulate node
+            structures is the <code>groupby</code> function. Here is
+            an example of its use:
+          </p>
+          <source>
+hmap grouped;
+
+groupby(generateFrom,
+        cfunc distinctF = $loop.CETrade.Instrument,
+        cfunc startF  =
+        {
+          // Create an empty CETrade, initialise important fields and
+          // store under the given name
+          any newCETrade = new(xy:CETrade);
+          newCETrade.Instrument = $loop.CETrade.Instrument;
+          newCETrade.Quantity   = 0;
+          newCETrade.Price      = 0;
+          any grouped.{@name}.CETrade = newCETrade;
+
+          // Put the Instrument into the grouped set - we need it to display in
+          // the generated trades table.
+          any grouped.{@name}.Instrument = $loop.Instrument;
+        },
+        foreach = cfunc foreachF =
+        {
+          // sum the qty/px within the current group, the px will be weighted
+          grouped.{@name}.CETrade.Quantity += $loop.CETrade.Quantity;
+          grouped.{@name}.CETrade.Price    += $loop.CETrade.Quantity * $loop.CETrade.Price;
+        },
+        end = cfunc enfF =
+        {
+          // weight the price
+          grouped.{@name}.CETrade.Price /= grouped.{@name}.CETrade.Quantity;
+        });
+
+</source>
+          <p>
+            The <code>groupby</code> function is discussed in the section
+            on <a href="structures.html">building node structures</a>.
+            This example
+            transforms a list of <code>CETrade</code> instances that
+            comprise (at least) the
+            fields <code>Instrument</code>, <code>Quantity</code>
+            and <code>Price</code>. To further explain
+            its operation the arguments are as follows:
+          </p>
+          <ol>
+            <li>The first argument, <code>generateFrom</code> in this
+            example, is the node set the group-by function will be
+            applied to.</li>
+            <li>A func argument to return the value that defines the
+            distinct-ness for the grouping operation. This example
+            groups the <code>CETrade</code> instances by
+            their <code>Instrument</code> field.</li>
+            <li>A func argument executed once for every distinct
+            value returned by argument 2 and on its first occurrence.
+            This example allocates
+            a new instance of <code>CETrade</code>, initialises the
+            relevant fields and places it in the output list.
+            The <code>@name</code>
+            symbol evaluates to the current distinct value.</li>
+            <li>A func that is executed for every child of the input
+            list. The <code>@name</code>
+            symbol evaluates to the current distinct value. The purpose
+            of this example is to sum the <code>Quantity</code> and
+            find an average <code>Price</code>, weighted by
+            the <code>Quantity</code>.</li>
+            <li>A func that is executed after the input list has been
+            processed, once for each distinct value. The required
+            average is calculated by dividing the weighted total by the
+            weighting total, <code>Quantity</code>.</li>
+          </ol>
+          <p>
+            Statement arguments to built-ins are often seen when the
+            built-in performs some sort of iteration, as in this example.
+            They are executed without arguments, so a new stack frame is
+            not created. In this way, the statements have
+            access to the current local scope, as illustrated in this example
+            where the output list is built on the <code>hmap</code> locally
+            declared as <code>grouped</code>.
+          </p>
+        </section>
+      </section>
+      <section id="funcstack">
+        <title>Arguments to funcs and Stack Frames</title>
+        <p>
+          Unlike a defined function, a func's statement has no formal
+          definition of its parameters. When arguments are passed in
+          an <code>xfunc</code> invocation they are placed on
+          a new stack frame. If no arguments are passed, no new stack frame
+          is created and instead the func statement has access to the contents
+          of the current stack.
+        </p>
+        <p>
+          Arguments are most often passed in an <code>xfunc</code> when
+          the <code>func</code> statement is a <code>call</code> expression:
+        </p>
+        <source>
+func callf = call somefunc(arg1, arg2);
+</source>
+        <p>
+          Of course, the expressions <code>arg1</code> and <code>arg2</code>
+          are the path references <code>$stack.arg1</code>
+          and <code>$stack.arg2</code>. For these to resolve successfully
+          the invocation of <code>callf</code> would look like this:
+        </p>
+        <source>
+xfunc(callf, arg1, arg2);
+</source>
+        <p>
+          This pattern of <code>func</code> and <code>xfunc</code> is common
+          when one context is establishing an entry point and providing
+          it for use to another via the variable <code>callf</code>.
+        </p>
+        <p>
+          However a <code>func</code>'s (or <code>cfunc</code>'s) statement
+          can be any expression and references to the stack can be satisfied
+          by arguments passed in the <code>xfunc</code>. If no arguments
+          are specified in the <code>xfunc</code> then the expression is
+          assuming that any stack references are resolved by the contents
+          of the current stack frame. This pattern is more common when funcs
+          are passed as arguments to built-in functions, such as
+          the <code>groupby</code> example above. In cases like these
+          there is no explicit <code>xfunc</code>, however the same rules apply.
+          Not creating a new stack frame is especially relevant
+          to <code>groupby</code> because it supports multiple <code>cfunc</code>
+          arguments, where those that are called first typically set up
+          stack-based variables for those called later.
+        </p>
+      </section>
+    </section>
+  </body>
+</document>

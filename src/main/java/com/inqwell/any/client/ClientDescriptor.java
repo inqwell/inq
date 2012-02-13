@@ -49,11 +49,15 @@ public final class ClientDescriptor extends    AbstractDescriptor
 		super(name, alias, fQName, proto, keys, formatStrings, titleStrings, widths, enums, enumSymbols, privileges);
 	}
 
-	public void construct(Map m, Transaction t) throws AnyException
-	{
-		throw (new UnsupportedOperationException(getClass().toString() +
-																						 " construct"));
-	}
+  public void construct(Map m, Transaction t) throws AnyException
+  {
+    throw (new UnsupportedOperationException());
+  }
+
+  public void join(Map m, Transaction t) throws AnyException
+  {
+    throw (new UnsupportedOperationException());
+  }
 
 	public void mutate(Map newVal,
                      Map oldVal,

@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import bibliothek.gui.dock.common.action.CAction;
 import bibliothek.gui.dock.common.action.CSeparator;
 
+import com.inqwell.any.AbstractAny;
 import com.inqwell.any.client.dock.AnyCAction.ActionContainer;
 
 
@@ -60,4 +61,6 @@ public class RootActionContainer implements ActionContainer
   {
     return actions_;
   }
+
+  public void afterLayout() {}
 }

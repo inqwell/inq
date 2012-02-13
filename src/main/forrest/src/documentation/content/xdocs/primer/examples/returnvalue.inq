@@ -1,0 +1,23 @@
+// Declare the function
+function daysInMonth(int month)
+{
+  switch
+  {
+    when (contains(set s = (4, 6, 9, 11), month)) 30;
+    when (month == 2) 28;
+    when (contains(set s = (1, 3, 5, 7, 8, 10, 12), month)) 30;
+    otherwise throw("Bad month number " + month);
+  }
+}
+
+int month = 13;
+writeln($catalog.system.out, "There are " +
+                             call daysInMonth(month = 1) +
+                             " days in January");
+
+writeln($catalog.system.out, "February (most often) has " +
+                             call daysInMonth(month = 2));
+
+writeln($catalog.system.out, "Lets croak " +
+                             call daysInMonth(month = 13));
+

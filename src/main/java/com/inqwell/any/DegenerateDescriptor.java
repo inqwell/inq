@@ -42,6 +42,10 @@ public class DegenerateDescriptor extends    AbstractAny
 	{
 	}
 
+  public void join(Map m, Transaction t) throws AnyException
+  {
+  }
+
 	public void mutate(Map newVal,
                      Map oldVal,
                      Map context,

@@ -88,15 +88,10 @@ public class SendRequest extends    AbstractFunc
 		return new SimpleEvent(eventType, toSend);
 	}
 	
-	/**
-	 * 
-	 */
   public SendRequest(Any serviceName,
 										 Any context,
-										 Any saveAt,    // defunct
 										 Any args,
-										 Any outputChannel,
-										 Any response)  // defunct
+										 Any outputChannel)
   {
     serviceName_        = serviceName;
     context_            = context;
@@ -104,18 +99,11 @@ public class SendRequest extends    AbstractFunc
     outputChannel_      = outputChannel;
   }
 
-	/**
-	 * Construction from BML for local service invocation from GUI
-	 * controls.  The context is supplied by the GUI control itself, when
-	 * the <code>SendRequest</code> is added as an event listener.
-	 * <p>
-	 * Uses the default event type of <code>INVOKE_SVC</code>
-	 */
   public SendRequest(Any serviceName,
                      Any args,
                      Any outputChannel)
   {
-    this(serviceName, null, null, args, outputChannel, null);
+    this(serviceName, null, args, outputChannel);
   }
   
   /**
@@ -313,13 +301,11 @@ public class SendRequest extends    AbstractFunc
 																								args_,
 																								Map.class);
 
-//System.out.println("resolving operands " + outputChannel_);
 	  outputChannel_    = (OutputChannel)EvalExpr.evalFunc
 																									(getTransaction(),
 		                                               a,
 		                                               outputChannel_,
 		                                               OutputChannel.class);
-//System.out.println("resolving operands " + outputChannel_);
   }
   
   /**

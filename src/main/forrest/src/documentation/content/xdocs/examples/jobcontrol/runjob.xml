@@ -1,0 +1,575 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright 2011 Inqwell Ltd.
+-->
+<!DOCTYPE document PUBLIC "-//APACHE//DTD Documentation V2.0//EN" "http://forrest.apache.org/dtd/document-v20.dtd">
+<document>
+  <header>
+    <title>Running Jobs</title>
+  </header>
+  <body>
+    <section id="runjob">
+      <title>Introduction</title>
+      <p>
+        Jobs can be run in two ways:
+      </p>
+      <ol>
+        <li><strong>When a timer fires.</strong> The top-level job associated with the timer is
+        is executed. If the job is a box then its children are executed recursively.</li>
+        <li><strong>On demand.</strong> A job at any level in the tree can be executed on request.
+        If the job is a box then its children are executed recursively.</li>
+      </ol>
+      <p>
+        <code>jobdispatcher</code>'s role in executing a job is only to start
+        a new process to execute the sub-tree. A check is made to ensure that
+        any descendant (or if a manual run of some child ancestor jobs also)
+        are not already running so that the same (or related) jobs cannot
+        be started more than once.
+      </p>
+      <p>
+        When this process terminates it invokes the <code>jobComplete</code>
+        service on <code>jobdispatcher</code>. Depending on the exit status
+        passed back and whether the job should be rescheduled if it reports
+        unsuccessful, <code>jobdispatcher</code> may restart the timer.
+      </p>
+    </section>
+    <section id="timer">
+      <title>Timer Execution</title>
+      <p>
+        Timers and their properties are covered 
+        in <a href="../petstore/items.html#timers">petstore</a>. Here is the
+        code that Job Control has to start the timers that run each top level
+        job:  
+      </p>
+      <source>
+local function startTimer(any Job, any jobTimer, any userInfo)
+{
+  // Run all timers at FIXED_DELAY and with no repeat period.
+  // This means that the timer will run at its nextRuns time
+  // once only. The job dispatcher process calls the timer
+  // expression to set up each new run.
+  jobTimer.properties.fixedOrDelay = FIXED_DELAY;
+  jobTimer.properties.period       = null;
+  
+  jobTimer.properties.userInfo     = userInfo; 
+  
+  // All timers call the job dispatcher function when they go off
+  jobTimer.properties.func = func f = <strong>call jobDispatcher(fromTimer);</strong>
+    
+  loginfo($catalog.jobcontrol.logger, "Starting timer for job {0} : runs at {1}",
+                                      Job.ShortName, jobTimer.properties.nextRuns);
+  starttimer(jobTimer);
+}
+</source>
+      <section id="tstart">
+        <title>Job Startup</title>
+        <p>
+          When a timer fires the stack is initialised with the timer
+          itself as the argument <code>fromTimer</code> and
+          its <code>func</code> property is executed. We can see
+          this calls the local function <code>jobDispatcher</code>.
+          Here is the code for that function: 
+        </p>
+        <source>
+/**
+ * Job Control Dispatcher.
+ *
+ * Called when a job's timer fires. This function is set as the "func"
+ * property of the timers started by initialise().
+ *
+ * Note: A timer is an invocation of a process's implicit event loop.
+ *
+ */
+local function jobDispatcher(any fromTimer)
+{
+  try
+  {
+    // The userInfo property carried in the timer is the container of
+    // the Job (and timer) that was set inside the timer when the job tree
+    // structure was built.
+    any m = fromTimer.properties.userInfo;
+
+    // Note - the map "m" is a member of the job tree structure built
+    // in this (the jobdispatcher) process. Containers of any sort are
+    // not thread-safe and we don't share them between processes.
+    // Create a simple map to hold the Job and JobVolatile we send
+    // to the new process running the job.
+    // TODO - Could do this when the userInfo is established?
+    //        Would that be clearer?
+    any jobInfo.Job = m.Job;
+    any jobInfo.JobVolatile = m.JobVolatile;
+    logfine($catalog.jobcontrol.logger, "Timer has fired for job {0}", jobInfo.Job.ShortName);
+
+
+    // If this (top-level) job or child are currently running (because
+    // a job has been run manually) then we can't start the job.
+    // In this case, throw an exception. The catch block will try
+    // to perform job completion (to restart the timer) and log the event.
+    <strong>if (call parentNotIdle(m.Job) ||
+        call childNotIdle(jobInfo = m))
+      throw("Dispatcher - Tree Not Idle");</strong>
+
+    // Start a process to run the job. Note that if the spawn function
+    // throws then the process was not started (though its start expression
+    // may have been run).
+    logfine($catalog.jobcontrol.logger, "Starting process to run job {0}", jobInfo.Job.ShortName);
+    <strong>any process = spawn(jobInfo.Job.ShortName, type  = PROCESS_CHILD,
+                                               start = call onJobStart(jobInfo,
+                                                                       immediate=false),
+                                               end   = call onJobExit());</strong>
+  }
+  catch
+  {
+    loginfo($catalog.jobcontrol.logger, "Caught exception while starting job {0}\n{1}\n{2}",
+                                        jobInfo.Job.ShortName,
+                                        @exception,
+                                        @stackTrace);
+
+    // If process was not started perform job completion here
+    <strong>call jobComplete(jobInfo.Job, exitStatus = 1, immediate=false);</strong>
+
+    // rethrow for logging purposes
+    throw();
+  }
+}
+</source>
+        <p>
+          Some exception handling ensures that the job completion code
+          runs even if the process to execute the job is not started.
+          Otherwise completion is handled when the process terminates,
+          via its <code>end</code> call of <code>onJobExit()</code>.
+        </p>
+        <p>
+          The common pattern for using <code>spawn()</code> is to invoke
+          a service in its <code>start</code> argument that performs
+          initialisation of the new process in its own thread and
+          node space [any initialisation required in the calling
+          thread can be performed before sending such a request].
+          Here is <code>onJobStart()</code>
+        </p>
+        <source>
+/**
+ * This function is called when the process to run the timer's FunctionExpr
+ * is started.
+ * 
+ * The "spawn" primitive (see above) executes the "start" expression
+ * in the caller's process (thread) but with $this returning the root of
+ * the new process's node space. All other paths (in particular $process)
+ * refer to the calling process's environment.
+ *
+ * The new process starts in its own thread after the start expression
+ * completes however its input channel is already established, so we can
+ * send it the service request to run the job proper.
+ *
+ * Whether it is formally declared or not, a "start" expression
+ * can access $stack.ichannel. Similarly, the process node space can also be
+ * accessed via $stack.process.
+ */
+local function onJobStart(any process, any ichannel, any jobInfo, boolean immediate)
+{
+  // Put the job dispatcher's (that is our) process's input channel in the
+  // new process's node space so it can send the jobComplete service request
+  // back to the job dispatcher when the process exits.
+  any process.jobDispatcher = $process.ichannel;
+
+  // This is required by Job:&lt;mutator&gt;
+  any process.loginName = "jobdispatcher";
+
+  // Send the runJob service request through to the new process
+  send runJob(@channel = ichannel, jobInfo, immediate);
+}
+</source>
+        <p>
+          The arguments <code>process</code> and <code>ichannel</code> are
+          provided by Inq. <code>ichannel</code> is the new process's
+          input channel. It can be used as an argument to <code>send</code>
+          to specify the channel to which the service request will be
+          directed. <code>process</code> is the <code>$process</code>
+          node space when the new process runs. As we can see, <code>onJobStart</code>
+          does both these things. 
+        </p>
+        <p>
+          Additional
+          arguments can be passed as required from the <code>spawn</code> usage.
+          Here we have supplied <code>jobInfo</code> (the container
+          holding the <code>Job</code>, <code>JobVolatile</code>
+          and timer) and a <code>boolean immediate</code> which states
+          whether the execution is via the timer (<code>false</code>)
+          or on demand (<code>true</code>)
+        </p>
+      </section>
+      <section id="exec">
+        <title>Job Execution</title>
+        <p>
+          The <code>runJob</code> service is how the <code>Job</code> is executed
+          in the new process. This service notes down the input parameters
+          and other state before calling the local function <code>runJob</code>:
+        </p>
+        <source>
+/**
+ * When a job's timer goes off a process is created on which this
+ * service is invoked to run the job's FunctionExpr
+ */
+service runJob(any jobInfo, boolean immediate)
+{
+  try
+  {
+    loginfo($catalog.jobcontrol.logger, "Process for job {0} running...", jobInfo.Job.ShortName);
+    
+    // Place the Job[Volatile] instances at $process.Job[Volatile],
+    // so that onJobExit can pick them up.
+    any $process.Job         = jobInfo.Job;
+    any $process.JobVolatile = jobInfo.JobVolatile;
+    
+    // Note down the process running this job. Then we can kill it
+    // later.
+    call setProcessId($process.id, jobInfo.JobVolatile);
+    
+    // Remember whether this was a timer or manual invocation
+    any $process.immediate = immediate;
+
+    // Process the given box or task.
+    <strong>any exitStatus = call runJob(jobInfo, immediate);</strong>
+
+  }
+  catch
+  {
+    // Ensure an exit status. If an exception occurred inside
+    // runJob then we won't have one
+    logsevere($catalog.jobcontrol.logger, "Exception {0}\n{1}",
+                                          @exception,
+                                          @stackTrace);
+    int exitStatus = 1;
+  }
+  finally
+  {
+    // A process has an event loop and will return to wait at its
+    // input channel unless it is killed by another process or volunteers
+    // to exit, as here. The exit status is placed at $process.status
+    // and any "end" function specified when the process was spawned
+    // is called just prior to termination.
+    // If we don't use a "finally" block then if an exception occurs
+    // while executing the job the process would not terminate.
+    <strong>exit(exitStatus);</strong>
+  }
+}
+</source>
+        <p>
+          A process terminates by invoking the Inq <code>exit()</code> function.
+          When it does so, any <code>end</code> expression specified
+          when it was started is executed. We look at this later.
+        </p>
+        <p>
+          The <code>runJob()</code> function accepts a <code>Job</code> and recurses
+          through nested boxes, executing any tasks it finds. Rather than
+          reproduce the function here, its use of transactions, which
+          end up being nested because of the recursion, is best illustrated
+          by the following diagram:
+        </p>
+        <figure src="images/runjob.png" alt="runjob"/>
+        <p>
+          Each successive <code>Job</code> (whether box or task) is joined
+          in a transaction opened at its recursion depth. When a task
+          is processed its <code>FunctionExpr</code> is executed in
+          a further transaction. This use of transactions means:
+        </p>
+        <ul>
+          <li>Tasks (which are external to Job Control) are executed
+          in their own transaction, isolating them from Job Control and
+          each other.</li>
+          <li>Events relating to a given <code>Job</code> are emitted as
+          that job completes and not delayed until the whole sub-tree has
+          been processed.</li> 
+        </ul>
+        <p>
+          The code to do this is straightforward enough and can be seen
+          at <code>local function runJob(any jobInfo, boolean immediate)</code>
+          in <code>jobControl.inq</code>. We examine this function further
+          below when discussing execution flow and transaction handling
+          when a process running a sub-tree is killed. 
+        </p>
+      </section>
+    </section>
+    <section id="demand">
+      <title>On Demand Execution</title>
+      <p>
+        A <code>Job</code> can be executed at any time by
+        calling <code>runJobNow(any Job)</code>. The argument can
+        be any job, not just a top level one but, as for timed execution,
+        there must not already be a job running within the <code>Job</code>'s
+        particular sub-tree.
+      </p>
+      <p>
+        Unlike a timed execution, which
+        respects <a href="usage.html#timedbox">timed boxes</a>, executing
+        a job on demand executes its children immediately in sequence
+        according to their <code>JobOrder</code>.
+      </p>
+    </section>
+    <section id="kill">
+      <title>Killing a Job</title>
+      <p>
+        When a job is running it can be terminated prematurely by
+        killing the process that is hosting it. In Job Control
+        this is performed by the function <code>killJob(any Job)</code>.
+      </p>
+      <p>
+        Killing a process (with the Inq <code>kill()</code> function) is
+        an abrupt way of terminating a process. Normally either a process
+        will terminate itself via the Inq <code>exit()</code> function
+        or can be sent a service request by another process requesting
+        it to do so. However if a job is somehow suspended, perhaps
+        because it is waiting on some external resource that never
+        becomes available or it has run system commands outside of the
+        Inq environment that are misbehaving, then killing the process
+        may be the only option.
+      </p>
+      <p>
+        When a process is killed there are semantics of transaction handling
+        and execution flow that are important to understand. While not
+        specific to Job Control, its use of recursion and nested transactions
+        make it a useful example to use in explaining these. First the theory.
+      </p>
+      <section id="killflow">
+        <title>Execution Flow</title>
+        <p>
+          When a process is killed execution passes as soon as possible
+          to the nearest <code>finally</code> block. If there is one at
+          the kill point then that is the nearest, otherwise intervening
+          stack frames are skipped. What does <em>as soon as possible</em> mean?
+        </p>
+        <p>
+          The expression of the
+          current <a href="../../primer/controlflow.html#stmts">statement</a>
+          will be evaluated. However an expression is a very granular level
+          within the Inq language. For example, the statement
+        </p>
+        <source>
+  a = b + c;
+</source>
+        <p>
+          contains three expressions: the references to <code>a</code>, <code>b</code>
+          and <code>c</code>. If the kill happens while <code>b</code> is being
+          evaluated then the statement is abandoned as Inq starts to
+          evaluate <code>c</code>. Hence, in general it is not possible to
+          say whether a <em>statement</em> will have completed.
+        </p>
+<!--
+<p>
+  Inq resolves the reference to <code>a</code> first so if the kill
+  occurs while <code>c</code> is evaluated the assignment will, in fact,
+  complete and execution is abandoned at the start of the next statement.
+</p>
+-->
+        <p>
+          The <code>finally</code> block will execute to completion (provided
+          it itself does not generate an exception). No <code>catch</code> blocks
+          are executed. Control then
+          passes to the next nearest <code>finally</code> block above, missing
+          out any stack frames that do not contain one.
+          Each <code>finally</code> block at successively higher levels
+          above the kill point is executed.
+        </p>
+      </section>
+      <section id="txn">
+        <title>Transactions</title>
+        <p>
+          If a particular <code>finally</code> block is that of a
+          transaction then that transaction will abort at the end of
+          the block. Generally this action is appropriate when killing
+          a process but as the block is entered its transaction still
+          contains the state it had immediately prior to the kill.
+        </p>
+        <p>
+          Execution in the <code>finally</code> block provides the
+          opportunity to perform any cleanup while the process
+          is being killed, including committing the current transaction
+          explicitly with the Inq <code>commit()</code> function.
+          If required, a process can determine whether it is being
+          killed by checking its <code>killed</code> property
+          at <code>$process.properties.killed</code>. This property
+          is <code>true</code> if a kill is in progress, <code>false</code>
+          otherwise.
+        </p>
+      </section>
+      <section id="jckill">
+        <title>Kill and Job Control</title>
+        <p>
+          How does Job Control manage itself when a job process is killed?
+        </p>
+        <section id="taskkill">
+          <title>Tasks</title>
+          <p>
+            As a job tree is executed, tasks are processed by the
+            function <code>processTask(any Job)</code>. This function
+            opens a transaction within which
+            the <code>Job</code>'s <code>FunctionExpr</code> is executed.
+            This isolates any transaction concerns the job has from Job
+            Control itself. Here is the finally block it uses: 
+          </p>
+          <source>
+finally
+{
+  // Were we killed? If so signal with a special exit status
+  // Note - if a process is killed then catch blocks
+  // are not executed, but finally blocks are. Other than
+  // that no code is executed apart from a spawned process's
+  // "end" expression.
+  
+  // Note - although finally {} blocks do execute when a
+  // process is killed (catch {} blocks do not) the
+  // transaction is *not* committed implicitly.
+  // This transaction is for the job itself (that is
+  // external to jobcontrol). It is allowed to abort. 
+
+  if ($process.properties.killed)
+    exitStatus = 255;
+
+  call closeLogFile();
+  call pruneLogfiles(Job);
+  
+  if (curStrm)
+    any $process.system.out = curStrm;
+  
+  exitStatus;
+}
+</source>
+          <p>
+            This code cleans up the job's log files (covered further
+            below) and checks whether the process is being killed. If
+            so a specific exit status is returned.
+          </p>
+          <note>
+            The last statement in the <code>finally</code> block
+            is <code>exitStatus;</code> making this the return
+            value of the function.<br/><br/>It is important that this
+            statement is inside the block and not outside. As soon
+            as the block is closed execution passes out of the
+            function and into the next nearest <code>finally</code>,
+            as if by exception.
+          </note>
+        </section>
+        <section id="jctxn">
+          <title>Job Control</title>
+          <p>
+            <code>processTask()</code> is called from <code>runJob()</code>
+            and the transaction at this level is used to encapsulate field
+            changes to the current <code>Job</code> in the tree, recording
+            its <code>LastRan</code> and <code>ExitStatus</code>. Here is
+            its <code>finally</code> block:
+          </p>
+          <source>
+finally
+{
+  // Clean up
+
+  // If the process is killed then finally blocks at and above the kill
+  // point will be executed immediately. If a finally block is associated
+  // with a transaction then it is aborted at the end of the finally block.
+  
+  if (childExitStatus &amp;&amp; childExitStatus == 255)
+  {
+    exitStatus = childExitStatus;
+    
+    logfine($catalog.jobcontrol.logger,
+            "Stopping at {0} because process has been killed",
+            jobInfo.Job.ShortName);
+  }
+
+  call setStartTime(jobInfo.JobVolatile, Started=null);
+
+  jobInfo.Job.ExitStatus = exitStatus;
+  call calcDuration(jobInfo.Job);
+  
+  <strong>// Explicit commit in case we were killed. We want the ExitStatus
+  // and LastRan fields saved regardless.
+  commit();</strong>
+  
+  // Return the exit status. This statement must be inside the finally
+  // block or (if the process is being killed) it will not execute.
+  // When a process is being killed execution passes immediately to
+  // the next finally block up the stack.
+  exitStatus;
+}
+</source>
+          <p>
+            This code checks for the exit status indicating a kill (first
+            checking that <code>childExitStatus</code> is defined at all in
+            case the kill happened at this level), performs some other
+            house keeping and then explicitly commits the transaction.
+            This processing will continue in any higher levels
+            of <code>runJob</code> there are on the call stack. 
+          </p>
+          <p>
+            By committing the transaction Job Control ensures
+            the <code>Job</code> instance audit fields are correctly
+            persisted and not discarded, in particular leaving
+            the <code>ExitStatus</code> unassigned (and probably zero). 
+          </p>
+        </section>
+      </section>
+    </section>
+    <section id="log">
+      <title>Capturing Job Output</title>
+      <p>
+        When a task is executed (in <code>processTask()</code>) Job Control
+        opens file which the <code>Job</code>'s <code>FunctionExpr</code>
+        can use for standard output or error:
+      </p>
+      <source>
+  // Set up the output stream
+  any outStream = call openLogFile(Job);
+  any $process.system.out = outStream;
+</source>
+      <p>
+        Here are the related functions for interest. You can find them
+        in <code>jobControl.inq</code>:
+      </p>
+      <source>
+/**
+ * Opens a log file for the given job.
+ * Returns an open print stream.
+ */
+local function openLogFile(any Job)
+{
+  any filename = call generateLogfileName(Job);
+
+  file logFile = $catalog.jobcontrol.properties.logroot + filename;
+
+  ioPrint p;
+
+  open(p, logFile, OPEN_WRITE);
+
+  p;
+}
+</source>
+      <source>
+/**
+ * Create a name for the Job's log file.
+ *
+ * If a top-level job defines logging then a file name is generated
+ * of the form:
+ *    SomeJob_20081218_050000.log
+ */
+local function generateLogfileName(any Job)
+{
+  // File name is composed from the job's short name (spaces are
+  // removed) and the start time to the granularity of 1 second.
+
+  any filename = call rootLogfileName(Job);
+
+  // Pattern is Java MessageFormat
+  renderf("{0}_{1,date,yyyyMMdd_HHmmss}.log", filename, getdate());
+}
+</source>
+      <source>
+local function rootLogfileName(any Job)
+{
+  // Create root string by stripping space characters from Job.ShortName
+  // After all, who really wants spaces in file names?
+  any filename = gsub("", " ", Job.ShortName);
+}
+</source>
+    </section>
+  </body>
+</document>

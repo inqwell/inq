@@ -25,13 +25,15 @@ public class Notify extends    AbstractFunc
                     implements Cloneable
 {
 	
-	private Any any_;
-  private Any expression_;
+	private Any     any_;
+  private Any     expression_;
+  private boolean all_;
 	
-	public Notify(Any any, Any expression)
+	public Notify(Any any, Any expression, boolean all)
 	{
     any_        = any;
     expression_ = expression;
+    all_        = all;
 	}
 
   public Any exec(Any a) throws AnyException
@@ -57,7 +59,8 @@ public class Notify extends    AbstractFunc
       expression.doFunc(getTransaction(), null, a);
       
     notified = Globals.lockManager__.notifyVia(any,
-                                               getTransaction().getProcess());
+                                               getTransaction().getProcess(),
+                                               all_);
 
 // BB questions this.  Can't remember what for so removed for now.
 //    if (!notified)

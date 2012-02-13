@@ -30,7 +30,7 @@ if NOT "%OS%"=="Windows_NT" call "%INQHOME%\bin\setpwdvar98.bat"
 if "%OS%"=="Windows_NT" call "%INQHOME%\bin\setpwdvar.bat"
 if "%OS%"=="WINNT" call "%INQHOME%\bin\setpwdvar.bat"
 
-set INQCOMMONARGS=-Dinq.home=%INQHOME% -Djava.util.logging.config.file=%INQHOME%/etc/log.properties -Djava.util.logging.manager=com.inqwell.any.AnyLogManager -Dinq.xml.dom=%INQDOMIMPL% -Dinq.jms.connectionfactory=%INQJMSFACTORY%
+set INQCOMMONARGS=-Dinq.home=%INQHOME% -Djava.util.logging.manager=com.inqwell.any.AnyLogManager -Dinq.xml.dom=%INQDOMIMPL% -Dinq.jms.connectionfactory=%INQJMSFACTORY%
 
 @call %INQHOME%\bin\custom.bat
 
@@ -70,7 +70,9 @@ GOTO END
 
 rem -- Server Startup
 :SERVER
-%LAUNCHER% -Xmx512m %INQCOMMONARGS% %INQCUSTOM% com.inqwell.any.server.Server %arg1% %arg2% %arg3% %arg4% %arg5% %arg6% %arg7% %arg8% %arg9% %arg10% %arg11% %arg12%
+rem Add the headless and logging config system properties
+set INQSERVERARGS=-Djava.awt.headless=true -Djava.util.logging.config.file=%INQHOME%/etc/server.log.properties
+%LAUNCHER% -Xmx512m %INQCOMMONARGS% %INQSERVERARGS% %INQCUSTOM% com.inqwell.any.server.Server %arg1% %arg2% %arg3% %arg4% %arg5% %arg6% %arg7% %arg8% %arg9% %arg10% %arg11% %arg12%
 GOTO END
 
 :CLIENT

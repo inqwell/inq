@@ -159,6 +159,11 @@ public class SynchronizedMap implements Map,
 		}
   }
 
+  public synchronized boolean valueEquals(Map m)
+  {
+    return this.valueEquals(m);
+  }
+  
   public synchronized boolean contains (Any a)
   {
     return m_.contains(a);
@@ -258,11 +263,6 @@ public class SynchronizedMap implements Map,
     return m_.getIfContains(key);
   }
 
-  public synchronized java.util.Map getMap ()
-  {
-    return m_.getMap();
-  }
-
   public synchronized Descriptor getDescriptor()
   {
 		return m_.getDescriptor();
@@ -308,16 +308,6 @@ public class SynchronizedMap implements Map,
 	  m_.setContext(context);
   }
   
-  public void setAux(Any aux)
-  {
-    m_.setAux(aux);
-  }
-  
-  public Any getAux()
-  {
-    return m_.getAux();
-  }
-
   public synchronized Any getUniqueKey()
   {
     return m_.getUniqueKey();

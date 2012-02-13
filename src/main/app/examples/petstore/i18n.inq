@@ -42,17 +42,15 @@ if (!$root.ps.i18n)
     exit(1);
   }
   
-  // Store it for later use. Note: For the time being - this characterises the
-  // server as a whole.
-  //string $catalog.i18n = i18n;
-  
-  // As well, place the locale at $root.i18n. This will characterise the
+  // Place the language at $root.ps.i18n. This will characterise the
   // session - its more future-proof in terms of using this path to 
   // define i18nised strings when Inq performs the substitution on
   // transfer to the client.
   any $root.ps.i18n = i18n;
-  // See AdminSrv.inq. To be fixed.
-  string $root.i18n = i18n;
+  
+  // See AdminSrv.inq. To be fixed. Generally we will log in as
+  // admin to run psBoot.inq
+  //string $root.i18n = i18n;
   
   // load the constant string values
   exec(i18n + "/i18n.inq");

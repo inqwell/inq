@@ -5,13 +5,6 @@
  * the README file.
  */
 
-/*
- * $Archive: /src/com/inqwell/any/client/AnyComponent.java $
- * $Author: sanderst $
- * $Revision: 1.12 $
- * $Date: 2011-05-07 16:53:56 $
- */
-
 package com.inqwell.any.client;
 
 import java.awt.Color;
@@ -75,37 +68,13 @@ import com.inqwell.any.beans.UIFacade;
 import com.inqwell.any.client.swing.SwingInvoker;
 
 /**
- * Wrap a component of some foreign sub-system (for example swing) to
- * bring it into the Any framework.  This class provides base
- * functionality for adapting events from the underlying sub-system
- * into the framework's <code>EventGenerator</code> interface.
- * <p>
- * In the Java Beans standard, each type of event the wrapped
- * component can generate is delivered to an object implementing
- * an interface specific to that event type.  These events each
- * have a <code>String</code> name which becomes the Any
- * <code>EventType</code>.
- * <p>
- * Events from the foreign sub-system are listened for when there
- * is at least one listener for the corresponding <code>Any</code>
- * event type.  Such events are delivered to this class at the
- * <code>adaptEvent</code> method.  The <code>processEvent</code>
- * method is used for <code>Any</code> framework events only
- * and is intended to signal (for example) model updates to the
- * underlying component from elsewhere in an <code>Any</code>
- * application.
- * <p>
- * This class can be used to provide basic functionality as:
- * <ul>
- * <li>Allow any listener interfaces the underlying component supplies
- * to be attached as <code>Any</code>event types
- * <li>does not interpret component events; just forwards them to
- * registered listeners of the event type.  Derived classes may override
- * <code>adaptEvent()</code> to change this behaviour.
- * <li><code>processEvent</code> does nothing (yet)
- * </ul>
+ * The root of the hierarchy representing Swing components in
+ * the Any framework.
+ * <p/>
+ * This class provides support common to components providing
+ * property access to Inq, handling of captions, borders and such like
  */
-public class AnyComponent extends    AnyView
+public abstract class AnyComponent extends AnyView
 {
 	// The component we are wrapping
 	//private Container comp_;
@@ -122,7 +91,7 @@ public class AnyComponent extends    AnyView
   private static Set   spoofProperties__;
   public  static Any   editable__      = AbstractValue.flyweightString("editable");
   public  static Any   renderer__      = AbstractValue.flyweightString("renderer");
-  public  static Any   isEditor__      = AbstractValue.flyweightString("isEditor");
+//  public  static Any   isEditor__      = AbstractValue.flyweightString("isEditor");
   public  static Any   toolTipText__   = AbstractValue.flyweightString("tabToolTip");
   public  static Any   tabIcon__       = AbstractValue.flyweightString("tabIcon");
   public  static Any   tabText__       = AbstractValue.flyweightString("tabTitle");
@@ -187,8 +156,6 @@ public class AnyComponent extends    AnyView
   public   static Any   typedef__        = AbstractValue.flyweightString("typedef");
   public   static Any   field__          = AbstractValue.flyweightString("field");
   
-  private   RenderInfo  renderInfo_;  // TODO move to a new subclass
-
   public static Any label__        = AbstractValue.flyweightString("label");
   public static Any formatString__ = AbstractValue.flyweightString("formatString");
   
@@ -218,7 +185,7 @@ public class AnyComponent extends    AnyView
 		spoofProperties__.add(enabled__);
 		spoofProperties__.add(editable__);
     spoofProperties__.add(renderer__);
-    spoofProperties__.add(isEditor__);
+    //spoofProperties__.add(isEditor__);
 		spoofProperties__.add(toolTipText__);
 		spoofProperties__.add(tabIcon__);
 		spoofProperties__.add(tabText__);
@@ -263,37 +230,6 @@ public class AnyComponent extends    AnyView
     spoofProperties__.add(landfname__);
 	}
   
-  public AnyComponent(Container c)
-  {
-		setObject(c);
-	}
-
-	/**
-	 * No-args constructor allows prototypical instances in factories
-	 * and separates construction and object setup.
-	 */
-  public AnyComponent()
-  {
-	}
-
-	/**
-	 * Process received events.  Default event processing is to assume
-	 * that the event originated from the data node (or one of its
-	 * ancestors) and that we should refresh this component from that
-	 * node.  More complicated components (like JTables, JLists etc)
-	 * have sub-class implementations
-	 * of <code>componentProcessEvent()</code> to do things like adapt
-	 * incoming Inq events to (eg) <code>TableModel</code> events.
-	 */
-  public boolean processEvent(Event e) throws AnyException
-  {
-  	//System.out.println ("AnyComponent.processEvent() " + e);
-  	//System.out.println ("AnyComponent.processEvent() I am " + nameInContainer_);
-
-		super.processEvent(e);
-    return true;
-	}
-
 	public Container getComponent() // TODO when all direct component access in in derived make abstract
 	{
     return null;  // So renderers can test and initialise
@@ -302,9 +238,11 @@ public class AnyComponent extends    AnyView
 
 	public String getLabel()
 	{
-		if (renderInfo_ != null)
+	  RenderInfo r = getRenderInfo();
+	  
+		if (r != null)
 		{
-			return renderInfo_.getLabel();
+			return r.getLabel();
 		}
 		else
 		{
@@ -453,32 +391,34 @@ public class AnyComponent extends    AnyView
 	 */
 	public void setRenderInfo(RenderInfo r)
 	{
-    renderInfo_ = r;
-    
-    if (getContextNode() != null && r != null)
-    {
-      r.resolveNodeSpecs(getContextNode());
-  
-      // We must listen to the context node for events which will cause
-      // us to render our data.
-      setupDataListener(r.getNodeSpecs());
-      
-      // Try to render now.
-      try
-      {
-        Any a = renderInfo_.resolveDataNode(getContextNode(), true);
-        setValueToComponent(a);
-      }
-      catch (AnyException e)
-      {
-        throw new RuntimeContainedException(e);
-      }
-    }
+//    renderInfo_ = r;
+//    
+//    if (getContextNode() != null && r != null)
+//    {
+//      r.resolveNodeSpecs(getContextNode());
+//  
+//      // We must listen to the context node for events which will cause
+//      // us to render our data.
+//      setupDataListener(r.getNodeSpecs());
+//      
+//      // Try to render now.
+//      try
+//      {
+//        Any a = renderInfo_.resolveDataNode(getContextNode(), true);
+//        setValueToComponent(a);
+//      }
+//      catch (AnyException e)
+//      {
+//        throw new RuntimeContainedException(e);
+//      }
+//    }
+	  throw new UnsupportedOperationException(this.getClass().getName() + " does not render things");
 	}
 
 	public RenderInfo getRenderInfo()
 	{
-    return renderInfo_;
+//    return renderInfo_;
+    return null;
   }
 
   public Any getFont()
@@ -616,10 +556,10 @@ public class AnyComponent extends    AnyView
 
 	public void setEditable(boolean editable)
 	{
-		if (renderInfo_ == null)
-			return;
-
-		renderInfo_.setEditable(editable);
+//		if (renderInfo_ == null)
+//			return;
+//
+//		renderInfo_.setEditable(editable);
 	}
 
 	public void setTabTitle(String text)
@@ -772,20 +712,7 @@ public class AnyComponent extends    AnyView
 
   public Any getRenderedValue()
   {
-    try
-    {
-      // Get the current rendered value, if any (for simple things)
-      Any a = null;
-      
-      if (renderInfo_ != null)
-        a = renderInfo_.resolveResponsibleData(getContextNode());
-      
-      return a;
-    }
-    catch(AnyException e)
-    {
-      throw new RuntimeContainedException(e);
-    }
+    throw new UnsupportedOperationException(this.getClass().getName() + " does not render things");
   }
   
   /**
@@ -796,14 +723,14 @@ public class AnyComponent extends    AnyView
    */
   public void setRenderedValue(Any v) throws AnyException
   {
-    // TODO: Check whether the few remaining uses of this method
-    if (renderInfo_ != null)
+    RenderInfo r = getRenderInfo();
+    if (r != null)
     {
-      Any a = renderInfo_.resolveResponsibleData(getContextNode());
+      Any a = r.resolveResponsibleData(getContextNode());
       if (a != null && a != AnyNull.instance())
         a.copyFrom(v);
-      a = renderInfo_.resolveDataNode(getContextNode(), false);
-			setValueToComponent(a);  // Not the rendered value? Yes, previoous line!
+      a = r.resolveDataNode(getContextNode(), false);
+			setValueToComponent(a);
     }
     else
     {
@@ -852,10 +779,11 @@ public class AnyComponent extends    AnyView
 
 	public boolean isEditable()
 	{
-		if (renderInfo_ == null)
-			return false;
-
-		return renderInfo_.isEditable();
+//		if (renderInfo_ == null)
+//			return false;
+//
+//		return renderInfo_.isEditable();
+	  return false;
 	}
 
   public boolean isRenderer()
@@ -873,20 +801,20 @@ public class AnyComponent extends    AnyView
       this.remove(renderer__);
   }
   
-  public boolean getIsEditor()
-  {
-    // Used from script when Inq needs help identifying a component
-    // as a cell editor
-    return this.contains(AnyTable.editor__);
-  }
-  
-  public void setIsEditor(boolean editor)
-  {
-    if (editor)
-      this.replaceItem(AnyTable.editor__, AnyBoolean.TRUE);
-    else
-      this.remove(AnyTable.editor__);
-  }
+//  public boolean getIsEditor()
+//  {
+//    // Used from script when Inq needs help identifying a component
+//    // as a cell editor
+//    return this.contains(AnyTable.editor__);
+//  }
+//  
+//  public void setIsEditor(boolean editor)
+//  {
+//    if (editor)
+//      this.replaceItem(AnyTable.editor__, AnyBoolean.TRUE);
+//    else
+//      this.remove(AnyTable.editor__);
+//  }
   
   /**
    * Perform any initialisation required when this component is used as a
@@ -1274,6 +1202,7 @@ public class AnyComponent extends    AnyView
     
     return null;
   }
+  
   public void setMargin(Array margin)
   {
     IntI top    = (IntI)margin.get(0);
@@ -1462,16 +1391,15 @@ public class AnyComponent extends    AnyView
 	 */
 	protected void componentProcessEvent(Event e) throws AnyException
 	{
-    Any a = getGUIRendered(e);
-    setValueToComponent(a);
+//    Any a = getGUIRendered(e);
+//    setValueToComponent(a);
 	}
   
   /**
    * Fetch the value to be rendered into the GUI node.
-   * @param e the node event gicing rise to the refresh 
+   * @param e the node event giving rise to the refresh 
    * @return the value to be rendered to the GUI
    * @throws AnyException
-   */
   protected Any getGUIRendered(Event e) throws AnyException
   {
     Map id = (Map)e.getId();
@@ -1494,6 +1422,7 @@ public class AnyComponent extends    AnyView
     
     return ret;
   }
+   */
   
   protected void setValueToComponent(Any v)
   {
@@ -1563,7 +1492,7 @@ public class AnyComponent extends    AnyView
 	{
 	}
 
-	protected Object getAttachee(Any eventType)
+	protected Object getAttachee(Any eventType) // TODO: Consider moving to AnyView
 	{
 		if (eventType.equals(ListenerConstants.CONTEXT))
     {
@@ -1575,9 +1504,9 @@ public class AnyComponent extends    AnyView
 		return getComponent();
 	}
 
-  protected void contextEstablished()
+  protected void contextEstablished()  // TODO remove?
   {
-    setRenderInfo(getRenderInfo());
+//    setRenderInfo(getRenderInfo());
   }
   
   /**
@@ -1617,26 +1546,6 @@ public class AnyComponent extends    AnyView
 
 		return getComponent();
 	}
-
-	protected boolean beforeAdd(Any key, Any value)
-	{
-		return super.beforeAdd(key, value);
-	}
-
-/*
-	protected void afterAdd(Any key, Any value)
-	{
-		// Make sure parentage is established...
-		super.afterAdd(key, value);
-
-		// ...then if we are an AnyComponent set up our context
-		if (value instanceof AnyComponent)
-		{
-			AnyComponent ac = (AnyComponent)value;
-		  ac.evaluateContext();
-		}
-	}
-*/
 
   private JScrollPane checkScroller()
   {

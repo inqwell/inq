@@ -3,8 +3,8 @@
     xsi:schemaLocation="http://maven.apache.org/plugins/maven-assembly-plugin/assembly/1.1.2 http://maven.apache.org/xsd/assembly-1.1.2.xsd">
 
   <!--
-  Build the inq runtime, combining its dependencies into
-  the output
+  Build the inq dependency jar. This jar can be used to
+  resolve Inq source dependencies in eclipse etc.
   -->
 
   <id>dependencies</id>

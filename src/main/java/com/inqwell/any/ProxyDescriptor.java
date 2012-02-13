@@ -58,6 +58,11 @@ public final class ProxyDescriptor extends    AbstractAny
     throw new UnsupportedOperationException();
 	}
 
+  public void join(Map m, Transaction t) throws AnyException
+  {
+    throw new UnsupportedOperationException();
+  }
+
 	public void mutate(Map newVal,
                      Map oldVal,
                      Map context,

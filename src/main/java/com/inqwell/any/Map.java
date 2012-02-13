@@ -76,12 +76,6 @@ public interface Map extends Composite
   public Any getIfContains(Any key);
 
   /**
-   * Expose the underlying java Map implementation - required for access
-   * to other Java core API classes.
-   */
-  public java.util.Map getMap ();
-  
-  /**
    * Like get() but just checks for the existence of the given key.
    * Overrides contains() in com.inqwell.any.Composite
    * @return true if this contains the given key; false otherwise
@@ -156,19 +150,18 @@ public interface Map extends Composite
   
   public void setUniqueKey(Any keyVal);
   
+  /**
+   * Compare this with <code>m</code> always by value.
+   * Some implementations choose to implement <code>equals(Any)</code>
+   * by identity. This method always compares by value.
+   * @param m
+   * @return
+   */
+  public boolean valueEquals(Map m);
+  
   public void setTransactional(boolean isTransactional);
   
   public void setContext(Any context);
-
-  /**
-   * @deprecated to be removed
-   */
-  public void setAux(Any aux);
-
-  /**
-   * @deprecated to be removed
-   */
-  public Any getAux();
 
   /**
 	 * Adds identity semantics, if supported, to this object.

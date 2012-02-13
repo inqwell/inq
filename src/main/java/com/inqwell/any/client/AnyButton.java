@@ -27,7 +27,7 @@ import javax.swing.JRootPane;
 import com.inqwell.any.Any;
 import com.inqwell.any.Event;
 
-public class AnyButton extends AnyComponent
+public class AnyButton extends AnySimpleComponent
 {
   private static final long serialVersionUID = 1L;
 
@@ -63,6 +63,7 @@ public class AnyButton extends AnyComponent
     Format f = getRenderInfo().getFormat(v);
     b_.setText(f.format(v));
   }
+  
   protected boolean handleBoundEvent(Event e)
   {
     // Check if we are a default button and if so send a spoof

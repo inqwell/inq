@@ -62,22 +62,10 @@ public class FetchDescriptors extends    AbstractFunc
   
 	private void init()
 	{		
-		// Set up the response structure
-		Map svcResp = AbstractComposite.map();
-		svcResp.add(ServerConstants.SVCEXEC,
-								new AnyString("system.services.NullService"));
-		
-		Map svcRespArgs = AbstractComposite.simpleMap();
-		svcResp.add(ServerConstants.SVCINAR, svcRespArgs);
-		svcRespArgs.add (new AnyString("dummy__"),
-										 new LocateNode(ServerConstants.SVCOUTP));
-
 		sr_ = new SendRequest (new AnyString("system.services.LoadDescriptors"),
 													 null,  // no context
-													 ServerConstants.SVCOUTP,
 													 null,  // no args
-													 new LocateNode (ServerConstants.ROCHANNEL),
-													 svcResp);
+													 new LocateNode (ServerConstants.ROCHANNEL));
 		sr_.setPropagateContext(false);
 	}
 }

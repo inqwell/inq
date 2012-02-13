@@ -8,10 +8,8 @@
 /**
  * Petstore i/o resource definitions
  *
- * Declare the SQL resource for the Xylinq server.
+ * Declare the SQL resource for the Petstore server.
  *
- * Private & Confidential Copyright � Xylinq Ltd 2004.
- * All rights reserved.
  */
 package examples.petstore;
 

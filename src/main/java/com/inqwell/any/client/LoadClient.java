@@ -85,10 +85,7 @@ public class LoadClient extends    AbstractFunc
 		
     SendRequest sr = new SendRequest (compile__,
                                       null,
-                                      null,
-                                      null,
-                                      new LocateNode (ServerConstants.ROCHANNEL),
-                                      null);
+                                      new LocateNode (ServerConstants.ROCHANNEL));
 
     sr.setArgs(svcArgs);
 		

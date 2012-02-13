@@ -196,11 +196,6 @@ public class AnyLogger extends Logger implements Map, Cloneable
     return propertyMap_.get(key);
   }
 
-  public Any getAux()
-  {
-    throw new UnsupportedOperationException();
-  }
-
   public Descriptor getDescriptor()
   {
     return Descriptor.degenerateDescriptor__;
@@ -212,11 +207,6 @@ public class AnyLogger extends Logger implements Map, Cloneable
       propertyMap_ = new LoggerPropertyAccess();
 
     return propertyMap_.getIfContains(key);
-  }
-
-  public java.util.Map getMap()
-  {
-    throw new UnsupportedOperationException();
   }
 
   public short getPrivilegeLevel(Any access, Any key)
@@ -270,11 +260,11 @@ public class AnyLogger extends Logger implements Map, Cloneable
     throw new UnsupportedOperationException();
   }
 
-  public void setAux(Any aux)
+  public boolean valueEquals(Map m)
   {
-    throw new UnsupportedOperationException();
+    return this.equals(m);
   }
-
+  
   public void setContext(Any context)
   {
     throw new UnsupportedOperationException();

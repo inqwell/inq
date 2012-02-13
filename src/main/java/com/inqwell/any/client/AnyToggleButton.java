@@ -26,6 +26,7 @@ import com.inqwell.any.Set;
 /**
  * Intercepts the <code>text</code> property and performs initial
  * text setting to get better layout characteristics.
+ * @deprecated
  */
 public class AnyToggleButton extends AnyComponent
 {

@@ -1,0 +1,1193 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright 2011 Inqwell Ltd.
+-->
+<!DOCTYPE document PUBLIC "-//APACHE//DTD Documentation V2.0//EN" "http://forrest.apache.org/dtd/document-v20.dtd">
+<document>
+  <header>
+    <title>Concurrency and Events</title>
+  </header>
+  <body>
+    <section id="concurrency">
+      <title>Introduction</title>
+      <p>
+        In earlier sections we have have briefly mentioned Job Control's concurrency
+        requirements. In many cases Inq's transaction and locking model
+        will be adequate in order to ensure data integrity and cooperation.
+        However the Job Control application has some
+        specific requirements that demonstrate how Inq's monitors and locks
+        can be used to effect complex interactions between processes.
+      </p>
+      <p>
+        The <code>jobdispatcher</code> process is what runs Job Control.
+        Like any process, it responds
+        to <a href="../../primer/process.html#eventmodel">events</a>.
+        <code>jobdispatcher</code> uses all three types as follows:
+      </p>
+      <ol>
+        <li><strong>Timer Events</strong> Timers are used to schedule jobs.</li>
+        <li><strong>Service Requests</strong> <code>jobdispatcher</code> can
+          receive requests to shut it down or notify it a job has completed</li>
+        <li><strong>Listeners</strong> As we saw
+          in <a href="how.html#listeninit">Establishing Listeners</a>, listeners
+          are used to monitor changes taking place in the prevailing set
+          of <code>Job</code> instances.</li>
+      </ol>
+      <p>
+        During initialisation Job Control <a href="how.html#jobtree">builds the
+        job tree</a>. Thereafter <code>jobdispatcher</code> is waiting for a
+        timer to fire, however other processes in the Inq environment may
+        want to modify the <code>Job</code> set, perhaps creating a new
+        sub-tree, deleting or setting job inactive. While Job Control is
+        running such actions may require the <code>jobdispatcher</code> to
+        re-evaluate the prevailing timers or manage changes to its
+        in-memory job tree.
+      </p>
+      <p>
+        The Inq event model allows processes to interact without knowing
+        about one-another. Inq raises events when a transaction commits
+        or a node structure is modified. The <code>listen()</code> function
+        allows a process to await transaction events in the environment
+        or structure events arising within its node space. The
+        petstore example listens
+        for <a href="../petstore/myorders.html#serverlisten">new orders</a>
+        being created and its
+        client <a href="../petstore/items.html#timerstart">filters particular
+        update events</a> according to the field(s) changed.
+      </p>
+    </section>
+    <section id="analyse">
+      <title>Analysing the Event Model</title>
+      <p>
+        So it can react to other processes altering the <code>Job</code>
+        set, <code>jobdispatcher</code> solicits the necessary events
+        by establishing suitable listeners during startup. However transaction
+        and node structure events are delivered discretely - a single
+        transaction by some client process could give rise to several
+        events arriving at <code>jobdispatcher</code>. With any number
+        of such processes able to manipulate disparate sets of <code>Job</code>
+        instances simultaneously we must analyse the event flow to consider
+        how many events are raised, when they are raised and
+        how <code>jobsidpatcher</code> should process them. 
+      </p>
+      <p>
+        The number of <code>Job</code>s in an application is small. It is
+        not an entity like, say, a bank statement entry whose numbers
+        will run into the millions. When types have a large number of
+        instances it is unlikely that overlapping sets of them would be
+        viewed or manipulated by different processes at the same time.
+        Atomicity is the main concern and Inq provides this automatically.
+      </p>
+      <note>In Inq, a statement like <code>foo.bar += account.balance</code>
+      where <code>foo</code> is a managed instance is atomic because
+      Inq locks <code>foo</code> before it reads the value
+      of <code>foo.bar</code>.</note>
+      <p>
+        Types like bank accounts do not generally have an impact
+        on some other part of a system that require events to
+        drive it. The <a href="../../primer/typedef.html#mtor"><code>join</code>
+        or <code>mutate</code></a>
+        statements would likely be a better place to handle
+        specific cases, such as going overdrawn.
+      </p>
+      <p>
+        With <code>Job</code>s it would be reasonable to modify all
+        existing instances at once, for example setting them
+        inactive (with the statement <code>Job.Active = enum(Active, N)</code>
+        looping over all instances). Life-cycle analysis may determine
+        that an entity instance cannot be deleted, but this is not
+        a restriction that need apply to <code>Job</code>s. Lastly, whether
+        Job Control is currently running and specific processing it
+        should perform are not things that should clutter even API
+        functions. Events are a better choice in this case.
+      </p>
+      <p>
+        When <code>jobdispatcher</code> receives an event it should be able
+        to work on a stable set of <code>Job</code> instances. Unlike
+        a bank account, with a small number of instances in existence
+        it could be quite likely that several processes are acting on
+        the same (or, since <code>Job</code>s can have children) related
+        instances. Overall, it makes sense to constrain any single client
+        process and the <code>jobdispatcher</code> to run in sequence, with
+        execution across these two processes completing before
+        another client can start. The following diagram depicts such a flow:
+      </p>
+      <figure src="images/sync1.png" alt="sync"/>
+      <p>
+        The diagram describes updating a set of <code>Job</code>s but
+        the same set of states is used when creating and deleting as well.
+        We look at each of these scenarios below. The general flow is
+        as follows:
+      </p>
+      <ol>
+        <li>Some process modifies a set of <code>Job</code> instances; it
+          must wait for the <em>job tree state</em> to be <code>IDLE</code>.</li>
+        <li>When the tree state is <code>IDLE</code> the process can set
+          it to <code>USER_START</code>, meaning it has commenced operating
+          on the <code>Job</code> set.</li>
+        <li>On completion, the process sets the tree state to <code>USER_END</code>
+          and raises a notification. This notification takes place on a
+          monitor mutually agreed between such client processes
+          and <code>jobdispacher</code>.</li>
+        <li>At the same time Inq will raise an event that <code>jobdispatcher</code>
+          is listening for. When it awakes to process this event it
+          checks the job tree state, if necessary waiting for the notification
+          that it has the value .</li>
+        <li>When <code>jobdispacher</code> sees the tree state
+          is <code>USER_END</code> it sets it to <code>DISPATCHER</code>. This
+          state means any other client process cannot embark on step 1 above,
+          because the state is not <code>IDLE</code>.</li>
+        <li>Lastly when <code>jobdispacher</code> has completed its processing
+          it sets the tree state to <code>IDLE</code> and raises a notification.
+          If a client process is waiting to commence some other action it
+          will be expecting this state or the notification of it.</li>
+      </ol>
+      <section id="comm">
+        <title>Communicating Sequential Processes</title>
+        <p>
+          This pattern is one form
+          of <a class="fork" href="ext:wikipedia/csp">communicating sequential processes</a>.
+          Inq is providing the events passed between processes as their output and input
+          and the variable <code>$catalog.jobcontrol.jobTreeState</code> represents
+          the current state of the system. How are the synchronisation and transition
+          between the states provided?
+        </p>
+      </section>
+      <section id="locks">
+        <title>Locks and Notifications</title>
+        <p>
+          Within <code>jobControl.inq</code> there are two related
+          functions: <code>awaitTreeState()</code>
+          and <code>notifyTreeState()</code>:
+        </p>
+        <source>
+/**
+ * Obtain a lock on the mutex when (if not already) the jobtree state variable
+ * attains <code>requiredState</code>. Then set it to <code>newState</code>.
+ * @param requiredState the desired state
+ * @param newState the new state
+ * @param timeout the length of time in milliseconds the process is
+ * willing to wait for the state to prevail
+ */
+local function awaitTreeState(JobTreeState requiredState,
+                              JobTreeState newState,
+                              long         timeout = -1)
+{
+  if (call isRunning())
+  {
+    if (lock("__jobtree",   // the mutex we are syncing on
+             timeout,       // default timeout is indefinite
+             func f = $catalog.jobcontrol.jobTreeState == requiredState))
+    {
+      // The lock() returns true if the lock is acquired and the expression
+      // evaluates to true within the specified timeout. If the process is
+      // willing to wait indefinitely then lock() will never return false.
+      // It may be aborted with a system exception if deadlock is detected
+      // and this process is chosen as the deadlock victim.
+  
+      $catalog.jobcontrol.jobTreeState = newState;
+  
+      // Once the new state is set unlock the mutex
+      unlock("__jobtree");
+    }
+    else
+      throw("Timeout while waiting for job tree state",
+            enumext(JobTreeState, $stack.newState));
+  }
+}
+</source>
+        <p>
+          The Inq <code>lock</code> function accepts up to three a
+          arguments:
+        </p>
+        <source>
+"lock" "(" &lt;mutex&gt; [ "," &lt;timeout&gt; [ "," &lt;condition&gt; ] ] ")"
+mutex = &lt;expression&gt;
+timeout = &lt;expression&gt;
+condition = &lt;func expression&gt;
+</source>
+        <p>
+          <code>mutex</code> is the variable on which to take out the lock.
+        </p>
+        <note>
+          Inq identifies lock variables by equality so if <code>string s</code>
+          has the value <code>"__jobtree"</code> the statement <code>lock(s)</code>
+          is equivalent to <code>lock("__jobtree")</code>.
+        </note>
+        <p>
+          <code>timeout</code> is the period the caller is willing to wait
+          to acquire the lock in ms. If absent or -1 the wait is indefinite.
+        </p>
+        <p>
+          <code>condition</code> any condition that must be <code>true</code>
+          for the lock to be acquired.
+        </p>
+        <p>
+          The return value of <code>lock()</code> is <code>true</code> if the
+          lock is obtained, <code>false</code> if it is not because the timeout
+          expired.
+        </p>
+        <p>
+          When a <code>condition</code> is present Inq evaluates the expression
+          while holding the lock. If the expression evaluates to <code>false</code>
+          the lock is released and a notification is awaited on <code>mutex</code>.
+          Each time a notification is received the lock is re-acquired and the
+          condition tested again. If it evaluates to <code>true</code> the
+          lock is retained and <code>lock()</code> returns <code>true</code>.
+        </p>
+        <p>
+          In <code>awaitTreeState()</code> the mutex lock is not retained. It
+          is only required to safely test and
+          set <code>$catalog.jobcontrol.jobTreeState</code>, after which
+          it is released using <code>unlock()</code>.
+        </p>
+        <p>
+          The complimentary function is <code>notifyTreeState()</code>:
+        </p>
+        <source>
+/**
+ * Obtain a lock on the mutex and set the jobtree state variable
+ * to a new state value.
+ * @param newState the new state
+ * @param timeout the length of time in milliseconds the process is
+ * willing to wait for the state to prevail
+ */
+local function notifyTreeState(JobTreeState newState, long timeout = -1)
+{
+  if (call isRunning())
+  {
+    if (lock("__jobtree",   // the mutex we are syncing on
+             timeout))      // default timeout is indefinite
+    {
+      // Notify any process waiting on the jobtree mutex. The expression
+      // is executed before the notification.
+      notify("__jobtree", func f = $catalog.jobcontrol.jobTreeState = newState);
+  
+      // Having performed a notify() any waiting process performing a wait()
+      // or a lock() with a condition as above is awakened. For conditional
+      // locks the condition is rechecked then.
+      unlock("__jobtree");
+    }
+    else
+      throw("Timeout while waiting to lock job tree",
+            enumext(JobTreeState, $stack.newState));
+  }
+}
+</source>
+        <p>
+          Again, a lock is acquired on the mutex. This time there
+          is no condition and the lock is being taken out just
+          so that <code>notify()</code> can be called:
+        </p>
+        <source>
+("notify" | "notifyall") "(" &lt;mutex&gt; [ "," &lt;expression&gt; ] ")"
+mutex = &lt;expression&gt;
+</source>
+        <p>
+          If there is an <code>expression</code> then this is executed
+          before the notification is performed. This could equally
+          well be a separate statement - placing the expression as
+          an argument to <code>notify()</code> is just formalising
+          it and for symmetry with the three argument version
+          of <code>lock()</code>.
+        </p>
+        <p>
+          If there are processes waiting on the mutex then <code>notify()</code>
+          will wake one of them; <code>notifyall()</code> will
+          wake them all.
+        </p>
+      </section>
+      <section id="states">
+        <title>Job Tree States</title>
+        <p>
+          The following diagram shows how <code>$catalog.jobcontrol.jobTreeState</code>
+          progresses through its various states and the process that executes
+          in each case.
+        </p>
+        <figure src="images/treestate.png" alt="sync"/>
+        <p>
+          In fact, we are not quite done in considering the event model. The
+          diagram makes clear what we have only alluded to so far; that is
+          that a single event must be dispatched by <code>jobdispatcher</code>'s
+          listeners for a given transaction committed by a client process.
+        </p>
+        <p>
+          A successful state transition requires that the process to execute
+          in that state receives some impetus to do so. In Job Control these
+          are
+        </p>
+        <ul>
+          <li><strong>jobdispatcher</strong> - an event ( + a notification
+          if not already USER_END)</li>
+          <li><strong>client process</strong> - a notification (if not
+          already IDLE)</li>
+        </ul>
+      </section>
+      <section id="batch">
+        <title>Batching Events</title>
+        <p>
+          A single event can be achieved by either choosing the amount
+          of work contained in the transaction (that is manipulating only
+          one <code>Job</code> instance) or batching the events into a
+          single delivery bundle. The first is straightforward enough,
+          albeit restricting the atomicity to a single instance. How
+          does batching work?
+        </p>
+        <p>
+          In Inq a function can schedule to raise an event when its
+          enclosing transaction commits. This is called a <em>complete</em>
+          event and its payload is the bundle of create, update or delete events
+          that arise in the transaction, The function must be called
+          at least once for the event to be raised.
+        </p>
+        <p>
+          Functions raise the complete event when their declaration
+          includes the <code>raises</code> clause. The events it
+          carries are any combination of <code>create</code>, <code>update</code>
+          and <code>delete</code>. If a function wishes to raise all event
+          types it can specify <code>any</code>. Here are some examples:
+        </p>
+        <source>
+local function foo(any arg) raises (update)
+ .
+ .
+
+function bar() raises (create, delete)
+ .
+ .
+
+local function fooobar() raises (any)
+</source>
+        <p>
+          Listening to node structures for update and delete events,
+          or <code>$catalog</code> for create events, dispatches those
+          events to any listeners discretely, waking the process
+          for each event. Using <code>raises</code> on a function
+          allows a particular flow of execution to trigger the
+          dispatch of that transaction's events as a bundle. In general,
+          which is most appropriate will depend on the application's
+          requirements.
+        </p>
+      </section>
+      <section id="tie">
+        <title>Tying It All Together</title>
+        <p>
+          Looking back at the <a href="how.html#listeninit">code that establishes
+          the listsners</a>, what decisions have we made in respect of the
+          foregoing? We look at how the events are processed in the next
+          section. Here is the script that will raise them.
+        </p>
+        <section id="create">
+          <title>Create</title>
+          <p>
+            When creating <code>Job</code>s we decide to support only
+            one instance at a time within its own transaction:
+          </p>
+          <source>
+local function createJob(any Job, any parent)
+{
+  if (parent &amp;&amp; call isTask(Job=parent))
+    throw("parent must be a box", parent);
+    
+  if (parent)
+    Job.ParentJob = parent.Job;
+
+  transaction
+  {
+    // Acquire the appropriate job tree state - user activity starting
+    call awaitTreeState(requiredState = enum(JobTreeState, IDLE),
+                        newState      = enum(JobTreeState, USER_START));
+
+    // Submit the instance to the transaction for creation
+    create(Job);
+  }
+  catch
+  {
+    // If something went wrong then the job dispatcher will not be
+    // woken by a create event.  Return the tree state to idle....
+    call notifyTreeState(newState = enum(JobTreeState, IDLE));
+    throw();
+  }
+
+  // ...On the other hand if creation is successful tell the job
+  // dispatcher we have finished and allow it to re-evaluate the
+  // job tree.
+  call notifyTreeState(newState = enum(JobTreeState, USER_END));
+  
+  // Return the (managed instance) created Job
+  read(Job, Job);
+}
+</source>
+          <p>
+            This is not so much of a compromise for a type whose set is
+            small and not volatile. This function is self-explanatory,
+            performing some precondition checks and using simple
+            exception handling to ensure the tree state protocol is
+            adhered to. 
+          </p>
+        </section>
+        <section id="update">
+          <title>Update</title>
+          <p>
+            For updates we can support modifying any number of instances
+            by using the <code>raises</code> clause. There are two
+            functions - <code>modifyJob</code> for updating a field of
+            a single instance and <code>modifyJobs</code> for updating
+            multiple instances.
+          </p>
+            <source>
+/**
+ * Update a Job instance. This function updates a Job
+ * instance from the supplied argument. It is illegal
+ * for a server process other than jobdispatcher to update
+ * instances directly and this is enforced by Job.&lt;join&gt;.
+ * Instead this function must be used so that an event is
+ * raised to hand off to jobdispatcher, where any necessary
+ * rescheduling is performed.
+ * 
+ * If called from a connected client the instance will not
+ * be the server managed one. This is retrieved and assigned
+ * in its entirety.
+ * 
+ * If called passing a specific field just that field
+ * is updated.
+ * 
+ */
+local function modifyJob(any Job, any field, any value) raises (update)
+{
+  logfine($catalog.jobcontrol.logger, "Updating with {0}, field {1}, value {2}", Job, field, value);
+  transaction
+  {
+
+    // Lock the job tree in the child transaction
+    call awaitTreeState(requiredState = enum(JobTreeState, IDLE),
+                        newState      = enum(JobTreeState, USER_START));
+                        
+    if (field)
+    {
+      if (field == "FunctionExpr" ||
+          field == "TimerExpr")
+        setblob(Job.{field}, value);
+      else
+        Job.{field} = value;
+    }
+    else
+    {
+  
+      // Alias the argument as we are about to replace it with the
+      // managed instance. 
+      any job = Job;
+  
+      if (read(Job, job))
+        Job = job;
+    }
+
+    // Check if the Job was modified at all. If not there will be
+    // no update events and no event raised on the execution of
+    // this service. This means there will be no hand-off to the
+    // job dispatcher.
+    <strong>any modified = ismodifying(Job);</strong>
+  }
+  catch
+  {
+    // If something went wrong then the job dispatcher will not be
+    // woken by the raises(update) event.  Return the tree state to idle....
+    call notifyTreeState(newState = enum(JobTreeState, IDLE));
+    throw();
+  }
+
+  // Modification was successful. If anything was actually changed tell
+  // the job dispatcher we have finished and allow it to re-evaluate the
+  // job tree.
+  if (modified == true)
+    call notifyTreeState(newState = enum(JobTreeState, USER_END));
+  else
+    call notifyTreeState(newState = enum(JobTreeState, IDLE));
+}
+</source>
+          <p>
+            Like the create <code>createJob</code> this function
+            uses simple exception handling to correctly manage the tree
+            state. However in addition to that we need to know if anything
+            is actually being modified at all. The Inq <code>ismodifying(&lt;managed_instance&gt;)</code>
+            function returns <code>true</code> if a managed instance is joined in the
+            transaction and has at least one modified field; <code>false</code> otherwise.
+          </p>
+          <p>
+            <code>modifyJobs()</code> is intended to be called from a GUI client and is
+            similar. It accepts a list
+            of unmanaged <code>Job</code>s and sets the server-side
+            ones to them:
+          </p>
+          <source>
+local function modifyJobs(any jobs) raises (update)
+{
+  logfine($catalog.jobcontrol.logger, "Updating with {0}", jobs);
+  transaction
+  {
+    // The client could choose to send us jobs that are not, in fact,
+    // modified at all. In this case there will be no update events
+    // and no event raised on the execution of this function. This means
+    // there will be no hand-off to the job dispatcher
+    boolean modified;
+
+    // Lock the job tree in the child transaction
+    call awaitTreeState(requiredState = enum(JobTreeState, IDLE),
+                        newState      = enum(JobTreeState, USER_START));
+    foreach(jobs)
+    {
+      if (read(Job, $loop.Job))
+      {
+        Job = $loop.Job;
+        <strong>modified ||= ismodifying(Job);</strong>
+      }
+    }
+  }
+  catch
+  {
+    // If something went wrong then the job dispatcher will not be
+    // woken by the raises(update) event.  Return the tree state to idle
+    // before rethrowing....
+    call notifyTreeState(newState = enum(JobTreeState, IDLE));
+    throw();
+  }
+
+  // Modification was successful. If anything was actually changed tell
+  // the job dispatcher we have finished and allow it to re-evaluate the
+  // job tree.
+  if (modified)
+    call notifyTreeState(newState = enum(JobTreeState, USER_END));
+  else
+    call notifyTreeState(newState = enum(JobTreeState, IDLE));
+}
+</source>
+          <p>
+            It also uses simple exception handling to ensure proper
+            state transition management. 
+          </p>
+          <note>
+            <code>transaction{...} catch {...} finally {...}</code>
+            <br/>
+            <br/>
+              is the same as
+            <br/>
+            <br/>
+            <code>try{...} catch {...} finally {...}</code>
+            <br/>
+            <br/>
+              but with a nested transaction. The transaction is committed
+              when the <code>transaction{...}</code> code block closes.
+          </note>
+        </section>
+        <section id="delete">
+          <title>Delete</title>
+          <p>
+            Deleting <code>Job</code>s is more interesting. For create and
+            update it's not important how many instances are affected or in
+            what order they are involved in the transaction.
+          </p>
+          <p>
+            When listening out for deletions, rather than listening for
+            the <code>delete</code> event raised on the instance we chose to
+            listen for <code>remove</code> events. Here is the code again: 
+          </p>
+          <source>
+  // Listen to the root of the job tree for deletion events from within
+  // By specifying the typedef we will only get events that relate to
+  // automatic pruning of the node-set structure when Job instances are
+  // deleted.
+  any $this.listeners.deleteJobListener = listen (jobTree,
+                                        func f = { call jobDeleted(@eventId, @eventData); },
+                                        event = (remove),
+                                        typedef = Job);
+</source>
+          <p>
+            The <code>remove</code> event occurs when a node is removed from
+            within an event-live structure.
+            Inq <a href="../../primer/structures.html#eventdel">prunes</a> node-set
+            children when their primary typedef instance is deleted. In this
+            case the <code>remove</code> or <code>delete</code> seem to serve
+            the same purpose. Why choose this over
+            the <code>delete</code> event? 
+          </p>
+          <p>
+            When a <code>Job</code> is deleted, if it is a box we must delete all
+            its children too. Remembering that a client transaction must
+            raise just one event for whatever it does, provided the child jobs
+            are deleted after their ancestor any <code>remove</code>
+            events that arise from them will not propagate beyond the
+            point in tree where the ancestor resided, because its container
+            has already been removed.
+          </p>
+          <p>
+            Here is the <code>deleteJobs()</code> function and its associated
+            helper:
+          </p>
+          <source>
+/**
+ * Delete the given set of jobs. If a job is a box then its children are
+ * deleted also.
+ */
+local function deleteJobs(any jobs)
+{
+
+  // Deleting a job causes any child jobs to be deleted also. In
+  // case any of the set are descendants of one another take some trouble
+  // to sort them by their depth.
+
+  <strong>omap m;  // map must be orderable for sort, below.
+  foreach(jobs)
+  {
+    any k = getprimarykey($loop.Job);
+    any m.{k}.Job = $loop.Job;
+    int m.{k}.aux.depth = call findDepth($loop.Job);
+  }
+
+  sort(m, $loop.aux.depth);</strong>
+
+  foreach(m)
+  {
+    // If the current job is a descendant of one deleted earlier it will
+    // already have been deleted within the transaction. This means read()
+    // will not return it.
+    if (read(Job, $loop.Job))
+      <strong>call deleteJobTree(Job);</strong>
+  }
+}
+</source>
+<source>
+/**
+ * Delete the specified job and all its descendants. Deletion occurs from the
+ * specified job downwards, and events are raised in the order instances
+ * are deleted. This means any structures that are automatically pruned by Inq
+ * as deletion events are propagated from the node will only result in a single
+ * event emanating from the root.
+ */
+<strong>local function deleteJobTree(any Job)</strong>
+{
+  transaction
+  {
+    // Lock the job tree in the child transaction
+    call awaitTreeState(requiredState = enum(JobTreeState, IDLE),
+                        newState      = enum(JobTreeState, USER_START));
+
+    // Delete the given root Job
+    delete(Job);
+
+    // Delete its children
+    call deleteChildJobs(Job);
+  }
+  catch
+  {
+    // If something went wrong then the job dispatcher will not be
+    // woken by the remove event emerging from the job tree.
+    // Return the tree state to idle....
+    call notifyTreeState(newState = enum(JobTreeState, IDLE));
+    throw();
+  }
+
+  // ...On the other hand if deletion was successful tell the job
+  // dispatcher we have finished and allow it to re-evaluate the
+  // job tree.
+  call notifyTreeState(newState = enum(JobTreeState, USER_END));
+}
+</source>
+          <p>
+            <code>deleteJobs(any jobs)</code> accepts a list of
+            jobs to be deleted. There is no restriction on how
+            the jobs in the list are related - in particular
+            we must determine whether any job could be a descendant
+            of another in the list. 
+          </p>
+          <p>
+            To do that the function places each job in an ordered
+            map in preparation for sorting and associates with each
+            its depth in the job tree [the <code>findDepth()</code>
+            function is not reproduced
+            here - see <code>app/examples/jobcontrol/jobControl.inq</code>].
+            The map is then sorted in depth order. Each sub-tree is then
+            deleted in its own transaction, taking into account that should
+            any job be a descendant of one deleted earlier it will already
+            have been deleted. 
+          </p>
+          <p>
+            With the correct choice of event and some careful processing it
+            is straightforward enough to support the arbitrary deletion
+            of <code>Job</code>s and achieve the desired event flow.
+          </p>
+        </section>
+      </section>
+    </section>
+    <section id="handle">
+      <title>Handling the Events</title>
+      <p>
+        We have seen how to listen for events and discussed how they are
+        raised. How are events dispatched to a listener processed?
+      </p>
+      <p>
+        When Inq dispatches a listen event it places some items
+        on the stack. These are
+      </p>
+      <table>
+        <caption>listen() Dispatch Arguments</caption>
+        <tr>
+          <th>Name</th>
+          <th>Description</th>
+        </tr>
+        <tr>
+          <td><p><code>@eventId</code></p></td>
+          <td>
+            <p>
+              The <em>ID</em> of the event. This is a map containing the basic
+              event type (that is <em>create</em>, <em>update</em>, <em>exec</em>
+              and others). The ID is how Inq filters the event so it also contains
+              an instance's modified field names and the path through which it
+              has travelled prior to the dispatch point.
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td><p><code>@eventData</code></p></td>
+          <td>
+            <p>
+              The payload the event is carrying. What this depends on the
+              event being dispatched. For instance events (<code>create</code>,
+              <code>update</code> or <code>delete</code>) the payload in the
+              instance. For <code>exec</code> events it is the
+              event bundle.
+            </p>
+          </td>
+        </tr>
+      </table>
+      <p>
+        We can see these items being referenced in the dispatch function
+        of our various <a href="how.html#listeninit">listeners</a>. In
+        those examples they are passed as arguments to other functions,
+        ascribing names that identify them for clarity. 
+      </p>
+      <section id="lcreate">
+        <title>Create</title>
+        <p>
+          To process a <code>create</code> event <code>jobdispatcher</code>
+          has to identify where beneath <code>$this.jobTree</code> the
+          new <code>Job</code> instance should go, that is, what its
+          parent <code>Job</code> is (if its not at the top-level). If
+          the new instance is its parent's first child then a new tree
+          level is created. This is done by the helper
+          function <code>findTreeLevel()</code> (see <code>jobControl.inq</code>).
+        </p>
+        <p>
+          Here is the <code>newJobCreated</code> function that the listener
+          calls, with the important lines highlighted:
+        </p>
+        <source>
+local function newJobCreated(any Job)
+{
+  // Lock the job tree in the default transaction
+  call awaitTreeState(requiredState = enum(JobTreeState, USER_END),
+                      newState      = enum(JobTreeState, DISPATCHER));
+
+  try
+  {
+    // A reference parameter to findTreeLevel. The index of the
+    // subtree the Job resides in is returned in this variable.
+    int subtreeIndex = null;
+
+    <strong>any treeLevel = call findTreeLevel(root = $this.jobTree,
+                                       Job,
+                                       ParentJob = null,
+                                       subtreeIndex);
+
+    // A node-set child for the new Job:
+    hmap m;
+
+    // Place the new Job instance in it
+    any m.Job = Job;
+    
+    // Include its volatile data
+    aggregate(JobVolatile, m.Job);
+    
+    // Put the new job into the treeLevel node. Note we use
+    // the primary key of the Job as the node set map key in the same way as
+    // the Inq built-in functions like read() and aggregate() do.
+    any k = getprimarykey(Job);
+    any treeLevel.{k} = m;</strong>
+
+
+    if (call isTopLevel(Job))
+    {
+      // A top-level job.
+
+      // findTreeLevel will not have set subtreeIndex.
+      subtreeIndex = indexof(treeLevel, k);
+    }
+
+    // If the new job has a timer expression then
+    // re-evaluate the timer for its subtree.
+    if (!isnull(Job.TimerExpr))
+      call restartSubtreeTimer(subtreeIndex);
+  }
+  finally
+  {
+    // Ensure the tree state is returned to idle even if we incur a
+    // system exception.
+    call notifyTreeState(newState = enum(JobTreeState, IDLE));
+  }
+}
+</source>
+      </section>
+      <section id="lupdate">
+        <title>Update</title>
+        <p>
+          When a <code>Job</code> is updated there are only certain
+          fields whose alteration can have any effect as far
+          as <code>jobdispatcher</code> is concerned. These are
+          a <code>Job</code>'s active state, its timer expression
+          and its order amongst its siblings.
+        </p>
+        <p>
+          Job Control starts one timer for each sub-tree at the
+          job tree root. As we discussed above, any number of
+          instances can be modified in the client transaction and
+          these are delivered as a bundle. Processing these
+          updates involves determining which sub-tree the job
+          resides in (in order to determine the distinct set)
+          and then re-evaluating the timer for the affected
+          sub-tree(s).
+        </p>
+        <p>
+          The event bundle is passed (from the listener function)
+          as <code>jobEvents</code>. This is a collection
+          of <code>update</code> events so the <code>@eventData</code>
+          contained within each event is the <code>Job</code>
+          instance. Here is the function:
+        </p>
+        <source>
+/**
+ * Maintain the job tree after mutation events arising from job modification.
+ * This function is a handler for the "complete" event raised when functions
+ * that modify Jobs are executed and their transaction commits.
+ *
+ * @param jobEvents the event bundle - there will be one event
+ * per instance modified.
+ */
+local function jobsModified(any jobEvents)
+{
+  // Await hand-off from the process doing the modification
+  call awaitTreeState(requiredState = enum(JobTreeState, USER_END),
+                      newState      = enum(JobTreeState, DISPATCHER));
+
+  try
+  {
+    // Jobs may have been modified in different subtrees. Make a note
+    // of them as we only re-evaluate at the end
+    set treeLevels;
+
+    <strong>foreach(jobEvents)</strong>
+    {
+      // A new variable each time through the loop. Important as we will be
+      // placing it in the treeLevels set if not previously seen
+      int subtreeIndex = null;
+
+      // Get the Job instance out of the event...
+      <strong>any Job = $loop.@eventData;</strong>
+
+      // ...find the sub tree index it resides in
+      call findTreeLevel(root = $this.jobTree,
+                         Job,
+                         ParentJob = null,
+                         subtreeIndex);
+
+      // Check if the TimerExpr, JobOrder or Active fields have changed. If so,
+      // re-evaluate the timer for this tree.
+      <strong>if (contains($loop.@eventId.fields, "TimerExpr") ||
+          contains($loop.@eventId.fields, "JobOrder")  ||
+          contains($loop.@eventId.fields, "Active"))</strong>
+      {
+        // Note down the subtree. The "set" type remains distinct and does
+        // not raise an exception if a duplicate is added.
+        <strong>treeLevels += subtreeIndex;</strong>
+      }
+    }
+
+    // Re-evaluate all affected subtrees
+    <strong>foreach(treeLevels)</strong>
+    {
+      call restartSubtreeTimer(subtreeIndex = $loop);
+    }
+  }
+  finally
+  {
+    // Ensure the tree state is returned to idle even if we incur a
+    // system exception.
+    call notifyTreeState(newState = enum(JobTreeState, IDLE));
+  }
+}
+</source>
+        <p>
+          Within each event's ID the fields that were changed by the
+          client transaction are at <code>@eventId.fields</code>. This
+          is a <a href="../../primer/types.html#set"><code>set</code></a>
+          and we can check if the field names it contains are relevant
+          to the listener's operation.
+        </p>
+        <p>
+          The alternative way to discriminate an event by the fields
+          changed is to listen for <code>update</code> events and
+          specify the <code>fields</code> argument. The petstore
+          example <a href="../petstore/items.html#timerstart">does this</a>.
+          Using the <code>exec</code> event raises the possibility that
+          a listener could be woken unnecessarily, however by ensuring
+          the function only updates relevant fields in the first place
+          means this can be avoided by the appropriate code flow.
+        </p>
+      </section>
+      <section id="ldelete">
+        <title>Delete</title>
+        <p>
+          Again, the event processing for deleting jobs is more interesting.
+          From the <a href="#delete">foregoing discussion</a> the event
+          we will receive is a <code>remove</code> event. The payload
+          for this event type is the node that was removed - the node-set
+          child. One event is received for each distinct sub-tree that
+          was deleted. 
+        </p>
+        <p>
+          The timer that schedules a top-level job is
+          either <a href="usage.html#toplevel">defined by that job</a>
+          or one of its descendants. As <code>jobdispatcher</code> builds
+          the job tree it <a href="how.html#starttimers">creates the
+          timers and sorts each level</a> according to its start time
+          and job order. 
+        </p>
+        <p>
+          Hence to process this event - if the <code>Job</code> was a top-level
+          one then its associated timer must be cancelled.
+        </p>
+        <p>
+          If it was somewhere within the job tree then that sub-tree's timer
+          is re-evaluated. In fact, this is only necessary if the job was
+          the first at that level - it may have propagated a timer to the
+          top level.
+        </p>
+        <p>
+          By the time the event is delivered the node-set child has been
+          removed from <code>jobdispatcher</code>'s job tree. This is
+          done by the executing client process and is thread-safe.
+        </p>
+        <note>
+          Inq structures are not, in general, thread safe. That an
+          event-live structure built in one process can have elements
+          within it removed via the events raised from another is
+          part of Inq's internal concurrency implementation.
+          <br/>
+          <br/>
+          If processes pass structures between them, for example via
+          a timer's <code>userInfo</code> or a service request argument,
+          the sender should not retain a reference.
+        </note>
+        <p>
+          Processing <code>create</code> events involves adding something to
+          the job tree structure that was not there before. We can find the
+          appropriate level at which to place the node because the <code>Job</code>
+          type includes the ID of the parent, which must already exist.  
+        </p>
+        <p>
+          Processing <code>update</code> events may reorder the tree (because jobs
+          are sorted by their run time and ordinal position) but otherwise the
+          structure does not change.  
+        </p>
+        <p>
+          When processing a <code>remove</code> event we may need to
+          cancel or re-evaluate a timer, but how do we know which
+          sub-tree the removal was from? We cannot traverse the tree
+          looking for the job because it has already been removed.
+          How can the timer be cancelled?
+        </p>
+        <p>
+          The payload carried by a <code>remove</code> event is the node
+          that was removed. When the removal is a consequence of
+          a manage instance deletion this is always a node-set child. In
+          the job tree, such nodes look like this:
+        </p>
+        <figure src="images/deletepayload.png" alt="deletepayload"/>
+        <p>
+          For a <code>remove</code> event the <code>@eventId</code> includes
+          the following:
+        </p>
+        <ul>
+          <li><strong><code>path</code></strong> the path through which the
+          event travelled from its origin to its dispatch point (the node being
+          listened to).</li>
+          <li><strong><code>parent</code></strong> the path to the node where
+          the removal took place (that is the parent of the node removed).</li>
+          <li><strong><code>vector</code></strong> when the removed node was the
+          child of a node set and the node set supports vector access, the index
+          of the removed node.</li>
+        </ul>
+        <p>
+          All this information can be put to good use, telling us all we need
+          to know to process the event:
+          <!--
+          <code>{path=$this..{Job=3, key__=unique, __descriptor=inq.jobcontrol.types.Job}.childJobs.{Job=4, key__=unique, __descriptor=inq.jobcontrol.types.Job}, parent=$this..{Job=3, key__=unique, __descriptor=inq.jobcontrol.types.Job}.childJobs, type=9, vector=0, __descriptor=inq.jobcontrol.types.Job}</code>
+          -->
+        </p>
+        <source>
+local function jobDeleted(any @eventId, any @eventData)
+{
+  call awaitTreeState(requiredState = enum(JobTreeState, USER_END),
+                      newState      = enum(JobTreeState, DISPATCHER));
+  try
+  {
+    // If a top-level job was deleted the only thing we have to do is cancel
+    // any timer.
+    <strong>if (call isTopLevel(@eventData.Job))</strong>
+    {
+      logfine($catalog.jobcontrol.logger, "Checking timer: {0}", @eventData.aux.jobTimer);
+      if (@eventData.aux.jobTimer)
+      {
+        logfine($catalog.jobcontrol.logger, "Canceling timer: {0}", @eventData.aux.jobTimer);
+        <strong>canceltimer(@eventData.aux.jobTimer);</strong>
+      }
+    }
+    else
+    {
+      // For child jobs we only need to re-evaluate the timer driving the
+      // subtree the job is in if (at whatever level) the deleted job
+      // was at vector position zero. Otherwise there is nothing to do.
+      <strong>if (@eventId.vector == 0)</strong>
+      {
+        // We don't know what subtree it is in. We cannot use
+        // call findTreeLevel() because the job has been removed from
+        // the structure. Instead, use the path to the parent available
+        // in the event and convert it to indices.
+        <strong>any indices = indicesof($this.jobTree, @eventId.parent);</strong>
+
+        // re-evaluate and start the timer for this subtree
+        call restartSubtreeTimer(subtreeIndex = indices[0]);
+      }
+    }
+  }
+  finally
+  {
+    // Ensure the tree state is returned to idle even if we incur a
+    // system exception.
+    call notifyTreeState(newState = enum(JobTreeState, IDLE));
+  }
+}
+</source>
+        <p>
+          What does <code>indicesof()</code> do?
+        </p>
+        <note label="indicesof(&lt;expression&gt;, &lt;expression&gt;)">
+          Returns an array containing the indices of each node yielded
+          as successive elements of <code>path</code> are applied
+          to some root. All the nodes in the path must support vector access or
+          an exception is thrown.
+          <br/>
+          <br/>
+          The second argument must evaluate to a <code>path</code> which
+          is applied to the node given by the first. The path's elements are
+          applied to yield successive nodes whose index in their
+          parent is placed in the array returned.
+        </note>
+        <p>
+          That code branch only applies if the deleted <code>Job</code> was
+          not a top-level one (and only then if it was at position zero
+          in its own level). The parent path supplied in
+          the <code>@eventId</code> makes it possible to find out which
+          sub-tree the <code>Job</code> was in. [Inq also has <code>nodesof</code>
+          which takes the same arguments and returns an array of the nodes
+          found along the path].
+        </p>
+        <p>
+          If the timer needs to be cancelled then because it was stored in
+          a sibling container to the <code>Job</code> it is available in
+          the node that gets sent back in the <code>remove</code> event.
+        </p>
+      </section>
+    </section>
+    <section id="integrity">
+      <title>System Integrity</title>
+      <p>
+        Inq does not have any kind of data hiding like object oriented
+        languages do. If script has a reference to a managed instance
+        it can simply assign to its fields. When this happens Inq locks
+        the instance and places it into the invoking process's 
+        current transaction.
+      </p>
+      <p>
+        In the Job Control application though, it
+        is important that this is done with the appropriate state
+        transition. In particular, any client process (that is any process
+        other than <code>jobdispatcher</code>) must arbitrate for
+        and set the job tree state to <code>USER_START</code>.
+      </p>
+      <p>
+        Although the various API functions in <code>inq.jobcontrol</code> do
+        this what is to stop any process from simply modifying <code>Job</code>s
+        and introducing concurrency errors or deadlocks waiting for
+        a state transition that does not come? The various life-cycle (or put
+        another way transaction phase) statements that a <code>typedef</code>
+        has are the places to trap such eventualities.
+      </p>
+      <section id="construct">
+        <title>Job.&lt;construct&gt;</title>
+        <p>
+          The <code>&lt;construct&gt;</code> statement in the <code>Job</code>
+          typedef calls the scripted function <code>isTreeState()</code>:
+        </p>
+        <source>
+construct (
+{
+  // Validate the tree state to ensure the integrity of jobDispatcher
+  call isTreeState(requiredState = enum(JobTreeState, USER_START));
+    .
+    .    
+</source>
+        <p>
+          The <code>isTreeState()</code> function checks the job tree
+          state and throws an exception if it is not as expected:
+        </p>
+        <source>
+/**
+ * Obtain a lock on the mutex and then check the jobtree state variable
+ * is <code>requiredState</code>.
+ * @return Undefined. Returns if the state is requiredState, otherwise
+ * throws. 
+ */
+function isTreeState(JobTreeState requiredState,
+                     long         timeout = -1)
+{
+  if (call isRunning())
+  {
+    if (lock("__jobtree",    // the mutex we are syncing on
+             timeout))       // default timeoout is indefinite
+    {
+      any ret = $catalog.jobcontrol.jobTreeState == requiredState;
+      unlock("__jobtree");
+      if (!ret)
+      {
+        throw("Illegal tree state " +
+              enumext(JobTreeState, $catalog.jobcontrol.jobTreeState) +
+              " wanted " +
+              enumext(JobTreeState, $stack.requiredState));
+      }
+    }
+    else
+      throw("Timeout while waiting for job tree lock");
+  }
+}
+</source>
+        <p>
+          The <code>&lt;join&gt;</code>, <code>&lt;mutate&gt;</code>
+          and <code>&lt;destroy&gt;</code> statements do the same thing,
+          ensuring that the system operates correctly. 
+        </p>
+      </section>
+      <p>
+        <a href="runjob.html"><icon src="../images/nextpage.gif" alt="nextpage"/></a>
+      </p>
+    </section>
+  </body>
+</document>

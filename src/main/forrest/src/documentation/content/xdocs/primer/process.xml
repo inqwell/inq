@@ -1,0 +1,374 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright 2006 Inqwell Ltd.
+-->
+<!DOCTYPE document PUBLIC "-//APACHE//DTD Documentation V2.0//EN" "http://forrest.apache.org/dtd/document-v20.dtd">
+<document>
+  <header>
+    <title>Introduction to Processes</title>
+  </header>
+  <body>
+    <section id="intro">
+      <title>The Inq Process Environment</title>
+      <p>
+      This section introduces the Inq process environment. Further detail on
+      creating processes and how they can cooperate
+      using Inq concurrency features is covered in Processes and Concurrency.
+      </p>
+      <fixme author="tom">To Be Wrtten</fixme>
+      <p>
+        Inq applications comprise a number of clients that cooperate for shared
+        resources via their connected server.
+        Inq supports the concept of a <em>process</em> in both the server and
+        client environments, where a process is a thread of execution with its own
+        node space, rooted at the node given by the path <code>$root</code>.
+        On initialisation a client makes a long-lived connection to its
+        server. When the server accepts the connection it
+        creates a process to handle all interaction with the client.
+      </p>
+      <p>
+        A process is idle until it receives an event, such as
+        a <em>service request</em> sent by another process. A client and its associated
+        server-side process are able to make service requests of one-another.
+        Within the server, the Inq run-time arbitrates
+        between competing processes for shared resources such as database usage
+        and mutation of shared application data objects.
+      </p>
+      <p>
+        The client runs a single process that handles events
+        from the graphics system as well as
+        service requests and other events received from the server, for example those
+        raised when application data are updated. The following
+        diagram depicts this relationship:
+      </p>
+      <figure src="images/process1.png" alt="Inq Process Structure"/>
+      <p>
+        The server-side process associated with a connected client is known as
+        a <em>User Process</em>. In addition to these processes, Inq script
+        supports the creation of <em>child</em> processes and <em>detached</em>
+        processes. A detached process may, itself, create child processes.
+      </p>
+    </section>
+    <section id="channels">
+      <title>Process Channels</title>
+      <p>
+        A process has an <em>input channel</em> and may have
+        an <em>output channel</em>. These are available
+        at <code>$process.ichannel</code> and <code>$process.ochannel</code>,
+        although in the case of the Client and User processes it is not usually
+        necessary to directly access these.
+      </p>
+      <p>
+        A process receives service requests and other events at its input channel.
+        The input and output channels of the Client and User processes are
+        connected to each other, so the Client process invokes services in its
+        associated User process by sending the invocation requests to its output
+        channel and vice-versa.
+      </p>
+      <section id="eventmodel">
+        <title>The Process Event Model</title>
+        <p>
+          A process waits for events at its input channel. An event can be a
+          service invocation, a data modification notice, a timer or any of the explicit
+          events that a process can arrange to listen for. When an event arrives
+          the process wakes, handles the event and then returns to wait at its
+          input channel:
+        </p>
+        <figure src="images/process2.png" alt="Handle Event"/>
+        <section id="thread">
+          <title>Thread Usage</title>
+          <p>
+            When a process handles an event it uses its own thread. There are
+            two other mechanisms by which threads external to Inq
+            can safely occupy a process's environment.
+          </p>
+          <ol>
+            <li>A process can handle
+            asynchronous JMS <a href="jms.html">broker messages</a>. The message
+            broker implementation provides the thread on which the
+            message is delivered.
+            </li>
+            <li>A process may start one or more <em>plugins</em>. A
+            plugin is an extension
+            of <code>com.inqwell.any.AbstractPlugin</code> and
+            allows a system external to the Inq environment to
+            maintain <a href="typedef.html">typedef</a> instances
+            by calling its <code>create()</code>, <code>modify()</code>
+            or <code>delete()</code> methods and to use the
+            process's <a href="txn.html">transaction</a> if
+            required by calling the <code>begin()</code>
+            and <code>end()</code> methods.</li>
+          </ol>
+          <p>
+            For broker messages there are implications for automatic message
+            acknowledgement that require the message to be processed in the
+            receiving thread; it cannot be dispatched to the process's thread
+            in this case.
+          </p>
+          <p>
+            The plugin model expects the implementation to start its own
+            thread but warrants that calls back to any of the above methods
+            complete synchronously. 
+          </p>
+          <figure src="images/process3.png" alt="Handle Event"/>
+          <p>
+            Inq guarantees that these threads interleave their execution
+            inside the process context with the process's own thread.
+            The function to handle a broker message will run to
+            completion. The plugin callbacks <code>create()</code>, <code>modify()</code>
+            and <code>delete()</code> will do likewise; furthermore
+            if the implementation calls <code>begin()</code> to open
+            a transaction then all callbacks are completed. Not
+            until <code>end()</code> is called can the process's thread
+            run again.
+          </p>
+        </section>
+      </section>
+    </section>
+    <section id="client">
+      <title>The Client Process</title>
+      <p>
+        The Client process handles events received from the User process in the
+        server and so acts as the thread for executing requests made by the server.
+        The client is also running the Java graphics thread and therefore separately
+        handles those events arising from user input and other aspects of the
+        host graphics system.
+      </p>
+      <p>
+        These two threads of execution share the node space of the Client process.
+        To achieve thread safety surrounding access to the node space these threads
+        run to their natural completion before allowing the other to run.
+        The Client process is allowed to access graphical elements directly and the
+        Inq runtime ensures that the necessary thread safety issues surrounding
+        access to Java graphical components is obeyed. This may mean that
+        sections of Inq script that appear to be executing in a single thread may
+        swap between the Client process and Java graphics threads as needs demand,
+        however this is never something that the Inq programmer needs to handle or
+        even be aware of.
+      </p>
+    </section>
+    <section id="detached">
+      <title>Detached and Child Processes</title>
+      <p>
+        In the server, it is possible to create <em>detached</em> processes.
+        These are processes that are not associated with a connected client
+        and can be used to perform service requests invoked within the server
+        itself, for example from a User process that is not willing to wait for the
+        (presumably lengthy) processing to complete.
+      </p>
+      <p>
+        A detached process has its own node space and is completely unrelated
+        to the process that created it. However, any process can
+        create <em>child</em> processes. In this case a parent and child
+        process are related, in that if the parent terminates all its children
+        will terminate also. A child process still has its own node space and
+        competes on equal terms with any other process in the server for
+        shared resources.
+      </p>
+      <p>
+        When a detached or child process is created it may be use the same
+        input channel as the process that created it. Otherwise a new one
+        is created for that process. The usual combination of detached vs.
+        child and exclusive vs. shared input channels is to create a detached
+        process with its own input channel and have that process create any number
+        of child processes that share its input channel. This process group then
+        forms a set of threads that can accept events on a single input channel and
+        have them dispatched to any available process with a fixed maximum
+        running simultaneously.
+      </p>
+      <p>
+        Detached and child processes are not connected to any sort of peer process
+        like the Client and User processes are, so they don't have an output
+        channel.
+      </p>
+    </section>
+    <section id="eventflows">
+      <title>Event Flows Between Processes</title>
+      <p>
+        In later sections we will see how instances of application entities,
+        called <em>managed instances</em> and defined by an
+        Inq <em>typedef</em> block, cooperate with the Inq
+        transaction model to raise events as they move through the life-cycle
+        of creation, mutation and destruction. Further, within the server, Inq
+        controls how references to managed instances are shared between all
+        processes that acquire them.
+      </p>
+      <p>
+        This system gives rise to an event flow that outlined here. Events
+        can be captured and processed by scripted functions, a topic that
+        we cover in the section on <a href="events.html">Events</a>. As well
+        as this, Inq itself processes these events in the following ways:
+      </p>
+      <ul>
+        <li>Inq propagates events arising from a managed instance to all
+        observers of that instance, regardless of who (that is which process)
+        is holding the reference.</li>
+        <li>If the process is a User process, the event is propagated to
+        the connected Client process.</li>
+        <li>Propagated events received at a client process are <em>mirrored</em>
+        in the client's node space, that is updates and structure
+        alterations are replicated in the Client.</li>
+        <li>Events in the Client (whether occurring because of propagation from
+        the User process or arising from local processing) are dispatched
+        to any observing GUI components. This topic is covered further in the
+        section <a href="guibasics.html">GUI Basics</a>.</li>
+      </ul>
+      <p>
+        All events are received at a process's input channel and processed
+        sequentially. Only when this processing is complete is the next event
+        in the channel then dispatched.
+      </p>
+      <section id="serverevents">
+        <title>Server-Side Event Flow</title>
+        <p>
+          Suppose, within the server, processes A and B are both holding a
+          reference to a managed instance that A then updates. With process B
+          also referring to the same managed instance, the event flow is
+          as depicted below:
+        </p>
+        <figure src="images/ss.png" alt="Event Flow"/>
+        <p>
+          For this flow to occur, process A and B must have assembled a
+          structure that is <em>event-live</em>, something that is
+          discussed in the
+          section <a href="structures.html">Building Event Structures</a>.
+        </p>
+      </section>
+    </section>
+    <section id="eventTypes">
+      <title>Process Event Types</title>
+      <p>
+        The table below summarises the types of event each process type can
+        receive and what, if anything, the Inq environment does with them.
+      </p>
+      <table>
+        <caption>Process Event Types</caption>
+        <tr>
+          <th colspan="2"/>
+          <th class="keys" colspan="3">Process Type</th>
+        </tr>
+        <tr>
+          <th colspan="2">Event</th>
+          <th>Client</th>
+          <th>User</th>
+          <th>Detached</th>
+        </tr>
+        <tr>
+          <td rowspan="3">Typedef Instance</td>
+          <td class="centred">Create</td>
+          <td class="centred"></td>
+          <td class="centred"><img src="images/script.png" alt="script"/></td>
+          <td class="centred"><img src="images/script.png" alt="script"/></td>
+        </tr>
+        <tr>
+          <td class="centred">Update</td>
+          <td class="centred"><img src="images/script.png" alt="node_in"/>&nbsp;&nbsp;&nbsp;<img src="images/node_in.png" alt="script"/></td>
+          <td class="centred"><img src="images/node_out.png" alt="node_out"/>&nbsp;&nbsp;&nbsp;<img src="images/script.png" alt="script"/></td>
+          <td class="centred"><img src="images/script.png" alt="script"/></td>
+        </tr>
+        <tr>
+          <td class="centred">Delete</td>
+          <td class="centred"><img src="images/script.png" alt="node_in"/>&nbsp;&nbsp;&nbsp;<img src="images/node_in.png" alt="script"/></td>
+          <td class="centred"><img src="images/node_out.png" alt="node_out"/>&nbsp;&nbsp;&nbsp;<img src="images/script.png" alt="script"/></td>
+          <td class="centred"><img src="images/script.png" alt="script"/></td>
+        </tr>
+        <tr>
+          <td rowspan="3">Node Structure</td>
+          <td class="centred">Add</td>
+          <td class="centred"><img src="images/script.png" alt="node_in"/>&nbsp;&nbsp;&nbsp;<img src="images/node_in.png" alt="script"/></td>
+          <td class="centred"><img src="images/node_out.png" alt="node_out"/>&nbsp;&nbsp;&nbsp;<img src="images/script_trans.png" alt="script_trans"/></td>
+          <td class="centred"><img src="images/script_trans.png" alt="script_trans"/></td>
+        </tr>
+        <tr>
+          <td class="centred">Remove</td>
+          <td class="centred"><img src="images/script.png" alt="node_in"/>&nbsp;&nbsp;&nbsp;<img src="images/node_in.png" alt="script"/></td>
+          <td class="centred"><img src="images/node_out.png" alt="node_out"/>&nbsp;&nbsp;&nbsp;<img src="images/script_trans.png" alt="script_trans"/></td>
+          <td class="centred"><img src="images/script_trans.png" alt="script_trans"/></td>
+        </tr>
+        <tr>
+          <td class="centred">Replace</td>
+          <td class="centred"><img src="images/script.png" alt="node_in"/>&nbsp;&nbsp;&nbsp;<img src="images/node_in.png" alt="script"/></td>
+          <td class="centred"><img src="images/node_out.png" alt="node_out"/>&nbsp;&nbsp;&nbsp;<img src="images/script_trans.png" alt="script_trans"/></td>
+          <td class="centred"><img src="images/script_trans.png" alt="script_trans"/></td>
+        </tr>
+        <tr>
+          <td rowspan="2">Function Execution</td>
+          <td class="centred">Start</td>
+          <td ></td>
+          <td class="centred"><img src="images/script.png" alt="script"/></td>
+          <td class="centred"><img src="images/script.png" alt="script"/></td>
+        </tr>
+        <tr>
+          <td class="centred">Complete</td>
+          <td ></td>
+          <td class="centred"><img src="images/script.png" alt="script"/></td>
+          <td class="centred"><img src="images/script.png" alt="script"/></td>
+        </tr>
+        <tr>
+          <td rowspan="2">Typedef Declaration</td>
+          <td class="centred">Cataloged</td>
+          <td ></td>
+          <td class="centred"><img src="images/script.png" alt="script"/></td>
+          <td class="centred"><img src="images/script.png" alt="script"/></td>
+        </tr>
+        <tr>
+          <td class="centred">Expire</td>
+          <td ></td>
+          <td class="centred"><img src="images/script.png" alt="script"/></td>
+          <td class="centred"><img src="images/script.png" alt="script"/></td>
+        </tr>
+        <tr>
+          <td colspan="2">Service Request</td>
+          <td class="centred" colspan="3">Dispatched by Inq to the specified service</td>
+        </tr>
+        <tr>
+          <td colspan="2">Timer</td>
+          <td class="centred" colspan="3">Dispatched by Inq to the specified function</td>
+        </tr>
+      </table>
+      <!--
+      <p>
+        <img src="images/evlegend.png" alt="evlegend"/>
+      </p>
+      -->
+      <p>
+      Notes:
+      </p>
+      <ol>
+        <li>A User process has a connected Client peer. Events
+          marked <img src="images/node_out.png" alt="node_out"/> are forwarded
+          by Inq to the Client process.</li>
+        <li>Corresponding events <img src="images/node_in.png" alt="node_in"/> are
+        mirrored by Inq in the Client process node space, creating them where
+        appropriate and causing the same event to be raised. Depending on the
+        prevailing GUI configuration the event may be dispatched by the graphics
+        thread also.</li>
+        <li>All events marked <img src="images/script.png" alt="script"/> may
+        be dispatched to an Inq scripted function by use of the <code>listen</code>
+        statement.
+        <note>Typedef Instance events are propagated by the process that raised
+        them through all node spaces that hold a reference to the instance. A
+        node space structure is only manipulated by its owning process, so
+        while these events <img src="images/script_trans.png" alt="script_trans"/>
+        can be <code>listen</code>ed for, this is less common than dispatching
+        Typedef Instance events.</note></li>
+        <li>Function Execution events are raised when a function is entered
+        or returned from and offer a way of batching the events raised by
+        a transaction into a single dispatch. This is covered in
+        the <a href="events.html">Events</a> section.</li>
+        <li>Timers offer a way for a process to awaken itself at regular intervals
+        or at some future time. These are also covered
+        in <a href="events.html">Events</a>.</li>
+      </ol>
+      <!--
+      <p>
+        A process is terminated with the <code>exit</code> statement. A process
+        can terminate itself with the statement
+      </p>
+      <p class="code-indent">
+        <code>exit(0);</code>
+      </p>
+      -->
+    </section>
+  </body>
+</document>

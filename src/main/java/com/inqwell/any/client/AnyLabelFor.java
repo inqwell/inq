@@ -37,7 +37,7 @@ import com.inqwell.any.Set;
  * unless the text (or other rendered properties) is required.
  *  
  * @author Tom
- *
+ * @deprecated
  */
 public class AnyLabelFor extends AnyLabel
 {

@@ -1,0 +1,1192 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * Inqwell Job Control Package
+ *
+ * Gui Client
+ */
+
+package inq.jobcontrol;
+
+// Immediate script for i18n setup
+set supportedLanguages = ("en");
+
+// check if we have specified the i18n parameter. if not, set the language to English.
+string i18n;
+
+if (isnull($catalog.argsMap.i18n))
+{
+  writeln($catalog.system.err, "WARNING: i18n parameter not found. Will use 'en' by default.");
+  i18n = "en";
+}
+else
+{
+  i18n = $catalog.argsMap.i18n;
+}
+
+// do we have the requested language in our repository????
+if (!contains(supportedLanguages, i18n))
+{
+  writeln($catalog.system.err, "ERROR: Requested i18n language '" + i18n + "' not found. Aborting.");
+  exit(1);
+}
+
+// store it for later use
+string $root.i18n = i18n;
+
+// The loadclient() function is a request to the server to return the
+// specified script. The server replies to multiple loadclient() requests
+// in the order they are issued.
+
+// load the constant string values from the server
+loadclient("../" + i18n + "/i18n.inq");
+
+// End of i18n setup
+loadclient("../common.inq");
+
+local function jobMain()
+{
+  // Dispose of any existing GUI
+  if ($this.jobMain)
+    remove($this.jobMain);
+
+  gWindow jobMain;
+  jobMain.properties.size = array a = (650,350);
+  jobMain.properties.contextNode = true;
+  jobMain.properties.title       = "Job Control";
+	gEvent(jobMain, call contextEstablished(), event=(gContext));
+  gEvent(jobMain, call cbJobClose(), event=(gWclosing));
+
+  // Place window in node space
+  any $this.jobMain = jobMain;
+
+}
+
+local function createGUI()
+{
+  // Create the GUI under $this
+
+  call createTreeTable(context = $this, guiParent = $this);
+  call createMenu(window = $this, context = $this);
+  call createToolBar(window = $this, context = $this);
+}
+
+local function createTreeTable(any context, any guiParent)
+{
+  gTable jobTable;
+  layout(., guiParent, "Margin d:3 jobTable");
+  call setupTreeTable(table = jobTable, context);
+  gEvent(jobTable, call cbSelection(), event=(gSelection));
+
+}
+
+local function setupTreeTable(any table, any context)
+{
+  // Put the table into treetable mode
+  table.properties.tableMode = TREE_TABLE;
+
+  // Table Model
+
+  // Ordered map of column renderinfos. The names of the map contents are
+  // symbols by which table columns can be accessed subsequently if required.
+  omap columns;
+
+  // For a TreeTable, column zero of the columns config is not used to render
+  // the cell.  We just specify the typedef to get the width/label.
+	any columns.ShortName     = renderinfo(null, typedef = Job.ShortName, width=30);
+
+  // When simply rendering a field value a default path of $this.<typedef>.<field>
+  // is assumed where $this is a node-set child
+	any columns.ContinueOnError = renderinfo(typedef = Job.ContinueOnError, width=2, label=null);
+	any columns.Started       = renderinfo(typedef = JobVolatile.Started);
+	any columns.LastRan       = renderinfo(typedef = Job.LastRan);
+	any columns.LastDuration  = renderinfo(typedef = Job.LastDuration);
+	any columns.NextRuns      = renderinfo(typedef = Job.NextRuns);
+	any columns.JobState      = renderinfo(typedef = JobVolatile.JobState);
+	any columns.JobOrder      = renderinfo(typedef = Job.JobOrder);
+	//any columns.Active        = renderinfo(typedef = Job.Active);
+
+	// See custom rendering set up in setupTableComponents().
+	any columns.TimerExpr       = renderinfo(typedef = Job.TimerExpr);
+	any columns.FunctionExpr    = renderinfo(typedef = Job.FunctionExpr);
+
+
+	// ****************************************************************************
+
+	// Tree Model
+	// Configure the only tree level we need (because the structure is the
+	// same at every level, that is it is recursive)
+
+	// Where the root of the first level of tree nodes is located
+  any     level.levelRoot     = path($this.vars.jobTree);
+
+	// Where the root of subsequent levels are located w.r.t. the node-set child.
+	// Note that setting a subRoot implies that this level is recursive (i.e.
+	// that the structure, with the same rendering requirements, repeats to
+	// an arbitrary depth.
+  any     level.subRoot       = path($this.childJobs);
+
+  // Note that graphically we show that a job is active by rendering
+  // it in bold face. This is done in the renderRow function but
+  // because Job.Active is not itself actually rendered anywhere
+  // there is no MVC when it changes. Hence, we include it in the
+  // rendering expression here, just to force this to happen. We could
+  // have put it on any column just to get the row to re-render but
+  // putting it on the tree means that the tree itself is notified
+  // and any new tree cell geometry is computed.
+  // Similarly, the renderTreeNode function sets the tree node icon
+  // on the basis of the BoxType and ExitStatus fields so we need
+  // to dispatch to the tree if either of these are updated. Lastly,
+  // the value we render to the cell is ShortName text. This is the
+  // last statement of the rendering expression, making it the result.
+  any     level.renderInfo    = renderinfo({
+                                             $this.Job.Active;
+                                             $this.Job.ExitStatus;
+                                             $this.Job.BoxType;
+                                             $this.Job.ShortName;
+                                           },
+                                           typedef = Job.ShortName);
+
+  // An expression that whether a given node is a leaf or a branch
+  any     level.isLeaf        = func jobLeaf = call jobLeaf();
+
+  // Some ordering
+  any     level.modelSort     = func f = sort($loop, $loop.Job.NextRuns,
+                                                     $loop.Job.JobOrder,
+                                                     null = NULL_HIGH);
+
+  // Give the level a name so we can refer to it later.
+  any     level.name          = "ShortName";
+
+  // Apply columns and level
+  table.properties.columns = columns;
+  table.properties.levels  = level;
+
+  // Tell the table where the root of the data will be
+  table.properties.modelRoot = path($this.vars.jobTree);
+
+  // Once the table/tree is configured components can be set into its
+  // columns/levels for editing and rendering
+  call setupTableComponents(table, context);
+}
+
+local function setupTableComponents(any table, any context)
+{
+  // A text field editor
+  gTextField tf;
+
+  // Some constants for the parse status. If an expression is edited it is then
+  // parsed, successfully or otherwise
+  any context.const.parseOK   = 0;
+  any context.const.parseFail = 1;
+
+  // Styles
+	boolean boldStyle.@bold     = true;
+	style   context.styles.bold = boldStyle;
+
+  string context.vars.editVal;
+  tf.properties.renderInfo = renderinfo($this.vars.editVal, editable=true);
+
+  table.properties.renderOnMouseMotion = true;
+  //table.properties.clickSortEnabled = false;
+
+  // Renderer components for script columns. This is a box
+  // containing two icons. The box is a lightweight container
+  // using geometry constraints to keep the editIcon at
+  // the right hand side.
+  gLabel editIcon;
+  gLabel scriptIcon;
+  gBox   scriptRenderer;
+  scriptRenderer.properties.axis = X_AXIS;
+  layout(., scriptRenderer, "scriptIcon Geometry xy:fv editIcon");
+
+  table.properties.columns.ShortName.editor.properties.component = tf;
+  table.properties.columns.ShortName.editor.properties.onStopEdit = func f = call shortNameChanged();
+  // TODO table.properties.columns.ShortName.renderer.properties.style = func f = call renderTreeNode();
+  table.properties.levels.ShortName.renderer.properties.style = func f = call renderTreeNode();
+
+  table.properties.columns.FunctionExpr.renderer.properties.component = scriptRenderer;
+  table.properties.columns.FunctionExpr.renderer.properties.setValueToComponent = null;
+  table.properties.columns.TimerExpr.renderer.properties.component = scriptRenderer;
+  table.properties.columns.TimerExpr.renderer.properties.setValueToComponent = null;
+
+	table.properties.columns.TimerExpr.renderer.properties.style = func f = call renderScript();
+	table.properties.columns.TimerExpr.sortable = false;
+	table.properties.columns.FunctionExpr.renderer.properties.style = func f = call renderScript();
+	table.properties.columns.FunctionExpr.sortable = false;
+  table.properties.columns.ContinueOnError.renderer.properties.setValueToComponent = null;
+  table.properties.columns.ContinueOnError.renderer.properties.style = func f = call renderContinueOnError();;
+  table.properties.columns.ContinueOnError.widths.properties.minimumWidth = 20;
+
+  table.properties.columns.LastDuration.renderer.properties.style = func f = call renderDuration();
+  // Don't have Inq set the value into the cell, the style function does it.
+  table.properties.columns.LastDuration.renderer.properties.setValueToComponent = null;
+
+  // Put a mouse event handler on the table to popup expression editor
+  // windows if we are in the appropriate cells
+  gEvent(table, call showExprEditor(), event=(gMclicked));
+
+  table.properties.rowStyle = func f = call renderRow();
+}
+
+local function renderScript(any component,
+                            any parent,
+                            any value,
+                            any isMouseCell,
+                            any row,
+                            any rowRoot,
+                            any columnName)
+{
+  //writeln($catalog.system.out, "\e ************* " + row + " " + component);
+  if (isnull(value))
+  {
+    component.scriptIcon.properties.icon = null;
+  }
+  else
+  {
+    component.scriptIcon.properties.icon = $this.images.script;
+    component.scriptIcon.properties.horizontalAlignment = gGuiConstant(CENTER);
+  }
+
+  if (call isBox(rowRoot.Job) && columnName == "FunctionExpr")
+    component.editIcon.properties.icon = null;
+  else
+  {
+    if (isMouseCell)
+      component.editIcon.properties.icon = $this.images.magBold;
+    else
+      component.editIcon.properties.icon = $this.images.magPlain;
+  }
+
+  //component.properties.background = parent.properties.background;
+
+  // Override from the rowStyle, which is called first
+  //component.properties.enabled = true;
+
+  null;
+}
+
+local function renderContinueOnError(any component, any rowRoot)
+{
+  if (call isBox(rowRoot.Job))
+    switch
+    {
+      when(rowRoot.Job.ContinueOnError == enum(ContinueOnError, CONTINUE))
+        component.properties.icon = $this.images.contOnError;
+
+      when(rowRoot.Job.ContinueOnError == enum(ContinueOnError, ABORT))
+        component.properties.icon = $this.images.stopOnError;
+
+      otherwise
+        component.properties.icon = null;
+    }
+  else
+    component.properties.icon = null;
+
+  component.properties.horizontalAlignment = gGuiConstant(CENTER);
+
+  null;
+}
+
+local function renderTreeNode(any component, any rowRoot, any isLeaf, any expanded)
+{
+  // The tree cell is rendered twice - once at the table level
+  // and then later at the tree level. At the table level the
+  // component used internally by Inq is the tree, but this is
+  // not passed to the renderer function and cannot be manipulated.
+  if (component)
+  {
+    any k = call imageKey(isBox=call isBox(rowRoot.Job),
+                          expanded,
+                          rowRoot.Job.BoxType,
+                          error=rowRoot.Job.ExitStatus != 0);
+
+    any i = $this.images.{k};
+    
+    component.properties.icon = i ? i : null;
+  }
+  null;
+}
+
+// This is the neatest way Inq has to render a duration at the moment.
+local function renderDuration(any component,
+                              any value)
+{
+  // if null (or zero) don't bother
+  if (value)
+  {
+    // Set the duration into the working date variable
+    $this.vars.duration = value;
+    
+    // This will give us the hrs:mins:secs.msecs (see durationFmt set
+    // up in contextEstablished() ) 
+    any txt = render($this.vars.duration, format=$this.vars.durationFmt);
+    
+    any days = value / $this.vars.oneDay;
+    txt = renderf("{0,choice,0#|1#1 day, |1<{0,number,integer} days, }{1}", days, txt);
+    component.properties.text = txt;
+  }
+  else
+    component.properties.text = null;
+
+  // No style to return
+  null;
+}
+
+// Return no style if job is inactive or bold style if it is active
+local function renderRow(any component, any rowRoot)
+{
+  if (rowRoot.Job.Active == enum(Active, N))
+  {
+    //component.properties.enabled = false;
+    null;
+  }
+  else
+  {
+    //component.properties.enabled = true;
+    null;
+  	$this.styles.bold;
+  }
+}
+
+local function shortNameChanged(any isUser,
+                                any after,
+                                any rowRoot,
+                                any columnName,
+                                any row,
+                                any column,
+                                any value,
+                                any newValue)
+{
+/*
+  writeln($catalog.system.out, "********************************");
+  writeln($catalog.system.out, columnName);
+  writeln($catalog.system.out, rowRoot);
+  writeln($catalog.system.out, row);
+  writeln($catalog.system.out, column);
+  writeln($catalog.system.out, value);
+  writeln($catalog.system.out, newValue);
+  writeln($catalog.system.out, after);
+  writeln($catalog.system.out, isUser);
+*/
+
+  if (after)
+    send modifyJob(rowRoot.Job);
+
+}
+
+local function showExprEditor()
+{
+  // We only respond to the mouse event if:
+  //   1) It occurred in the TimerExpr column
+  //   2) It occurred in the FunctionExpr column and the row represents a task
+  //   3) It is in the cell region where we have placed the edit icon
+  if ((@event.columnName == "TimerExpr" ||
+       @event.columnName == "FunctionExpr" && call isTask(@event.rowRoot.Job)) &&
+       @event.cell.width - @event.cellX <= $this.images.magBold.properties.width)
+  {
+    call editorWindow(context=$this, @event.rowRoot.Job, textPath=@event.columnName);
+  }
+}
+
+local function createMenu(any window, any context)
+{
+  gMenuBar menuBar;
+
+  gMenu jobMenu;
+  jobMenu.properties.text = "Job";
+  jobMenu.properties.mnemonic = keycode(VK_J);
+
+	gMenu menuNew;
+	menuNew.properties.text = "New";   // TODO i18n
+	menuNew.properties.mnemonic = keycode(VK_N);
+
+	gMenuButton mbDel;
+	mbDel.properties.text = "Delete";   // TODO i18n
+	mbDel.properties.accelerator = keystroke(VK_D, CTRL_MASK);
+	mbDel.properties.mnemonic = keycode(VK_D);
+	gEvent(mbDel, call cbDeleteJobs(jobsAt = path($this.jobTable.model.selection)));
+
+	gMenuButton mbBox;
+	mbBox.properties.text = "Box";   // TODO i18n
+	mbBox.properties.accelerator = keystroke(VK_B, CTRL_MASK);
+	mbBox.properties.mnemonic = keycode(VK_B);
+	gEvent(mbBox, call cbNewBox());
+
+	gMenuButton mbTask;
+	mbTask.properties.text = "Task";   // TODO i18n
+	mbTask.properties.accelerator = keystroke(VK_T, CTRL_MASK);
+	mbTask.properties.mnemonic = keycode(VK_T);
+	gEvent(mbTask, call cbNewTask());
+
+	gMenuButton mbTLTask;
+	mbTLTask.properties.text = "T/L Task";   // TODO i18n
+	mbTLTask.properties.accelerator = keystroke(VK_L, CTRL_MASK);
+	mbTLTask.properties.mnemonic = keycode(VK_L);
+	gEvent(mbTLTask, call cbNewTLTask());
+
+	gMenuButton mbTLBox;
+	mbTLBox.properties.text = "T/L Box";   // TODO i18n
+	mbTLBox.properties.accelerator = keystroke(VK_X, CTRL_MASK);
+	mbTLBox.properties.mnemonic = keycode(VK_X);
+	gEvent(mbTLBox, call cbNewTLBox());
+
+	gMenuButton mbContOnError;
+	mbContOnError.properties.text = "Continue on Error";   // TODO i18n
+	mbContOnError.properties.mnemonic = keycode(VK_C);
+	mbContOnError.properties.icon = context.images.contOnError;
+	gEvent(mbContOnError,
+	       call cbSetContOnError(jobs = $this.jobTable.model.selection,
+	                             ContinueOnError = enum(ContinueOnError, CONTINUE)));
+
+	gMenuButton mbAbortOnError;
+	mbAbortOnError.properties.text = "Abort on Error";   // TODO i18n
+	mbAbortOnError.properties.mnemonic = keycode(VK_A);
+	mbAbortOnError.properties.icon = context.images.stopOnError;
+	gEvent(mbAbortOnError,
+	       call cbSetContOnError(jobs = $this.jobTable.model.selection,
+                               ContinueOnError = enum(ContinueOnError, ABORT)));
+
+	gMenuButton mbBoxTimed;
+	mbBoxTimed.properties.text = "Timed";   // TODO i18n
+	mbBoxTimed.properties.icon = context.images.boxTimed;
+	gEvent(mbBoxTimed,
+	       call cbSetBoxType(jobs = $this.jobTable.model.selection,
+	                         BoxType = enum(BoxType, TIMED)));
+
+	gMenuButton mbBoxConsec;
+	mbBoxConsec.properties.text = "Consecutive";   // TODO i18n
+	mbBoxConsec.properties.icon = context.images.boxConsec;
+	gEvent(mbBoxConsec,
+	       call cbSetBoxType(jobs = $this.jobTable.model.selection,
+                           BoxType = enum(BoxType, SEQUENCE)));
+
+	gMenuButton mbActive;
+	mbActive.properties.text = "Active";   // TODO i18n
+	mbActive.properties.icon = context.images.active;
+	mbActive.properties.mnemonic = keycode(VK_V);
+	gEvent(mbActive,
+	       call cbSetActive(jobsAt = path($this.jobTable.model.selection),
+	                        Active = enum(Active, Y),
+	                        ask    = false));
+
+	gMenuButton mbInactive;
+	mbInactive.properties.text = "Inactive";   // TODO i18n
+	mbInactive.properties.icon = context.images.inactive;
+	mbInactive.properties.mnemonic = keycode(VK_E);
+	gEvent(mbInactive,
+	       call cbSetActive(jobsAt = path($this.jobTable.model.selection),
+                          Active = enum(Active, N)));
+
+	gMenuButton mbClose;
+	mbClose.properties.text = "Close";   // TODO i18n
+	mbClose.properties.accelerator = keystroke(VK_F4, ALT_MASK);
+	gEvent(mbClose, call cbJobClose());
+
+  gMenu systemMenu;
+  systemMenu.properties.text = "System";
+  
+  gMenuButton mbStart;
+  mbStart.properties.text = "Start";   // TODO i18n
+  gEvent(mbStart, call cbJCStart());
+  
+  gMenuButton mbStop;
+  mbStop.properties.text = "Stop";   // TODO i18n
+  gEvent(mbStop, call cbJCStop());
+  
+
+  // Add the log level menu
+  any logMenu = call inq.gui.util:loggingMenu(logLevelCb =
+                                           func f = {
+                                                      send setLogLevel(logLevel);
+                                                    });
+  logMenu.properties.text = "Log";
+
+	layout(., context, menuBar, "Geometry d:f jobMenu
+																						{
+																							menuNew
+																							{
+																							  mbBox
+																							  mbTask
+																							  mbTLBox
+																							  mbTLTask
+																							}
+																							mbDel
+																							Separator
+																							mbActive
+																							mbInactive
+																							Separator
+																							mbContOnError
+																							mbAbortOnError
+																							Separator
+																							mbBoxTimed
+																							mbBoxConsec
+																							Separator
+																							mbClose
+																						}
+																						systemMenu
+																						{
+																						  mbStart
+																						  mbStop
+																						  Separator
+																						  logMenu
+																						}
+															");
+
+  // Set the window's menuBar property. Also save it in the
+  // context so that when this is known we can add the
+  // log menu
+	window.properties.menuBar = menuBar;
+	any context.menuBar       = menuBar;
+
+	// Set up variables/property bindings for button states.
+	boolean context.propvars.newChild;        // can make a new child task/box
+	boolean context.propvars.delete;          // can delete job(s)
+	boolean context.propvars.enable;          // can enable job(s)
+	boolean context.propvars.disable;         // can disable job(s)
+	boolean context.propvars.setBoxFlags;     // can change box(es) ContinueOnError
+	boolean context.propvars.setActive;       // can set inactive jobs active
+	boolean context.propvars.setInactive;     // can set active jobs inactive
+	boolean context.propvars.restartTopLevel; // can restart the job
+  boolean context.propvars.runJobNow;       // can manually run the job
+  boolean context.propvars.killJob;         // can kill a running job
+	string  context.propvars.restartToolTip = null; // the tooltip for restart button
+	string  context.propvars.nowToolTip     = null; // the tooltip for run now button
+
+  gProperty(mbBox,  enabled, renderinfo($this.propvars.newChild));
+  gProperty(mbTask, enabled, renderinfo($this.propvars.newChild));
+  gProperty(mbDel,  enabled, renderinfo($this.propvars.delete));
+  gProperty(mbContOnError, enabled, renderinfo($this.propvars.setBoxFlags));
+  gProperty(mbAbortOnError, enabled, renderinfo($this.propvars.setBoxFlags));
+  gProperty(mbBoxTimed, enabled, renderinfo($this.propvars.setBoxFlags));
+  gProperty(mbBoxConsec, enabled, renderinfo($this.propvars.setBoxFlags));
+  gProperty(mbActive, enabled, renderinfo($this.propvars.setActive));
+  gProperty(mbInactive, enabled, renderinfo($this.propvars.setInactive));
+
+}
+
+local function createToolBar(any window, any context)
+{
+  gToolBar tb;
+
+  tb.properties.name = "Job Control";
+
+	gButton mbActive;
+  array margin = (0,0,0,0);
+	mbActive.properties.icon = context.images.active;
+	mbActive.properties.toolTipText = "Active";
+  mbActive.properties.margin = margin;
+	gEvent(mbActive,
+	       call cbSetActive(jobsAt = path($this.jobTable.model.selection),
+	                        Active = enum(Active, Y),
+	                        ask    = false));
+
+
+	gButton mbInactive;
+	mbInactive.properties.icon = context.images.inactive;
+	mbInactive.properties.toolTipText = "Inactive";
+  mbInactive.properties.margin = margin;
+	gEvent(mbInactive,
+	       call cbSetActive(jobsAt = path($this.jobTable.model.selection),
+	                        Active = enum(Active, N)));
+
+	gButton mbContOnError;
+	mbContOnError.properties.toolTipText = "Continue on Error";   // TODO i18n
+	mbContOnError.properties.margin = margin;
+	mbContOnError.properties.icon = context.images.contOnError;
+	gEvent(mbContOnError,
+	       call cbSetContOnError(jobs = $this.jobTable.model.selection,
+	                             ContinueOnError = enum(ContinueOnError, CONTINUE)));
+
+	gButton mbAbortOnError;
+	mbAbortOnError.properties.toolTipText = "Abort on Error";   // TODO i18n
+	mbAbortOnError.properties.margin = margin;
+	mbAbortOnError.properties.icon = context.images.stopOnError;
+	gEvent(mbAbortOnError,
+	       call cbSetContOnError(jobs = $this.jobTable.model.selection,
+                               ContinueOnError = enum(ContinueOnError, ABORT)));
+
+	gButton mbBoxTimed;
+	mbBoxTimed.properties.toolTipText = "Timed";   // TODO i18n
+	mbBoxTimed.properties.margin = margin;
+	mbBoxTimed.properties.icon = context.images.boxTimed;
+	gEvent(mbBoxTimed,
+	       call cbSetBoxType(jobs = $this.jobTable.model.selection,
+	                         BoxType = enum(BoxType, TIMED)));
+
+	gButton mbBoxConsec;
+	mbBoxConsec.properties.toolTipText = "Consecutive";   // TODO i18n
+	mbBoxConsec.properties.margin = margin;
+	mbBoxConsec.properties.icon = context.images.boxConsec;
+	gEvent(mbBoxConsec,
+	       call cbSetBoxType(jobs = $this.jobTable.model.selection,
+                           BoxType = enum(BoxType, SEQUENCE)));
+
+	gButton mbTopLevelRestart;
+	mbTopLevelRestart.properties.margin = margin;
+	mbTopLevelRestart.properties.icon = context.images.restart;
+  // We only enable the restart action when there's a single selection.
+  // See cbSelection
+	gEvent(mbTopLevelRestart,
+	       call cbRestartJob($this.jobTable.model.selection[0].Job));
+
+	gButton mbRunNow;
+	mbRunNow.properties.toolTipText = "Restart";   // TODO i18n
+	mbRunNow.properties.margin = margin;
+	mbRunNow.properties.icon = context.images.runnow;
+	gEvent(mbRunNow,
+	       call cbRunNow($this.jobTable.model.selection[0].Job));
+
+  gButton mbKillJob;
+  mbKillJob.properties.toolTipText = "Kill";   // TODO i18n
+  mbKillJob.properties.margin = margin;
+  mbKillJob.properties.icon = context.images.killJob;
+  gEvent(mbKillJob,
+         call cbKillJob($this.jobTable.model.selection[0].Job));
+
+  // Layout the buttons in the toolbar. Make the toolbar the Inq container
+  // as well, as we have named those common with the menu ones the same
+  layout(., tb, "mbActive
+                 mbInactive
+                 Separator
+                 mbContOnError
+                 mbAbortOnError
+                 Separator
+                 mbBoxTimed
+                 mbBoxConsec
+                 Separator
+                 mbTopLevelRestart
+                 mbRunNow
+                 mbKillJob
+                 ");
+
+  window.properties.toolBar = tb;
+
+  gProperty(mbContOnError, enabled, renderinfo($this.propvars.setBoxFlags));
+  gProperty(mbAbortOnError, enabled, renderinfo($this.propvars.setBoxFlags));
+  gProperty(mbBoxTimed, enabled, renderinfo($this.propvars.setBoxFlags));
+  gProperty(mbBoxConsec, enabled, renderinfo($this.propvars.setBoxFlags));
+  gProperty(mbActive, enabled, renderinfo($this.propvars.setActive));
+  gProperty(mbInactive, enabled, renderinfo($this.propvars.setInactive));
+  gProperty(mbTopLevelRestart, enabled, renderinfo($this.propvars.restartTopLevel));
+  gProperty(mbRunNow, enabled, renderinfo($this.propvars.runJobNow));
+  gProperty(mbKillJob, enabled, renderinfo($this.propvars.killJob));
+
+  // We vary the tooltip for the restart button according to the
+  // selected job, so bind its tooltip property.
+  gProperty(mbTopLevelRestart, toolTipText, renderinfo($this.propvars.restartToolTip));
+  gProperty(mbRunNow, toolTipText, renderinfo($this.propvars.nowToolTip));
+}
+
+/**
+ * Display the editor window, creating if necessary.
+ * @param Job the job whose function or timer expression we are editing
+ * @param textPath the path where the exited text should be written back to.
+ * We cannot supply the field itself as this violates ripping constraints.
+ */
+local function editorWindow(any Job, any textPath, any context)
+{
+  if (!context.editorWin)
+  {
+    gWindow context.editorWin;
+    gEvent(context.editorWin,
+           call cbEditCancel(toHide=$this.editorWin, vars=$this.editorVars),
+           event=(gWclosing));
+
+    context.editorWin.properties.size = array a = (500, 285);
+
+    gTextArea  taEdit;
+    gTextField tfStatus;
+
+    gButton bEditEnable;
+    gEvent(bEditEnable, call enableEdit(focusTo=$this.editorWin.taEdit, vars=$this.editorVars));
+    bEditEnable.properties.text = "Edit"; // TODO $catalog.{$root.i18n}.button.OK;
+
+    gButton bEditOk;
+    bEditOk.properties.text = "OK"; // TODO $catalog.{$root.i18n}.button.OK;
+    gEvent(bEditOk, call cbEditOk(toHide=$this.editorWin, vars=$this.editorVars));
+
+    gButton bEditCancel;
+    bEditCancel.properties.text = "Cancel"; // TODO $catalog.{$root.i18n}.button.OK;
+    gEvent(bEditCancel, call cbEditCancel(toHide=$this.editorWin, vars=$this.editorVars));
+
+    layout(., $this.editorWin,
+           "Margin d:3
+            Table  Gap 3 Columns  0.2, GRID_FILL, 0.2, 0.2 
+              Gap 3 Rows
+                GRID_FILL,
+                GRID_PREF,
+                GRID_PREF;
+            {
+              Column
+              {
+                HSpan 3 Caption tl \"Expression Editor\"; taEdit
+                HSpan 3 Caption tl \"Status\"; tfStatus
+              }
+              Row 2
+              {
+                bEditEnable ~ bEditOk bEditCancel
+              }
+            }");
+
+    string context.editorVars.editText;
+    taEdit.properties.renderInfo = renderinfo($this.editorVars.editText);
+
+    string context.editorVars.status;
+    tfStatus.properties.renderInfo = renderinfo($this.editorVars.status);
+
+    boolean context.editorVars.editable;
+    gProperty(taEdit, editable, renderinfo($this.editorVars.editable));
+    gProperty(taEdit, background, renderinfo($this.editorVars.editable
+                                               ? $uidefaults.TextArea.background
+                                               : $uidefaults.TextField.inactiveBackground));
+
+  }
+
+  // The text is initially not editable
+  context.editorVars.editable = false;
+
+  // Remember where to write the text back to if the user hits ok.
+  any context.editorVars.textPath = textPath;
+
+  // Copy the current text to the editor
+  context.editorVars.editText = Job.{textPath};
+
+  // Clear the status line
+  context.editorVars.status = "";
+
+  // Place the Job instance in editorVars so it can be updated if the
+  // editText is committed
+  any context.editorVars.Job = Job;
+
+  context.editorWin.properties.title = Job.ShortName + " Edit " + textPath;
+
+  // Show the Window
+  show(context.editorWin);
+}
+
+local function enableEdit(any focusTo, any vars)
+{
+  vars.editable = true;
+  setfocus(focusTo);
+}
+
+local function cbEditCancel(any toHide, any vars)
+{
+  // Clear edit/status text
+  vars.editText = null;
+  vars.status   = null;
+
+  // unload the Job instance
+  any context.editorVars.Job = null;
+
+  hide(toHide);
+}
+
+local function cbEditOk(any toHide, any vars)
+{
+  try
+  {
+    // If we successfully parse the expression then hide the dialog
+    // and send the job to the server if the text has actually changed.
+    if (vars.Job.{vars.textPath} != vars.editText)
+    {
+      compile("string://vars.editText");
+      
+      // If we get here then no exception, text parses ok
+      
+      //vars.Job.{vars.textPath} = vars.editText
+      setblob(vars.Job.{vars.textPath}, vars.editText);
+      send modifyJob(vars.Job);
+      hide(toHide);
+    }
+    else
+    {
+      hide(toHide);
+    }
+  }
+  catch
+  {
+    writeln($catalog.system.out, @exmsg);
+    vars.status = @exmsg;
+  }
+}
+
+local function cbSelection()
+{
+  if (@event.isAdjusting)
+  {
+    any $this.vars.selectedBox = null;
+  }
+  else
+  {
+    // We can create a new child box or task if the single selection
+    // is a box.
+    $this.propvars.newChild = @event.component.model.selectCount == 1 &&
+                              call isBox(Job = any $this.vars.selectedBox = @event.component.model.selection[0].Job);
+
+    $this.propvars.delete          = true;
+    $this.propvars.enable          = true;
+    $this.propvars.disable         = true;
+    $this.propvars.setActive       = false;
+    $this.propvars.setInactive     = false;
+    $this.propvars.setBoxFlags     = false;
+    $this.propvars.restartTopLevel = false;
+    $this.propvars.nowToolTip      = false;
+    $this.propvars.killJob         = false;
+    $this.propvars.runJobNow       = null;
+    $this.propvars.nowToolTip      = null;
+
+    // Things we might be able to do if there is at least one selection
+    if (@event.component.model.selectCount > 0)
+    {
+      foreach(@event.component.model.selection)
+      {
+        // If we have any boxes we can set their ContinueOnError flag
+        if (call isBox($loop.Job))
+          $this.propvars.setBoxFlags = true;
+
+        // Check whether we can enable the active/inactive actions
+        $loop.Job.Active == enum(Active, N) ? $this.propvars.setActive ||= true
+                                            : $this.propvars.setInactive ||= true;
+
+        // Can we stop a running job?
+        $this.propvars.killJob ||= !isnull($loop.JobVolatile.ProcId);
+
+        if (@event.component.model.selectCount == 1)
+        {
+          // Top-level jobs can be restarted
+          if (isnull($loop.Job.ParentJob))
+          {
+            $this.propvars.restartTopLevel = true;
+            $this.propvars.restartToolTip  = "Restart " + $loop.Job.ShortName;
+          }
+
+          $this.propvars.runJobNow = true;
+          $this.propvars.nowToolTip  = "Run " + $loop.Job.ShortName;
+        }
+      }
+    }
+  }
+}
+
+local function cbNewTLTask()
+{
+  send createJob(Job = $this.vars.newTask);
+}
+
+local function cbNewTLBox()
+{
+  send createJob(Job = $this.vars.newBox);
+}
+
+local function cbNewTask()
+{
+  send createJob(Job    = $this.vars.newTask,
+                 parent = $this.vars.selectedBox);
+}
+
+local function cbNewBox()
+{
+  send createJob(Job    = $this.vars.newBox,
+                 parent = $this.vars.selectedBox);
+}
+
+local function cbDeleteJobs(any jobsAt, boolean ask = true)
+{
+  // We use a path (to the table selection) just in case anything happens
+  // to the table data while the user responds to the question. For example,
+  // someone else could delete one or more jobs
+  if (ask)
+  {
+    // Save the path if the user says OK to the question
+    any $this.vars.jobsAt = jobsAt;
+
+    if (count($this.{jobsAt}) > 1)
+      call inq.gui.util:questionDialog(questionText = "Delete Selected Jobs",
+                                       okExpr = func f = call cbDeleteJobs($this.vars.jobsAt, ask=false));
+    else
+      call inq.gui.util:questionDialog(questionText = "Delete " + $this.{jobsAt}[0].Job.ShortName,
+                                       okExpr = func f = call cbDeleteJobs($this.vars.jobsAt, ask=false));
+  }
+  else
+    send deleteJobs(jobs = $this.{jobsAt});
+}
+
+local function cbRestartJob(any Job)
+{
+  send restartJob(Job);
+}
+
+local function cbRunNow(any Job)
+{
+  send runJobNow(Job);
+}
+
+local function cbKillJob(any Job)
+{
+  send killJob(Job);
+}
+
+local function cbJCStart()
+{
+  send startup(@context = "$root",
+               ack = func f = {
+                                call inq.gui.util:messageDialog(messageText = "Job Control Started");
+                              }); 
+}
+  
+local function cbJCStop()
+{
+  send shutdownJobControl(@context = "$root",
+                          ack =
+                          func f = {
+                                    call inq.gui.util:messageDialog(messageText = "Job Control Stopped");
+                                  }); 
+}
+  
+/**
+ * Returns whether the node parameter, passed by the tree model
+ * within the Inq environment, is a branch or a leaf.
+ */
+local function jobLeaf(any node)
+{
+  call isTask(node.Job);
+}
+
+/**
+ * Create a value (to be used as a map key) that embodies the given values
+ * Used for image selection.
+ * Notes:
+ * 1) all parameters are pass-by-value so they can be used
+ * directly in the return value without worrying that they could otherwise
+ * be modified later.
+ * 2) Booleans default to false. BoxType is defaulted to TIMED, which is the
+ * same as the BoxType for the template Job instances. For tasks the field is
+ * not relevant but we must be consistent or the key will not work.
+ */
+local function imageKey(boolean isBox,
+                        boolean expanded,
+                        Job.BoxType = enum(BoxType, TIMED),
+                        boolean error)
+{
+  any m.isBox    = isBox;
+  any m.expanded = expanded;
+  any m.BoxType  = BoxType;
+  any m.error    = error;
+
+  m;
+}
+
+local function cbSetContOnError(any jobs, Job.ContinueOnError)
+{
+  foreach(jobs)
+  {
+    if (call isBox($loop.Job))
+      $loop.Job.ContinueOnError = ContinueOnError;
+  }
+
+  send modifyJobs(jobs);
+}
+
+local function cbSetBoxType(any jobs, Job.BoxType)
+{
+  foreach(jobs)
+  {
+    if (call isBox($loop.Job))
+      $loop.Job.BoxType = BoxType;
+  }
+
+  send modifyJobs(jobs);
+}
+
+local function cbSetActive(any jobsAt, Job.Active, boolean ask = true)
+{
+  if (ask)
+  {
+    // Save the path if the user says OK to the question
+    any $this.vars.jobsAt = jobsAt;
+
+    // We only ask when deactivating
+    if (count($this.{jobsAt}) > 1)
+      call inq.gui.util:questionDialog(questionText = "Deactivate Selected Jobs",
+                                       okExpr = func f = call cbSetActive($this.vars.jobsAt,
+                                                                          Active = enum(Active, N),
+                                                                          ask=false));
+    else
+      call inq.gui.util:questionDialog(questionText = "Deactivate " + $this.{jobsAt}[0].Job.ShortName,
+                                       okExpr = func f = call cbSetActive($this.vars.jobsAt,
+                                                                          Active = enum(Active, N),
+                                                                          ask=false));
+  }
+  else
+  {
+    foreach($this.{jobsAt})
+    {
+      $loop.Job.Active = Active;
+    }
+
+    send modifyJobs(jobs = $this.{jobsAt});
+  }
+}
+
+local function jobDataUpdated(any jobsAt)
+{
+  // If there is a selection update the gui property variables that depend
+  // on Job.Active|ExitStatus
+  foreach($this.{jobsAt})
+  {
+    if (@first)
+    {
+      $this.propvars.setActive = false;
+      $this.propvars.setInactive = false;
+    }
+
+    $loop.Job.Active == enum(Active, N) ? $this.propvars.setActive ||= true
+                                        : $this.propvars.setInactive ||= true;
+  }
+}
+
+local function volatileDataUpdated(any jobsAt)
+{
+  // If there is a selection update the gui property variables that depend
+  // on JobVolatile.ProcId
+  foreach($this.{jobsAt})
+  {
+    if (@first)
+      $this.propvars.killJob = false;
+
+    $this.propvars.killJob ||= !isnull($loop.JobVolatile.ProcId);
+  }
+}
+
+local function cbJobClose()
+{
+  // If we logged in as this package then exit, otherwise dispose
+  if ($process.package == "\p")
+    exit();
+  else
+    remove($this);
+}
+
+local function contextEstablished()
+{
+  // The window will show up, then the contents will appear shortly
+  // afterwards.
+  show($this);
+
+  // Listen to the context node for updates to the data.
+  // All sorts of events will propagate through the context node, including
+  // updates to all variables we have bound to gui properties.
+  // We discriminate by specifying that the event be from instances
+  // of the type Job. In addition, we are only interested in the
+  // Active and ExitStatus fields.
+  // Note that this listener responds when data is changed on the server by
+  // other users, so our gui state is always up to date.
+  listen ($this,
+          func f = call jobDataUpdated(jobsAt = path($this.jobTable.model.selection)),
+          event = (update),
+          typedef = Job,
+          fields = (Active, ExitStatus));
+
+  // Similarly JobVolatile
+  listen ($this,
+          func f = call volatileDataUpdated(jobsAt = path($this.jobTable.model.selection)),
+          event = (update),
+          typedef = JobVolatile,
+          fields = (ProcId));
+
+  send initClient();
+
+  // Fetch the client data
+  send fetchJobTree(treeName = "vars.jobTree");
+
+  call inq.gui.util:createMessageDialogAt(parent = $this);
+  call inq.gui.util:createQuestionDialogAt(parent = $this);
+
+  // Set up template Job instances
+  any $this.vars.newBox = new(Job);
+  $this.vars.newBox.ShortName       = "New Box";
+  $this.vars.newBox.JobOrder        = 0; // maintained silently by server
+  $this.vars.newBox.Active          = enum(Active, N);
+  $this.vars.newBox.ContinueOnError = enum(ContinueOnError, CONTINUE);
+  $this.vars.newBox.BoxType         = enum(BoxType, TIMED);
+  $this.vars.newBox.ExitStatus      = 0;
+
+  any $this.vars.newTask = new(Job);
+  $this.vars.newTask = $this.vars.newBox;
+  $this.vars.newTask.ShortName = "New Task";
+  // A task is defined by having a FunctionExpr, even if it doesn't
+  // do anything other than return a zero exit status
+  setblob($this.vars.newTask.FunctionExpr, "0;");
+  
+  // Some stuff to help us format the duration cell
+  long $this.vars.oneDay = 1000*60*60*24;
+  any $this.vars.durationFmt = format("HH:mm:ss.SSS", date $this.vars.duration);
+  $this.vars.durationFmt.properties.timeZone = timezone tz = "GMT+0";
+}
+
+function generalError(string  msg,
+                      string  stackTrace,
+                      date    exTime,
+                      boolean isUser,
+                      any     exInfo)
+{
+	call inq.gui.util:messageDialog(messageTitle = msg,
+	                        icon         = $uidefaults.OptionPane.warningIcon,
+                          messageText  = exInfo);
+}
+
+syncgui service initResponse(any images, any treeImages)
+{
+  // Store the icons in the context
+  any $this.images = images;
+
+  // Use keys to select appropriate image when rendering tree cells
+  any k = call imageKey();
+  any $this.images.{k}   = treeImages.task;
+  any k = call imageKey(BoxType=enum(BoxType, SEQUENCE));
+  any $this.images.{k}   = treeImages.task;
+  
+  any k = call imageKey(error=true);
+  any $this.images.{k}   = treeImages.task_error;
+  any k = call imageKey(error=true, BoxType=enum(BoxType, SEQUENCE));
+  any $this.images.{k}   = treeImages.task_error;
+
+  any k = call imageKey(isBox=true, BoxType=enum(BoxType, SEQUENCE));
+  any $this.images.{k}   = $this.images.boxConsec;
+
+  any k = call imageKey(isBox=true, BoxType=enum(BoxType, SEQUENCE), error=true);
+  any $this.images.{k}   = treeImages.box_closed_consec_error;
+
+  any k = call imageKey(isBox=true, BoxType=enum(BoxType, SEQUENCE), expanded=true);
+  any $this.images.{k}   = treeImages.box_open_consec;
+
+  any k = call imageKey(isBox=true, expanded=true, BoxType=enum(BoxType, SEQUENCE), error=true);
+  any $this.images.{k}   = treeImages.box_open_consec_error;
+
+  any k = call imageKey(isBox=true);
+  any $this.images.{k}   = $this.images.boxTimed;
+
+  any k = call imageKey(isBox=true, error=true);
+  any $this.images.{k}   = treeImages.box_closed_timed_error;
+
+  any k = call imageKey(isBox=true, expanded=true);
+  any $this.images.{k}   = treeImages.box_open_timed;
+
+  any k = call imageKey(isBox=true, expanded=true, error=true);
+  any $this.images.{k}   = treeImages.box_open_timed_error;
+
+  // Create the GUI
+  call createGUI();
+}
+
+
+// Load the general-purpose dialogs
+exec("classpath:///inq/gui/messagedialog.inq");
+exec("classpath:///inq/gui/questiondialog.inq");

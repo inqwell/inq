@@ -1,0 +1,1155 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright 2006 Inqwell Ltd.
+-->
+<!DOCTYPE document PUBLIC "-//APACHE//DTD Documentation V2.0//EN" "http://forrest.apache.org/dtd/document-v20.dtd">
+<document>
+  <header>
+    <title>Inq Data Types</title>
+  </header>
+  <body>
+    <section id="value-types">
+      <title>Value Types</title>
+      <p>
+        Inq supports a number of types that are used to represent values. As well
+        as any defined range, all Inq value types with the exception
+        of <code>boolean</code> can take on the <code>null</code> value.
+      </p>
+      <p>The value types have a ranking order to determine operand
+        promotion when mixed types occur in an expression. The
+        available value types are as follows:
+      </p>
+      <table>
+        <caption>Value Types In Rank Order, Highest to Lowest</caption>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Range/Size/Format</th>
+        </tr>
+        <tr>
+          <td><code>decimal:</code><em>n</em></td>
+          <td>Arbitrary precision signed decimal</td>
+          <td><em>n</em> is the precision. 0 means integer.</td>
+        </tr>
+        <tr>
+          <td><code>double</code></td>
+          <td>Double-precision floating point</td>
+          <td>64-bit IEEE 754 (Note MIN_VALUE 2<sup>-1074</sup> is used to represent <code>null</code>)</td>
+        </tr>
+        <tr>
+          <td><code>float</code></td>
+          <td>Single-precision floating point</td>
+          <td>32-bit IEEE 754 (Note MIN_VALUE 2<sup>-149</sup> is used to represent <code>null</code>)</td>
+        </tr>
+        <tr>
+          <td><code>long</code></td>
+          <td>Long integer</td>
+          <td>&#xB1;2<sup>63</sup>-1</td>
+        </tr>
+        <tr>
+          <td><code>int</code></td>
+          <td>Integer</td>
+          <td>&#xB1;2<sup>31</sup>-1</td>
+        </tr>
+        <tr>
+          <td><code>short</code></td>
+          <td>Short integer</td>
+          <td>&#xB1;2<sup>15</sup>-1</td>
+        </tr>
+        <tr>
+          <td><code>char</code></td>
+          <td>A single character</td>
+          <td>16-bit Unicode (Note Unicode '\uFFFF' is used to represent <code>null</code>)</td>
+        </tr>
+        <tr>
+          <td><code>byte</code></td>
+          <td>Byte-length integer</td>
+          <td>&#xB1;2<sup>7</sup>-1</td>
+        </tr>
+        <tr>
+          <td><code>boolean</code></td>
+          <td>A boolean value (true or false)</td>
+          <td><code>true</code> or <code>false</code>. Cannot be <code>null</code></td>
+        </tr>
+        <tr>
+          <td><code>string</code></td>
+          <td>A character string.</td>
+          <td><code>java.lang.String</code></td>
+        </tr>
+        <tr>
+          <td><code>date</code></td>
+          <td>A specific instant in time, with millisecond precision.</td>
+          <td>Same as <code>java.util.Date</code></td>
+        </tr>
+      </table>
+      <p>
+        Here are some example declarations:
+      </p>
+      <source>
+int i = 3;
+decimal:2 d = "10.51";
+short s;
+</source>
+      <section id="stringconst">
+        <title>String Constants</title>
+        <p>
+          String constants are enclosed in double quotes <code>"like this"</code>.
+          If the string is broken over more than one line then the line breaks are
+          included, so this statement
+        </p>
+        <source>
+writeln($catalog.system.out, "A
+string
+on
+several
+lines");
+</source>
+        <p>
+          produces the output
+        </p>
+        <source><strong>
+A
+string
+on
+several
+lines
+</strong></source>
+        <p>
+          To remove the line breaks while avoiding the inconvenience of
+          long lines, use the escape character &apos;<code>\</code>&apos;
+          at the end of the line:
+        </p>
+        <source>
+writeln($catalog.system.out, "A \
+string \
+on \
+one \
+line");
+</source>
+        <source><strong>
+A string on one line
+</strong></source>
+        <p>
+          Conversely, to embed a new-line in a string the escape
+          sequence <code>\n</code> can be used:
+        </p>
+        <source>
+writeln($catalog.system.out, "A string on\ntwo lines");
+</source>
+        <source><strong>
+A string on
+two lines</strong></source>
+        <p>
+          There are a number of other characters that when preceeded
+          by <code>\</code> are substituted as follows:
+        </p>
+        <table>
+          <caption>String Escape Substitutions</caption>
+          <tr>
+            <th>Character</th>
+            <th>Substitution</th>
+          </tr>
+          <tr>
+            <td><code>n</code></td>
+            <td>The platform-specific line terminator</td>
+          </tr>
+          <tr>
+            <td><code>r</code></td>
+            <td>A carriage return 0x0d</td>
+          </tr>
+          <tr>
+            <td><code>t</code></td>
+            <td>The tab character 0x09</td>
+          </tr>
+          <tr>
+            <td><code>b</code></td>
+            <td>The back-space character 0x08</td>
+          </tr>
+          <tr>
+            <td><code>f</code></td>
+            <td>The form-feed character 0x0c</td>
+          </tr>
+          <tr>
+            <td><code>\</code></td>
+            <td>The escape character <code>\</code></td>
+          </tr>
+          <tr>
+            <td><code>"</code></td>
+            <td>A double-quote</td>
+          </tr>
+          <tr>
+            <td><code>'</code></td>
+            <td>A single-quote. It is not necessary to escape this character in
+              a string, however it is provided for character literals</td>
+          </tr>
+          <tr>
+            <td><code>Octal sequence</code></td>
+            <td>two characters in the range 0-7 or three characters
+              as the pattern [0-3][0-7][0-7] that are decoded to a
+              single byte character in the range 0-255.</td>
+          </tr>
+          <tr>
+            <td><code>p</code></td>
+            <td>The package of the parse module</td>
+          </tr>
+          <tr>
+            <td><code>e</code></td>
+            <td>The function or service in which the string appears</td>
+          </tr>
+          <tr>
+            <td><code>i</code></td>
+            <td>The URL from which the script was read</td>
+          </tr>
+          <tr>
+            <td><code>l</code></td>
+            <td>The current line number</td>
+          </tr>
+        </table>
+        <p>
+          The unicode escape sequence <code>\uXXXX</code> where X is one
+          of 0-9, a-f or A-F is supported but is substituted as the input
+          stream is read and not as part of parsing. This means that \u000a
+          becomes a hard new-line in the stream, which for Inq's definition
+          of a string makes no difference.
+        </p>
+      </section>
+      <section id="characterconst">
+        <title>Character Constants</title>
+        <p>
+          A character constant is a character between single quotes (also known as
+          the apostrophe), such as <code>'Q'</code>. Exactly one character
+          may be present unless the representation is an escape sequence or
+          a unicode escape.
+        </p>
+        <table>
+          <caption>Character Escape Substitutions</caption>
+          <tr>
+            <th>Character</th>
+            <th>Substitution</th>
+          </tr>
+          <tr>
+            <td><code>n</code></td>
+            <td>A new line character 0x0a</td>
+          </tr>
+          <tr>
+            <td><code>r</code></td>
+            <td>A carriage return 0x0d</td>
+          </tr>
+          <tr>
+            <td><code>t</code></td>
+            <td>The tab character 0x09</td>
+          </tr>
+          <tr>
+            <td><code>b</code></td>
+            <td>The back-space character 0x08</td>
+          </tr>
+          <tr>
+            <td><code>f</code></td>
+            <td>The form-feed character 0x0c</td>
+          </tr>
+          <tr>
+            <td><code>\</code></td>
+            <td>The escape character <code>\</code></td>
+          </tr>
+          <tr>
+            <td><code>"</code></td>
+            <td>A double-quote</td>
+          </tr>
+          <tr>
+            <td><code>'</code></td>
+            <td>A single-quote.</td>
+          </tr>
+          <tr>
+            <td><code>Octal sequence</code></td>
+            <td>two characters in the range 0-7 or three characters
+              as the pattern [0-3][0-7][0-7] that are decoded to a
+              single byte character in the range 0-255.</td>
+          </tr>
+        </table>
+      </section>
+      <section id="numericconst">
+        <title>Numeric Constants</title>
+        <section id="intconst">
+          <title>Integer Constants</title>
+          <p>
+            Integer constants can be expressed as decimal (the default), octal
+            or hexadecimal with an optional type suffix:
+          </p>
+          <source>
+&lt;integer-literal&gt; =
+    &lt;decimal-integer-literal&gt;
+    &lt;hex-integer-literal&gt;
+    &lt;octal-integer-literal&gt;
+
+&lt;decimal-integer-literal&gt; =
+    &lt;decimal-numeral&gt; [&lt;integer-type-suffix&gt;]
+
+&lt;hex-integer-literal&gt; =
+        0 (x | X) &lt;hex-numeral&gt; [&lt;integer-type-suffix&gt;]
+
+&lt;octal-integer-literal&gt; =
+        &lt;octal-numeral&gt; [&lt;integer-type-suffix&gt;]
+
+&lt;integer-type-suffix&gt; = ( l | L )
+</source>
+          <p>
+            A decimal integer is the digit zero or the digits 1 to 9 followed
+            by one or more of 0 to 9.
+          </p>
+          <p>
+            A hexadecimal integer is the leading character
+            sequence <code>0x</code> or <code>0X</code> followed by one or more
+            of the hexadecimal digits 0-9, A-F, a-f.
+          </p>
+          <p>
+            A octal integer is the leading character <code>0</code>
+            followed by one or more
+            of 0-7.
+          </p>
+          <p>
+            The data type is <code>int</code> unless the type
+            suffix <code>L</code> or <code>l</code> is present, in which
+            case the resulting value is a <code>long</code>.
+          </p>
+        </section>
+        <section id="floatconst">
+          <title>Floating Point Constants</title>
+          <p>
+            Floating point constants can be expressed in decimal comprising
+            a whole number part, a decimal point and a fractional part.
+            An exponent notation and type suffix are optional. If the literal
+            does not include the decimal point then a suffix is required to
+            force the data type to be one of the floating point representations.
+          </p>
+          <source>
+&lt;floating-point-literal&gt; =
+    &lt;decimal-numeral&gt; "." [&lt;decimal-numeral&gt;] [&lt;exponent&gt;] [ &lt;suffix&gt; ]
+  | "." &lt;decimal-numeral&gt; [&lt;exponent&gt;] [ &lt;suffix&gt; ]
+  | &lt;decimal-numeral&gt; &lt;exponent&gt; [ &lt;suffix&gt; ]
+  | &lt;decimal-numeral&gt; [ &lt;exponent&gt; ] &lt;suffix&gt;
+
+&lt;exponent&gt; =
+    ("e" | "E") [ ( "+" | "-" ) ] &lt;decimal-numeral&gt;
+
+&lt;suffix&gt; =
+    ( "f" | "F" | "d" | "D" )
+</source>
+          <p>
+            The suffices <code>f</code> or <code>F</code>
+            and <code>d</code> or <code>D</code> indicate
+            the <code>float</code> and <code>double</code> types respectively.
+            If the suffix is optional and absent then <code>float</code> is
+            assumed.
+          </p>
+          <p>
+            Examples of constants of type <code>float</code>:
+          </p>
+          <source>
+2.0
+2f
+2e07
+3e-4
+</source>
+          <p>
+            Examples of constants of type <code>double</code>:
+          </p>
+          <source>
+2.0d
+2d
+2e07d
+3e-4d
+</source>
+        </section>
+      </section>
+      <section id="booleanconst">
+        <title>Boolean Constants</title>
+        <p>
+          The boolean constants are the tokens <code>true</code>
+          and <code>false</code>.
+        </p>
+      </section>
+      <section id="constalias">
+        <title>Creating Constant Aliases</title>
+        <p>
+          Constants may be aliased with
+          an <a href="#anonymousdecl">anonymous declaration</a>. The
+          following script does not create a variable of type <code>double</code>.
+          Instead, it generates an error when assignment is attempted:
+        </p>
+        <source>
+any d = 2.32d;
+<strong>2.32</strong>
+d = 0;<strong>
+file:///C:\inqwell\dev\system.in
+com.inqwell.any.AnyRuntimeException: Attempt to mutate const value
+        at com.inqwell.any.AbstractValue.constViolation(AbstractValue.java:118)
+        at com.inqwell.any.ConstDouble.copyFrom(ConstDouble.java:85)
+        at com.inqwell.any.Assign.visitAnyDouble(Assign.java:143)
+        at com.inqwell.any.ConstDouble.accept(ConstDouble.java:80)
+        at com.inqwell.any.MutatingOperator.visitFunc(MutatingOperator.java:31)
+        at com.inqwell.any.AbstractFunc.accept(AbstractFunc.java:90)
+        at com.inqwell.any.Assign.doOperation(Assign.java:42)
+        at com.inqwell.any.EvalExpr.exec(EvalExpr.java:224)
+        at com.inqwell.any.AbstractFunc.execFunc(AbstractFunc.java:68)
+        at com.inqwell.any.EvalExpr.evalFunc(EvalExpr.java:112)
+        at com.inqwell.any.EvalExpr.evalFunc(EvalExpr.java:149)
+        at com.inqwell.any.parser.Inq.main(Inq.java:514)
+file:/C:/inqwell/dev/system.in &lt;parser&gt;(2)</strong>
+</source>
+      </section>
+      <section id="nullconst">
+        <title>The null Constant</title>
+        <p>
+          The null constant is given by the expression <code>null</code>. When
+          assigned to a variable, the variable takes on the <code>null</code>
+          value for its type.
+        </p>
+        <p>
+          The null constant is the result of arithmetic or any Inq function that
+          operates on the value types where one or more operands is null.
+          For example, given the following:
+        </p>
+        <source>
+int i = 56;
+int j = null;
+</source>
+        <p>
+          the following expressions will return the null constant:
+        </p>
+        <source>
+i + j;
+max(i, j);
+</source>
+        <section id="relationequals">
+          <title>Relation and Equality</title>
+          <p>
+          Strict relationship involving null returns <code>false</code>.
+          In the examples above,
+          the expressions <code>i &lt; j</code> and <code>i &gt; j</code>
+          both return <code>false</code>.
+          </p>
+          <p>
+            Values that are null are equal to one-another and the null constant. The
+            following all return <code>true</code>:
+          </p>
+          <source>
+i &gt;= j;
+i &lt;= j;
+j == null;
+</source>
+        <!--
+        <p>
+          The function <code>setnull(&lt;node_ref&gt;)</code> is equivalent
+          to <code>&lt;node_ref&gt; = null</code>
+          and <code>isnull(&lt;node_ref&gt;)</code> is the same
+          as <code>&lt;node_ref&gt; == null</code>.
+        </p>
+        -->
+        </section>
+        <section id="isnull">
+          <title>The isnull() Function</title>
+          <p>
+            The <code>isnull()</code> function has the following syntax:
+          </p>
+          <source>
+isnull(&lt;expression&gt; [, &lt;expression&gt;]);
+</source>
+          <p>
+            It returns <code>true</code> if the single operand equals null
+            or false otherwise. When present, the second operand is returned
+            if the first is null, otherwise the first operand is returned.
+          </p>
+        </section>
+        <section id="unresolveddnull">
+          <title>Unresolved Operands</title>
+          <p>
+            The term <em>null</em> may be used when describing a node reference
+            whose path cannot be resolved, i.e. the target is not present in
+            the node space. This is referred to as <em>unresolved null</em> and is
+            handled differently from the
+            null constant. The assignment, arithmetic and relational operators
+            generate an error:
+          </p>
+          <source>
+int i = 2;
+<strong>2</strong>
+i + j;
+<strong>file:///C:\inqwell\dev\system.in
+com.inqwell.any.AnyRuntimeException: Operand j could not be resolved
+        at com.inqwell.any.OperatorVisitor.notResolved(OperatorVisitor.java:198)
+        at com.inqwell.any.Add.handleNullOperands(Add.java:107)
+        at com.inqwell.any.OperatorVisitor.doOperation(OperatorVisitor.java:41)
+        at com.inqwell.any.EvalExpr.exec(EvalExpr.java:224)
+        at com.inqwell.any.AbstractFunc.execFunc(AbstractFunc.java:68)
+        at com.inqwell.any.EvalExpr.evalFunc(EvalExpr.java:112)
+        at com.inqwell.any.EvalExpr.evalFunc(EvalExpr.java:149)
+        at com.inqwell.any.parser.Inq.main(Inq.java:518)
+file:/C:/inqwell/dev/system.in &lt;parser&gt;(2)</strong>
+</source>
+        <p>
+          Other functions either generate an error or ignore unresolved null
+          depending on their semantics. The reference entry <!--(XXX link) -->
+          for each function details its behaviour for unresolved null operands. [TODO]
+        </p>
+        </section>
+      </section>
+      <section id="equalsconst">
+        <title>The equals Constant</title>
+        <p>
+          The equals constant is given by the expression <code>equals</code>.
+          The equality operator <code>==</code> returns <code>true</code>
+          when a value is combined with <code>equals</code>. For example:
+        </p>
+        <source>
+2 == 3;
+<strong>false</strong>
+2 == equals;
+<strong>true</strong>
+equals == 2;
+<strong>true</strong></source>
+        <p>
+          The equals constant is used when creating "don't care" values as
+          part of an event filter used when subscribing to transaction
+          creation events. <!--XXX link--> Its use in any other operator, for
+          example not equals <code>!=</code> and the inequality
+          operators <code>&lt;</code>, <code>&lt;=</code>, <code>&gt;</code> and <code>&gt;=</code>
+          generates an error.
+        </p>
+      </section>
+      <section id="fixedprecision">
+        <title>Fixed Precision Decimals</title>
+        <p>
+          The <code>decimal</code> type supports fixed precision decimal numbers
+          with round-half-up
+          arithmetic. Values of this type can only be combined with other
+          decimals (which may have a different precision),
+          the integer types or strings that are convertible to numeric values.
+        </p>
+        <p>
+          Decimals cannot be combined with the floating point types because of
+          their inherent inaccuracy of representation. The following
+          script (whose output may vary on different platforms) illustrates
+          this:
+        </p>
+        <source>
+double dbl = 2.376;
+<strong>2.375999927520752</strong>
+
+decimal:2 dec2 = "2.376";
+<strong>2.38</strong>
+
+dec2 = dbl;
+<strong>file:/e:/inqwell/doc/src/documentation/content/xdocs/primer/examples/fixedprecision.inq
+java.lang.IllegalArgumentException: com.inqwell.any.ConstBigDecimal$CopyFrom Operation not supported on com.inqwell.any.AnyDouble
+        at com.inqwell.any.AbstractVisitor.unsupportedOperation(AbstractVisitor.java:110)
+        at com.inqwell.any.AbstractVisitor.visitAnyDouble(AbstractVisitor.java:60)
+        at com.inqwell.any.ConstDouble.accept(ConstDouble.java:80)
+        at com.inqwell.any.ConstBigDecimal$CopyFrom.copy(ConstBigDecimal.java:336)
+        at com.inqwell.any.AnyBigDecimal.copyFrom(AnyBigDecimal.java:80)
+        at com.inqwell.any.Assign.visitDecimal(Assign.java:154)
+        at com.inqwell.any.ConstBigDecimal.accept(ConstBigDecimal.java:134)
+        at com.inqwell.any.MutatingOperator.visitFunc(MutatingOperator.java:31)
+        at com.inqwell.any.AbstractFunc.accept(AbstractFunc.java:90)
+        at com.inqwell.any.Assign.doOperation(Assign.java:42)
+        at com.inqwell.any.EvalExpr.exec(EvalExpr.java:224)
+        at com.inqwell.any.AbstractFunc.execFunc(AbstractFunc.java:68)
+        at com.inqwell.any.EvalExpr.evalFunc(EvalExpr.java:112)
+        at com.inqwell.any.EvalExpr.evalFunc(EvalExpr.java:149)
+        at com.inqwell.any.parser.Inq.main(Inq.java:514)
+file:/e:/inqwell/doc/src/documentation/content/xdocs/primer/examples/fixedprecision.inq &lt;parser&gt;(5)</strong>
+</source>
+        <p>
+          The precision of a <code>decimal</code> (the number of decimal places
+          it holds) is defined at declaration time and cannot change thereafter.
+          If a decimal is assigned a value of greater precision then that
+          precision is lost according to round-half-up:
+        </p>
+        <source>
+decimal:7 d7 = "3.1415927";
+<strong>3.1415927</strong>
+decimal:3 d3 = d7;
+<strong>3.142</strong></source>
+        <p>
+          The following table summarises the scale of the result when
+          decimals <code>d</code><sub>x</sub> and <code>d</code><sub>y</sub>
+          of differing precisions <code>x</code> and <code>y</code> are combined
+          in binary operators:
+        </p>
+        <table>
+          <caption>Combining Decimals of Differing Precision</caption>
+          <tr>
+            <th>Operator</th>
+            <th>Precision of Result</th>
+          </tr>
+          <tr>
+            <td><code>d</code><sub>x</sub> <code>+</code> <code>d</code><sub>y</sub></td>
+            <td><code>max(x, y)</code></td>
+          </tr>
+          <tr>
+            <td><code>d</code><sub>x</sub> <code>-</code> <code>d</code><sub>y</sub></td>
+            <td><code>max(x, y)</code></td>
+          </tr>
+          <tr>
+            <td><code>d</code><sub>x</sub> <code>*</code> <code>d</code><sub>y</sub></td>
+            <td><code>x + y</code></td>
+          </tr>
+          <tr>
+            <td><code>d</code><sub>x</sub> <code>/</code> <code>d</code><sub>y</sub></td>
+            <td><code>x</code></td>
+          </tr>
+          <tr>
+            <td><code>d</code><sub>x</sub> <code>^^</code> <code>n</code> (<code>d</code><sub>x</sub> to the power <code>n</code>)</td>
+            <td><code>n * x</code> (n must be an integer)</td>
+          </tr>
+          <tr>
+            <td><code>max(d</code><sub>x</sub><code>, d</code><sub>y</sub><code>)</code></td>
+            <td>The scale of the maximum value</td>
+          </tr>
+          <tr>
+            <td><code>min(d</code><sub>x</sub><code>, d</code><sub>y</sub><code>)</code></td>
+            <td>The scale of the minimum value</td>
+          </tr>
+        </table>
+        <p>
+          The behaviour of other mathematical functions, such as <code>sum()</code>
+          and the other aggregates, is described in the reference entry for the
+          function [TODO].<!--XXX link-->
+        </p>
+        <p>
+          Inq expressions produce temporary results during evaluation, for example
+          a new decimal, <code>d</code><sub>r</sub> of scale <code>x + y</code> results
+          from the expression
+        </p>
+        <source>
+decimal:2 d2 = "1.84";
+<strong>1.84</strong>
+decimal:3 d3 = "2.273";
+<strong>2.273</strong>
+any dr = d2 * d3;
+<strong>4.18232</strong></source>
+        <p>
+          If an expression gains precision during evaluation then script authoring
+          should be such that this is not lost too soon by assignment of any
+          temporaries to lower precision variables.
+        </p>
+      </section>
+      <section id="conversion">
+        <title>Compatibility Between Value Types</title>
+        <p>
+          Inq allows different types to be combined in
+          expressions without error. If mixed types are combined then the
+          operand of lower rank is converted to that of the higher.
+        </p>
+        <p>
+          When one operand is assigned to another, no error occurs provided the
+          magnitude of the right hand side is acceptable to the left. The
+          example code
+          in <a href="examples/byteassign.inq">byteassign.inq</a> demonstrates this:
+        </p>
+        <source>
+  >inq -show -in byteassign.inq
+  0
+  <strong>127</strong>
+  <strong>file:/C:/inqwell/dev/examples/byteassign.inq
+  com.inqwell.any.AnyRuntimeException: Truncation occurred assigning integer value 128 to byte
+          at com.inqwell.any.AssignerVisitor.rangeError(AssignerVisitor.java:28)
+          at com.inqwell.any.AnyByte$CopyFrom.visitAnyInt(AnyByte.java:130)
+          at com.inqwell.any.AnyInt.accept(AnyInt.java:76)
+          at com.inqwell.any.AnyByte$CopyFrom.copy(AnyByte.java:117)
+          at com.inqwell.any.AnyByte.copyFrom(AnyByte.java:79)
+          at com.inqwell.any.Assign.visitAnyByte(Assign.java:77)
+          at com.inqwell.any.AnyByte.accept(AnyByte.java:69)
+          at com.inqwell.any.MutatingOperator.visitFunc(MutatingOperator.java:31)
+          at com.inqwell.any.AbstractFunc.accept(AbstractFunc.java:82)
+          at com.inqwell.any.Assign.doOperation(Assign.java:42)
+          at com.inqwell.any.EvalExpr.exec(EvalExpr.java:215)
+          at com.inqwell.any.EvalExpr.evalFunc(EvalExpr.java:109)
+          at com.inqwell.any.EvalExpr.evalFunc(EvalExpr.java:140)
+          at com.inqwell.any.parser.Inq.main(Inq.java:512)
+  file:/C:/inqwell/dev/examples/byteassign.inq &lt;parser&gt;(4)
+
+  file:/C:/inqwell/dev/examples/byteassign.inq
+  com.inqwell.any.AnyRuntimeException: Truncation occurred assigning integer value -128 to byte
+          at com.inqwell.any.AssignerVisitor.rangeError(AssignerVisitor.java:28)
+          at com.inqwell.any.AnyByte$CopyFrom.visitAnyInt(AnyByte.java:130)
+          at com.inqwell.any.AnyInt.accept(AnyInt.java:76)
+          at com.inqwell.any.AnyByte$CopyFrom.copy(AnyByte.java:117)
+          at com.inqwell.any.AnyByte.copyFrom(AnyByte.java:79)
+          at com.inqwell.any.Assign.visitAnyByte(Assign.java:77)
+          at com.inqwell.any.AnyByte.accept(AnyByte.java:69)
+          at com.inqwell.any.MutatingOperator.visitFunc(MutatingOperator.java:31)
+          at com.inqwell.any.AbstractFunc.accept(AbstractFunc.java:82)
+          at com.inqwell.any.Assign.doOperation(Assign.java:42)
+          at com.inqwell.any.EvalExpr.exec(EvalExpr.java:215)
+          at com.inqwell.any.EvalExpr.evalFunc(EvalExpr.java:109)
+          at com.inqwell.any.EvalExpr.evalFunc(EvalExpr.java:140)
+          at com.inqwell.any.parser.Inq.main(Inq.java:512)
+  file:/C:/inqwell/dev/examples/byteassign.inq &lt;parser&gt;(5)</strong>
+
+  <strong>-127</strong>
+  Inq done
+  </source>
+        <p>
+          Lines 4 and 5 generate an exception because the
+          values 128 and -128 are out of range for a <code>byte</code> type.
+        </p>
+        <section id="convbool">
+          <title>Conversion to <code>boolean</code></title>
+          <p>
+            The boolean type is assignment compatible with all value types and takes
+            on values according to the following rules:
+          </p>
+          <table>
+            <caption>Boolean Conversion</caption>
+            <tr>
+              <td><em>Numeric types</em></td>
+              <td><code>false</code> if zero or <code>null</code>, <code>true</code> otherwise</td>
+            </tr>
+            <tr>
+              <td><code>string</code></td>
+              <td><code>false</code> if the string is <code>null</code> or has zero length, <code>true</code> otherwise</td>
+            </tr>
+            <tr>
+              <td><code>date</code></td>
+              <td><code>false</code> if <code>null</code>, <code>true</code> otherwise</td>
+            </tr>
+          </table>
+          <p>
+            Conversion to boolean most often occurs implicitly, for example as
+          </p>
+          <source>
+string s = "my aim";
+if (s)
+  writeln($catalog.system.out, "my aim is true");
+</source>
+          <p>
+            Generally, when evaluating node paths where the result is not one
+            of the above types (that is, the path resolves to one of
+            the <a href="#containertypes">container types</a>), implicit boolean
+            conversion yields <code>false</code> when the path does not resolve:
+          </p>
+          <source>
+if (x.y.z)
+  "resolved";
+else
+  "did not resolve";
+</source>
+        </section>
+        <section id="stringv">
+          <title>Combining <code>string</code>s With Value Types</title>
+          <p>
+            The addition operator when used with strings performs concatenation,
+            however the conversion rules between strings and numeric types mean
+            that mixed-type operations involving strings are not commutative.
+            Consider the following:
+          </p>
+          <source>
+  >inq -show
+  string s = "2";
+  <strong>2</strong>
+  int i = 2;
+  <strong>2</strong>
+  i + s;
+  <strong>4</strong>
+  s + i;
+  <strong>22</strong>
+  ^Z
+  Inq done
+  </source>
+        </section>
+      </section>
+    </section>
+    <section id="containertypes">
+      <title>Container Types</title>
+      <p>
+        Inq provides several container types, by far the most important of which
+        is the Map. The examples of variable declarations above have the look
+        familiar to many languages, however its worth remembering what exactly
+        these mean in Inq.
+      </p>
+      <p>
+        Recall from the discussion of node paths that without a specific
+        <!--XXX link--> prefix a path refers to the stack. We can see that declarations
+        like those above result in new variables being placed on the stack by
+        printing out the stack itself, as shown here:
+      </p>
+      <source>
+int i = 3;
+decimal:2 d = "10.51";
+short s;
+writeln($catalog.system.out, "The stack now looks like: " + .);
+</source>
+      <p>
+        If we run this script it generates the output
+      </p>
+      <source>
+<strong>The stack now looks like: {d=10.51, i=3, s=0}</strong>
+</source>
+      <p>
+        In fact, if you run this script you will also see Inq has initialised the
+        stack with the command line arguments, but these have been omitted for
+        clarity.
+      </p>
+      <p>
+        The containment node space is Inq's way of subdividing the application
+        and making associations between related items, either by sibling or
+        parent-child relationships. If we wanted to create a collection of variables
+        for later use as a group then we can declare them like this:
+      </p>
+      <source>
+int myVars.i = 3;
+decimal:2 myVars.d = "10.51";
+short myVars.s;
+writeln($catalog.system.out, "The stack now looks like: " + .);
+</source>
+      <p>
+        The result is now
+      </p>
+      <source>
+<strong>The stack now looks like: {myVars={d=10.51, i=3, s=0}}</strong>
+</source>
+      <p>
+        The identifier <code>myVars</code> is a map containing the three
+        variables <code>i</code>, <code>d</code> and <code>s</code>.
+      </p>
+      <note>Maps are not necessarily ordered, so the order their contents
+        comes out may not be the same as the way they went in.</note>
+      <p>
+        The use of a path containing two or more elements causes Inq to create
+        any intervening maps necessary to generate the required structure, placing
+        the declared item at the ultimate node.
+      </p>
+      <section id="maptypes">
+        <title>Map Types</title>
+        <p>
+          There are several map types supported by Inq, each with differing
+          characteristics. When Inq creates maps implicitly as it does in
+          variable declarations, the map type used is the same as that of
+          the starting point, the stack in the above examples.
+        </p>
+        <p>
+          All the available map types support the same key-value association
+          required of a containment hierarchy and in all cases the set of keys
+          within a map must be unique. However they differ the following
+          ways:
+        </p>
+        <ul>
+          <li>whether a map can be contained within multiple parent maps;</li>
+          <li>whether a map listens for events raised by its children and
+          propagates them to its parent;</li>
+          <li>whether, in addition to access by key, a map supports vector
+          access.</li>
+        </ul>
+        <section id="hmap">
+          <title>The Hierarchy Map</title>
+          <p>
+            Maps that support a single parent at any one time are called hierarchy
+            maps. Their data type is <code>hmap</code>. To be more precise,
+            a <code>hmap</code> can only be contained by at most one
+            parent <code>hmap</code> at any time. A <code>hmap</code> can be
+            placed on the stack (for example when passed as an argument to function
+            calls). As we will see in later examples, a containment hierarchy
+            of <code>hmap</code>s is often a data structure built for a purpose
+            relevant to the application. A <code>hmap</code> also passes events
+            received from its children to its parent.
+          </p>
+          <p>
+            The <code>hmap</code> supports access by vector however there is
+            no initial ordering of the nodes nor does vector access necessarily
+            return the children in the same order they were added.
+            To avoid unnecessary overheads, a <code>hmap</code> initialises itself
+            for vector access when
+          </p>
+          <ol>
+            <li>vector access occurs for the first time</li>
+            <li>the <code>hmap</code> is sorted</li>
+            <li>the <code>hmap</code> is reversed (even if it is empty at the time)</li>
+          </ol>
+          <p>
+            When vector access has been used children added subsequently are
+            placed at the end of the vector. If the <code>hmap</code> is
+            sorted <em>and the map is a
+            top-level <a href="structures.html#nodeset">node set</a>
+            container</em>
+            then new children are placed into the vector at the appropriate
+            position for the current sort criteria.
+          </p>
+        </section>
+        <section id="smap">
+          <title>The Simple Map</title>
+          <p>
+            A simple map is the data type <code>smap</code>. A <code>smap</code>
+            does not keep track of any parent(s) it may have and places no
+            restrictions on how many other maps, whatever their type, may
+            contain it. The <code>smap</code> does not solicit or propagate
+            events, nor does it establish itself as the parent of
+            any <code>hmap</code>s it contains. The <code>smap</code> is used
+            for stack frames.
+          </p>
+          <p>
+            A <code>smap</code> does not support vector access and therefore
+            cannot be sorted.
+          </p>
+        </section>
+        <section id="omap">
+          <title>The Ordered Map</title>
+          <p>
+            A ordered map, declared with the data type <code>omap</code>, has
+            the same characteristics as a <code>smap</code> but with the
+            addition of vector access and sorting. The <code>omap</code> maintains
+            ordering information by default and returns its child nodes in the
+            order they were added.
+          </p>
+          <p>
+            As for <code>hmap</code>s, newly added children are placed at
+            the end of the vector or at their appropriate
+            vector position when sorted and a top-level node set container.
+          </p>
+        </section>
+        <p>
+          The following table summarises the map types and their supported
+          features:
+        </p>
+        <table>
+          <caption>Map Types</caption>
+          <tr>
+            <th>Type</th>
+            <th>Single Parent Containment</th>
+            <th>Propagates Events</th>
+            <th>Vectored and Sortable</th>
+            <th>Maintains Insertion Order</th>
+          </tr>
+          <tr>
+            <td><code>hmap</code></td>
+            <td class="centred"><icon src="images/tick.png" alt="tick"/></td>
+            <td class="centred"><icon src="images/tick.png" alt="tick"/></td>
+            <td class="centred"><icon src="images/tick.png" alt="tick"/></td>
+            <td class="centred">After first use or sort</td>
+          </tr>
+          <tr>
+            <td><code>smap</code></td>
+            <td class="centred"></td>
+            <td class="centred"></td>
+            <td class="centred"></td>
+            <td class="centred"></td>
+          </tr>
+          <tr>
+            <td><code>omap</code></td>
+            <td class="centred"></td>
+            <td class="centred"></td>
+            <td class="centred"><icon src="images/tick.png" alt="tick"/></td>
+            <td class="centred"><icon src="images/tick.png" alt="tick"/></td>
+          </tr>
+        </table>
+        <p>
+          The root node of a process is a <code>hmap</code>, so structures built
+          on it will comprise <code>hmap</code>s also. This is generally what
+          is required, as such structures tend to remain in the process's node
+          space, propagating events from nodes within.
+        </p>
+        <p>
+          If a structure is temporarily built on the stack but <code>hmap</code>s
+          are required for its containers then an explicit declaration can
+          be used to provide the correct seed type:
+        </p>
+        <source>
+hmap m;
+int m.myVars.count;
+string m.myVars.name;
+</source>
+        <p>
+          When this structure is placed in the context node we can discard the
+          seed map <code>m</code>. Remember, however, that a <code>hmap</code>
+          can only have one parent at any given time, so <code>myVars</code>
+          must be removed from <code>m</code> as it is added to <code>$this</code>:
+        </p>
+        <source>
+add(remove(m.myVars), path($this.myVars));
+</source>
+        <p>
+          The <code>remove</code> function returns the specified node, which it
+          also removes from the node space. The <code>add</code>
+          function places its first operand at the path specified by the
+          second. The expression <code>path(&lt;node_reference&gt;)</code>
+          is used when a node reference itself is required, rather than the
+          node it evaluates to. We will return to the use of <code>add</code>
+          and <code>path</code> in later sections.
+        </p>
+      </section>
+      <section id="othercontainers">
+        <title>Other Container Types</title>
+        <p>
+          Inq provides arrays and sets as additional utility containers.
+        </p>
+        <section id="array">
+          <title>The <code>array</code> Type</title>
+          <p>
+          The <code>array</code> type supports vector access and ordering. Its
+          contents do not have to be unique. Some examples of array handling
+          are shown in <a href="examples/array.inq">array.inq</a>. It produces
+          the following output:
+          </p>
+          <source>
+>inq -show -in examples/array.inq
+3
+[2, 3, 1, 4]
+[2, 3, 1, 4, 3]
+[2, 1, 4, 3]
+12
+5
+[2, 5, 1, 4, 12, 3]
+4
+[2, 5, 1, 12, 3]
+[1, 2, 3, 5, 12]
+Inq done
+</source>
+        </section>
+        <section id="set">
+          <title>The <code>set</code> Type</title>
+          <p>
+            The <code>set</code> type, unlike <code>array</code>, supports neither
+            vector access or ordering and enforces uniqueness within its contents.
+            The example <a href="examples/set.inq">set.inq</a> produces the
+            following output:
+          </p>
+          <source>
+>inq -show -in examples/set.inq
+[1, 2, 3]
+[1, 2, 3]
+[1, 2, 4, 3]
+[1, 4, 3]
+true
+false
+Inq done
+</source>
+          <p>
+            As for unordered maps, the order in which a set chooses to represent
+            its contents is not necessarily the order in which the items were
+            added.
+          </p>
+        </section>
+      </section>
+    </section>
+    <section id="anonymousdecl">
+      <title>Anonymous Declarations and Avoiding Direct Use of Types</title>
+      <p>
+        As in many languages, better Inq script results when there are fewer
+        references to specific types. An anonymous declaration takes the form
+      </p>
+      <source>
+any &lt;path&gt; = &lt;expression&gt;;
+</source>
+      <p>
+        The <code>any</code> declaration is used when the type of the expression is
+        unknown and irrelevant. Every Inq expression returns a value and
+        the <code>any</code> declaration allows this value, whatever it is, to
+        be placed at the specified path. Usually the expression results in a
+        new value, however if it does not, the effect is that an alias is
+        created. This example demonstrates this:
+      </p>
+      <source>
+>inq -show
+int x=4;
+<strong>4</strong>
+any y = x;
+<strong>4</strong>
+y=10;
+<strong>10</strong>
+x;
+<strong>10</strong>
+</source>
+      <p>
+        From the above we see that <code>x</code> and <code>y</code> are both
+        the same variable.
+      </p>
+      <section id="new">
+        <title>The new Function</title>
+        <p>
+          We detail how application types and value type aliases are defined
+          using <code>typedef</code> in the <a href="typedef.html">typedef</a> section.
+          The <code>new</code> function
+          creates instances of a typedef entity, entity field, one of
+          its defined i/o keys or a defined value type alias
+          by symbolic reference. The following examples assume a typedef
+          entity called <code>Price</code> containing the
+          field <code>Bid</code>
+          and having a i/o key named <code>Filter</code>.
+        </p>
+        <section id="newinstance">
+          <title>Creating typedef and field Instances</title>
+          <p>
+            The <code>new</code> function is used to create an instance
+            of <code>Price</code> like this:
+          </p>
+          <source>
+any somePrice = new(Price);
+</source>
+          <p>
+            and similarly if we want, say, a temporary variable based on the
+            data type of the <code>Bid</code> field it can be created with
+          </p>
+          <source>
+any tempBid = new(Price.Bid);
+</source>
+        </section>
+        <section id="newkey">
+          <title>Creating I/O Key Instances</title>
+          <p>
+            When the symbol includes a field reference, <code>new</code>
+            checks to see if there is an i/o key by the given name. If so, a
+            map containing that key's fields is created:
+          </p>
+          <source>
+any filterKey = new(Price.Filter);
+</source>
+          <p>
+            There is no requirement that fields and i/o keys cannot have the same name,
+            however if they do then <code>new</code> returns the key, not the field.
+          </p>
+        </section>
+        <section id="newvalue">
+          <title>Value Type Aliases</title>
+          <p>
+            A value type alias abstracts a particular type with a symbol. Considering
+            the definition of <code>FXRate</code> described in
+            the <a href="typedef.html#aliases">typedef</a> section,
+            new variables can be created like this:
+          </p>
+          <source>
+any fxRate = new(FXRate);
+</source>
+        </section>
+        <section id="newinit">
+          <title>Setting an Initial Value</title>
+          <p>
+            As a convenience, <code>new</code> accepts an optional second argument.
+            If present, this argument is used to initialise the return value and
+            must be compatible with it:
+          </p>
+          <source>
+any tempBid = new(Price.Bid, "2.5487");
+</source>
+        </section>
+      </section>
+    </section>
+    <section id="funcvars">
+      <title>Function Variables</title>
+      <p>
+        Inq supports executable statements held as variables. Such variables
+        are declared as type <code>func</code> or <code>cfunc</code>.
+        Function variables are frequently used to pass call-back information
+        across service requests and specify handlers for exceptions raised
+        in application script.
+      </p>
+      <p>
+        A full discussion of function variables is given in the section
+        on <a href="controlflow.html">control flow</a> and examples of their
+        use in the services to
+        illustrate <a href="txn.html#mutateGeneric">transactions</a>. They
+        also appear as arguments to Inq built-in functions, such
+        as <code>read</code> and <code>aggregate</code>, covered
+        in <a href="structures.html">building node structures</a>.
+      </p>
+    </section>
+  </body>
+</document>

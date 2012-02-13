@@ -135,6 +135,11 @@ public final class AnyMapEgDecor implements Map,
     return false;
   }
 
+  public boolean valueEquals(Map m)
+  {
+    return instance_.valueEquals(m);
+  }
+  
   public int entries() { return instance_.entries(); }
 
   public boolean containsAll (Composite c)
@@ -173,8 +178,6 @@ public final class AnyMapEgDecor implements Map,
   public Any get (Any key) { return instance_.get(key); }
 
   public Any getIfContains (Any key) { return instance_.getIfContains(key); }
-
-  public java.util.Map getMap () { return instance_.getMap(); }
 
   public Any remove (Any key) { return instance_.remove(key); }
 
@@ -237,16 +240,6 @@ public final class AnyMapEgDecor implements Map,
 	  instance_.setContext(context);
   }
   
-  public void setAux(Any aux)
-  {
-    instance_.setAux(aux);
-  }
-  
-  public Any getAux()
-  {
-    return instance_.getAux();
-  }
-
   public Any getUniqueKey()
   {
     return instance_.getUniqueKey();

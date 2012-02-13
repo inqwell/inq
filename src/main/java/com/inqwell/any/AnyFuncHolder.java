@@ -338,6 +338,9 @@ public class AnyFuncHolder extends    AbstractFunc
       Any  a           = (Any)this.getValue();
 			Func f           = a != null ? (Func)a.cloneAny() : null;
 			
+			if (f == null)
+			  return null;
+			
 //			context_     = null;
 //			contextPath_ = null;
 //			execNode_    = null;

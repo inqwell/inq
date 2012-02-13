@@ -1,0 +1,670 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright 2011 Inqwell Ltd.
+-->
+<!DOCTYPE document PUBLIC "-//APACHE//DTD Documentation V2.0//EN" "http://forrest.apache.org/dtd/document-v20.dtd">
+<document>
+  <header>
+    <title>How Job Control Works</title>
+  </header>
+  <body>
+    <section id="intro">
+      <title>Introduction</title>
+      <p>
+        In this section we examine how Job Control is implemented.
+        In addition to the things we have seen so far in the
+        other examples, Job Control demonstrates the following:
+      </p>
+      <ul>
+        <li>Running a short-lived process and picking up its exit status</li>
+        <li>Killing a process</li>
+        <li>Using conditional lock/wait/notify concurrency constructs</li>
+        <li>More complex Inq event processing, including handling events
+        as a batch</li>
+        <li>Using nested transactions to isolate pieces of work</li>
+        <li>Managing correct code flow with try/catch/finally</li>
+        <li>Storing <code>blob</code>s in a database column</li>
+        <li>Miscellaneous stream and file handling</li>
+      </ul>
+    </section>
+    <section id="overview">
+      <title>Overview</title>
+      <section id="jobdispatcher">
+	      <title>The jobdispatcher Process</title>
+	      <p>
+	        Job Control starts a <a href="../../primer/process.html#detached">detached process</a>
+	        called <code>jobdispatcher</code>.
+	        This process is responsible for
+	      </p>
+	      <ol>
+	        <li>
+	          Managing the job tree timers. Each top-level job requires a timer to
+	          schedule it. This timer is either defined by the job itself or is the
+	          earliest of any defined by the job's children.  
+	        </li>
+	        <li>
+	          Reacting to changes in the job tree as <code>Job</code> instances are
+	          created, mutated or destroyed. 
+	        </li>
+	        <li>
+	          Starting a process to run a job tree (or sub-tree) and managing its
+	          termination.
+	        </li>
+	      </ol>
+	      <p>
+	        Job Control is running when the <code>jobdispatcher</code> process is
+	        initialised and awaiting events.
+        </p>
+      </section>
+      <section id="typedefs">
+        <title>Typedefs</title>
+        <p>
+          Job control defines two <a href="../../primer/typedef.html">typedef</a>s.
+          The <code>Job</code> type
+          is <a href="../../primer/typedef.html#iobinding">bound</a> to the database
+          while <code>JobVolatile</code> contains data that is only relevant when
+          Job Control is running, so it is in-memory only.
+        </p>
+      </section>
+      <section id="misc">
+        <title>Miscellaneous</title>
+        <p>
+          Like <a href="../petstore/anatomy.html#common">petstore</a>, Job Control has
+          a script file <code>defs.inq</code> to declare useful typedef aliases.
+          As well as this, Job Control includes the file <code>common.inq</code>.
+          This file contains script that is used by both the GUI client and the
+          server, so it is parsed by both.
+        </p>
+        <note>In the Inq environment, <code>typedef</code> metadata is sent
+        to the client during the login process. Typedefs themselves are
+        never parsed by the client environment.</note>
+      </section>
+      <section id="inventory">
+        <title>Inq Script Inventory</title>
+        <p>
+          <code>jobBoot.inq</code> - a file that #includes all the server-side
+          functionality, providing the single point to <a href="index.html#start">boot</a>
+          Job Control into a server.
+        </p>
+        <p>
+          <code>defs.inq</code> - typedef aliases and enumerations used elsewhere.
+        </p>
+        <p>
+          <code>common.inq</code> - script used both by Job Control client and server.
+        </p>
+        <p>
+          <code>Job.inq</code> - the <code>Job</code> typedef.
+        </p>
+        <p>
+          <code>JobVolatile.inq</code> - the <code>JobVolatile</code> typedef.
+        </p>
+        <p>
+          <code>jobControl.inq</code> - all of the server-side functionality
+        </p>
+        <p>
+          <code>testSetup.inq</code> - establish some test jobs
+        </p>
+        <p>
+          <code>gui/jcAdmin.inq</code> - administrative client
+        </p>
+      </section>
+    </section>
+    <section id="job">
+      <title>The Job Type</title>
+      <p>
+        We look the <code>Job</code> type to examine its implementation
+      </p>
+      <section id="pk">
+        <title>Primary Key</title>
+        <p>
+          There is nothing intrinsic to a <code>Job</code> instance that
+          makes a natural primary key, so an integer field, called <code>Job</code>
+          according to <a href="../../primer/typedef.html#fields">convention</a>
+          is used.
+        </p>
+      </section>
+      <section id="blobs">
+        <title>Blob Usage</title>
+        <p>
+          A <code>Job</code> that has a non-null <code>FunctionExpr</code> is
+          a <em>task</em>; otherwise it is a <em>box</em> that can have child
+          boxes and tasks.
+        </p>
+        <p>
+          The way a <code>Job</code> specifies its execution time is
+          to have a <code>TimerExpr</code> that returns a suitably
+          initialised <code>timer</code>. The jobs established
+          in <code>testSetup.inq</code> give some examples.
+          Both these fields are of type <code>blob</code>
+        </p>
+        <p>
+          A <code>blob</code> requires a stream type to define the way the
+          value will be stored. Valid streams are:   
+        </p>
+        <ul>
+          <li><strong>ioPrint</strong> stores the value as plain text</li>
+          <li><strong>ioXML</strong> stores the value using Inq's native XML format</li>
+          <li><strong>ioXMLX</strong> stores the value using
+            Inq's <a href="../petstore/myorders.html#ioxmlx">configurable XML stream</a></li>
+          <li><strong>ioByte</strong> stores the value as bytes</li>
+        </ul>
+        <p>
+          In this example of blob usage, the value is a string, so <code>ioPrint</code>
+          is the appropriate stream type. If storing node structures then <code>ioXML</code>
+          or <code>ioXMLX</code> would be used.
+        </p>
+      </section>
+      <section id="ctor">
+        <title>Constructor</title>
+        <p>
+          Here is <code>Job</code>'s construct statement with some note-worthy lines highlighted:
+        </p>
+        <source>
+construct (
+{
+  // Validate the tree state to ensure the integrity of jobDispatcher
+  <strong>call isTreeState(requiredState = enum(JobTreeState, USER_START));</strong>
+  
+  // Validate the fields we are expecting to be initialised already
+  if (isnull($this.ShortName))
+    throw ($catalog.{$root.i18n}.errortype.JOB_CREATE,
+           $catalog.{$root.i18n}.errormsg.NULL_SHORTNAME);
+
+
+  /*
+  No function expression implies a box.
+  */
+
+  <strong>$this.Job           = call Uniq:getUniqueId(Name="JC");</strong>
+  $this.ShortName    += " " + $this.Job;
+  $this.ExitStatus    = 0;
+
+  $this.LastUpdated   = getdate();
+  $this.User          = $process.loginName;
+
+  // Create associated JobVolatile
+  <strong>create(new(JobVolatile, $this));</strong>
+
+})
+</source>
+        <p>
+          The call to <code>isTreeState()</code> relates to Job Control's use
+          of Inq's locking and concurrency features. We look at this in detail
+          later on.
+        </p>
+        <p>
+          The instance's primary key is initialised
+          by <code>call Uniq:getUniqueId(Name="JC")</code>. <code>Job.inq</code>
+          imports <code>inq.util</code> making <code>Util</code> a symbolic
+          equivalent. The unique ID allocator discussed
+          in <a href="../../primer/txn.html#morenested">transactions</a>
+          is implemented in the <code>inq.util</code> package and part of
+          the Inq distribution.
+        </p>
+        <p>
+          Finally, the constructor is a good place to ensure any related instances
+          are created. Remember that any instance flagged in a transaction for
+          creation will not come into actual existence unless the transaction
+          commits successfully.
+        </p>
+        <p>
+          There is a 1-to-1 relationship between <code>Job</code>
+          and <code>JobVolatile</code> instances, so it always makes sense
+          to create the corresponding <code>JobVolatile</code> here.
+          Correspondingly, <code>Job</code> also has a <code>destroy</code>
+          statement, where its <code>JobVolatile</code> is deleted.
+        </p>
+        <p>
+          In this example, the optional second argument to <code>new()</code>
+          is included. This is the new instance's initial value, that is
+          the instance of <code>Job</code> being created.
+          Typedef instances implement assignment by assigning commonly named
+          fields, so the result is to make <code>JobVolatile.Job</code> equal
+          to <code>Job.Job</code>.
+        </p>
+      </section>
+      <section id="join">
+        <title>Join and Mutate</title>
+        <p>
+          As a reminder, <code>join</code> and <code>mutate</code> relate to
+          modifying an
+          existing <a href="../../primer/typedef.html#entities">managed instance</a>.
+          The <code>join</code> statement is executed when an instance is first
+          assigned to; <code>mutate</code> runs as the transaction in which
+          the instance is joined commits.
+        </p>
+        <p>
+          When <code>join</code> runs the instance has not yet been
+          modified. <code>Job</code>'s <code>join</code> statement
+          calls <code>isTreeState()</code>. Again, we look at this in
+          more detail later. Just to say at this point that any process
+          can mutate a <code>Job</code> instance but when <code>jobdispatcher</code>
+          is running there is concurrency mediation between it and
+          the modifying process. Using <code>join</code> allows Job Control
+          to catch any problems early and abort the transaction if
+          the requirements are not being obeyed. 
+        </p>
+      </section>
+      <section id="parent">
+        <title>Parent Link</title>
+        <p>
+          A <code>Job</code> has a link to its parent. It defines the following field:
+        </p>
+        <source>
+// The box this job is in, null if top-level.
+Job           ParentJob;
+</source>
+        <p>
+          The type of <code>Parent</code> is determined by resolving the
+          reference <code>Job</code>.
+          The <a href="../../primer/typedef.html#resolvefields">result</a>
+          is <code>Job.Job</code> so <code>Parent</code> is (as you would expect)
+          the same type as the primary key field, <code>Job</code>.
+        </p>
+        <p>
+          There is also a key defined so that all children of
+          a given <code>Job</code> can be retrieved: 
+        </p>
+        <source>
+key ByParent
+(
+  fields(ParentJob)
+
+  #include &lt;{db}/Job.ByParent.sql&gt;
+)
+</source>
+      </section>
+      <p>
+        The remainder of this discussion focuses on the functionality of
+        Job Control, all of which is coded in the file <code>jobControl.inq</code>.
+      </p>
+    </section>
+    <section id="startup">
+      <title>Startup</title>
+      <p>
+        Starting Job Control is performed in the local function <code>startup()</code>.
+        A node is placed in the global <code>$catalog</code> node space
+        at <code>$catalog.jobcontrol</code> and this is used elsewhere in the code
+        to verify whether Job Control is running. The following data is stored here: 
+      </p>
+      <source>
+$catalog.jobcontrol.logger         // Job Control's logger "inq.jobcontrol"
+                   .jobTreeState   // A variable of type JobTreeState
+                   .process        // The "jobdispatcher" process
+                    
+</source>
+      <p>
+        The <code>jobdispatcher</code> process is made available because, in
+        many cases, when clients invoke Job Control functionality the
+        work must be carried out by this process. To do that a service
+        request must be sent to it, so there are various places where
+        lines like this are found:
+      </p>
+      <source>
+// Run the service in the jobDispatcher process and with its
+// context as $root
+send restartJob(@channel = $catalog.jobcontrol.process.ichannel,
+                @context = "$root",
+                Job);
+</source>
+      <section id="jts">
+        <title>Job Tree State</title>
+        <p>
+          The variable at <code>$catalog.jobcontrol.jobTreeState</code> is used to
+          manage cooperation between <code>jobdispatcher</code> and any
+          other process using Job Control. Referring to <code>defs.inq</code>
+          it is an enumeration whose symbolic values can be one
+          of <code>STARTUP</code>, <code>IDLE</code>, <code>USER_START</code>, <code>USER_END</code>
+          or <code>DISPATCHER</code>. We look at the various states and
+          how cooperation is achieved later.
+        </p>
+        <p>
+          During initialisation the job tree state is <code>STARTUP</code>:
+        </p>
+        <source>
+// Create the state flag for synchronisation between user processes
+// and the dispatcher process. User processes cannot modify,
+// create or delete Job instances while the dispatcher is manipulating
+// the job tree.
+// Note - default initial value is "S"tartup
+any jobcontrol.jobTreeState = new(JobTreeState);
+</source>
+      </section>
+      <section id="process">
+        <title>Job Dispatcher Process</title>
+        <p>
+          After starting the <code>jobdispatcher</code> process the
+          executing process instructs it to run the <code>initialise</code>
+          service:
+        </p>
+        <source>
+// Create the dispatcher process. We can't specify initialise() as
+// the "start" function because that is run in the caller's thread
+// and initialisation includes establishing event listeners in the
+// dispatcher process
+any jobcontrol.process = spawn("jobdispatcher",
+                               type = PROCESS_DETACHED,
+                               end  = call shutdown());
+
+any $catalog.jobcontrol = jobcontrol;
+
+send initialise(@channel = jobcontrol.process.ichannel);    
+</source>
+        <p>
+          Initialisation is carried out in the local function <code>initialise()</code>.
+          The first thing this function does is arbitrate to proceed by
+          calling <code>awaitTreeState()</code>:
+        </p>
+        <source>
+local function initialise
+{
+  .
+  .
+  try
+  {
+  
+    // Mutually exclusive with startup - see comment there
+    call awaitTreeState(requiredState = enum(JobTreeState, STARTUP),
+                        newState      = enum(JobTreeState, DISPATCHER));
+</source>
+        <p>
+          This is a helper function that implements
+          a <a class="fork" href="ext:wikipedia/monitor">blocking
+          condition variable</a>. We look at its implementation detail later; at
+          this stage we can make do with stating what it does: 
+        </p>
+        <note label="awaitTreeState">
+        Wait until <code>$catalog.jobcontrol.jobTreeState</code> becomes
+        equal to <code>requiredState</code> and when it does set it
+        to <code>newState</code>.
+        </note> 
+        <p>
+          As <code>jobTreeState</code> already has the
+          value <code>STARTUP</code> <code>jobdispatcher</code>
+          will not have to wait and it can establish the 
+          state <code>DISPATCHER</code>. Again, we look closer
+          at these states and state transitions later.
+        </p>
+      </section>
+      <section id="listeninit">
+        <title>Establishing Listeners</title>
+        <p>
+          Job Control makes more extensive use of event listeners than
+          we have seen so far in
+          the <a href="../petstore/myorders.html#serverlisten">petstore</a> and
+          its <a href="../petstore/myorders.html#clientlisten">client</a>. Here
+          are the listeners it establishes:
+        </p>
+        <source>
+  // Listen for new Job instances.
+  any $this.listeners.newJobListener = listen ($catalog,
+                                     func f = call newJobCreated(Job = @eventData),
+                                     event = (create),
+                                     typedef = Job);
+
+  // Listen to the function used to modify Job instances.
+  // The client may modify several instances at a time and we want one
+  // event to handle all such processing, as opposed to the several update
+  // events we could get.
+  any $this.listeners.modJobListener1 = listen ($catalog,
+                                      func f = call jobsModified(jobEvents = @eventData),
+                                      event  = (complete),
+                                      exec   = modifyJobs);
+
+  any $this.listeners.modJobListener2 = listen ($catalog,
+                                      func f = call jobsModified(jobEvents = @eventData),
+                                      event  = (complete),
+                                      exec   = modifyJob);
+
+  // Listen to the root of the job tree for deletion events from within
+  // By specifying the typedef we will only get events that relate to
+  // automatic pruning of the node-set structure when Job instances are
+  // deleted.
+  any $this.listeners.deleteJobListener = listen (jobTree,
+                                        func f = { call jobDeleted(@eventId, @eventData); },
+                                        event = (remove),
+                                        typedef = Job);
+</source>
+        <section id="lcreate">
+          <title>Create</title>
+          <p>
+            The <code>create</code> listener is the same as we have seen before. We
+            look at the processing that it performs when new <code>Job</code>
+            instances are created later.
+          </p>
+        </section>
+        <section id="lupdate">
+          <title>Update</title>
+          <p>
+            The next two <code>listen</code> statements introduce a new
+            listener type - one that is primed to fire when the
+            functions <code>modifyJobs</code> or <code>modifyJob</code>
+            are executed. Listeners like these deliver
+            all <code>create</code>, <code>update</code> and <code>delete</code>
+            events as a batch in the argument <code>@eventData</code> on the stack
+            when the transaction that generated them commits. Put another way, when
+            a process executes either of these functions its transaction
+            will deliver any typedef events to listeners that specify those functions.
+          </p>
+          <p>
+            In our case the listening process is <code>jobdispatcher</code> and
+            we want a batch because, as we see shortly, there is a hand-off between
+            any client process and <code>jobdispatcher</code> driven by these
+            events. This hand-off requires that one transaction in a
+            client process causes one transaction in <code>jobdispatcher</code>. If
+            a client modifies several jobs at a time (as the administrative GUI does)
+            it is important that <code>jobdispatcher</code> likewise processes
+            the events that arise in a single invocation of its event loop. 
+          </p>
+        </section>
+        <section id="ldelete">
+          <title>Delete</title>
+          <p>
+            When <code>Job</code> instances are deleted a <code>delete</code>
+            event is raised on its instance and Inq propagates this event through
+            any event-live node structures. If the event passes through a node-set
+            and the <a href="../../primer/structures.html#eventdel">originating typedef is
+            marked in the node-set root</a> then the instance's node-set child is
+            removed from the structure. Inq then raises a <code>remove</code> event
+            on this child which itself propagates from its point of origin.
+          </p>
+          <p>
+            When deciding how to process deletions, an application design
+            can consider whether to listen to typedef instance <code>delete</code>
+            or node <code>remove</code> events. For Job Control the following
+            issues arise:
+          </p>
+          <ol>
+            <li>When a <code>Job</code> is deleted any children it has are
+            deleted also (otherwise there would be orphaned jobs). This would
+            generate a series of <code>delete</code> events. These could be
+            batched by using a function listener as we do for <code>update</code>
+            but events from children deleted as a consequence are of no interest
+            in any case.</li>
+            <li>While <code>delete</code> events are transactional (that is they
+            are raised when the enclosing transaction commits), <code>remove</code>
+            events are not - they are raised within the structure at the time they
+            happen. Even if they arise as a consequence of a <code>delete</code> event
+            they cannot be batched.</li>
+            <li>When a node is removed from a structure, any events that may arise
+            beneath it cannot propagate any further than the node that was
+            removed. As the <code>listen</code> statement shows, the <code>remove</code>
+            event is solicited from the <code>jobTree</code> root. If we
+            arrange to delete jobs in order of their depth then we can arrange
+            for only one event to arise, at least for jobs deleted within a
+            given subtree.</li>
+          </ol>
+          <p>
+            Given that we want one event per transaction for <code>jobdispatcher</code>
+            to pick up on, the compromise is that jobs are deleted per job tree and
+            in order of their depth, with a given job tree being handled in its
+            own transaction. The listener subscribes to the single <code>remove</code>
+            event that will emanate from the <code>jobTree</code> root as a result.
+            Again, we put all this together with how <code>jobdispatcher</code> and
+            other server processes cooperate in a moment.
+          </p>
+        </section>
+      </section>
+      <section id="volatile">
+        <title>Creating The Volatile Data</title>
+        <p>
+          During startup <code>jobdispatcher</code> creates
+          the <code>JobVolatile</code> instances:
+        </p>
+        <source>
+  // Create in-memory data
+  call createVolatile();
+  loginfo($catalog.jobcontrol.logger, "Volatile data created");
+</source>
+        <p>
+          This is a simple function that reads all <code>Job</code> instances
+          and creates their corresponding <code>JobVolatile</code>. It
+          is only required on startup as any <code>Job</code>s that are
+          created while Job Control is running have their <code>JobVolatile</code>
+          created then.
+        </p>
+        <p>
+          The <code>createVolatile()</code> function is straightforward:
+        </p>
+        <source>
+/**
+ * Create the volatile data for all the Job instances
+ */
+local function createVolatile()
+{
+  // Read the jobs
+  any all = new(Job.All);
+  read(Job, all, setname="allJobs");
+
+  transaction
+  {
+    foreach(allJobs)
+    {
+      // Create associated JobVolatile. If we are being restarted then
+      // volatile data instances will already exist, so check for
+      // this.
+      if (!read(JobVolatile, $loop.Job))
+        create(new(JobVolatile, $loop.Job));
+    }
+  }
+}
+</source>
+      </section>
+      <section id="jobtree">
+        <title>Building the Job Tree</title>
+        <p>
+          During startup <code>jobdispatcher</code> builds the job tree in memory
+        </p>
+        <source>
+  // Build the job tree
+  hmap  m;  // Seed map
+  any jobTree = call buildJobTree(root = m);
+  loginfo($catalog.jobcontrol.logger, "Job tree created");
+</source>
+        <p>
+          The <a href="../../primer/structures.html#nsetseed">seed map</a> is of
+          type <code>hmap</code> so the structure is event-live. As discussed above,
+          this means listeners can be established on it to process events that
+          arise within the structure, especially as a consequence of work performed
+          by other processes.
+        </p>
+        <p>
+          Building the job tree is an example of recursion and use of
+          the <a href="../../primer/structures.html#aggregate"><code>aggregate</code></a>
+          function. Here is <code>buildJobTtree</code>
+          and a helper function <code>addNextLevel()</code>: 
+        </p>
+        <source>
+local function buildJobTree(any root)
+{
+  // Read the top-level jobs, those with a ParentJob of null
+  any k = new(Job.ByParent);
+  read(Job, k, setname="topLevelJobs", target=root);
+  aggregate(JobVolatile, root.topLevelJobs[@first].Job);
+
+  // Start recursion to add successive child job levels
+  call addNextLevel(root = root.topLevelJobs);
+
+  // Unencumber the result from the seed root parameter while returning it
+  remove(root.topLevelJobs);
+}
+
+local function addNextLevel(any root)
+{
+  any k = new(Job.ByParent);
+  aggregate(Job,
+            root[@first].Job,
+            setname = "childJobs",
+            key = cfunc f0 = {
+                               // Set the key for each parent job,
+                               // because we are joining self to ParentJob
+                               k.ParentJob    = $loop.Job.Job;
+
+                               k;
+                             }
+           );
+
+  // Recurse for each child node set
+  foreach(root)
+  {
+    aggregate(JobVolatile, $loop.childJobs[@first].Job);
+    call addNextLevel(root = $loop.childJobs);
+  }
+}
+</source>
+        <p>
+          The entry point to the recursion is <code>buildJobTree()</code> and
+          the helper function <code>addNextLevel()</code> then recurses to
+          create the node structure as shown:
+        </p>
+        <figure src="images/jobtree2.png" alt="jobtree"/>
+      </section>
+      <section id="starttimers">
+        <title>Starting The Job Timers</title>
+        <p>
+          The last thing for initialisation to do is evaluate and start
+          timers that will schedule the jobs. There is one timer per
+          top-level job in the job tree, assuming, that is, that this
+          job or a descendent defines a <code>TimerExpr</code>.
+        </p>
+        <source>
+  // Evaluate the timers underneath each top-level job.
+  call evaluateChildTimers(root = jobTree);
+  loginfo($catalog.jobcontrol.logger, "Timers evaluated, starting any timers");
+
+  // Start the timer of the root jobs that have defined (or inherited) one.
+  // Even if the job is inactive, we'll fire the timer so that the NextRuns
+  // field is always updated.
+  foreach(jobTree)
+  {
+    if ($loop.Job.Active == enum(Active, Y) &amp;&amp; !isnull($loop.aux.jobTimer))
+      call startTimer($loop.Job, $loop.aux.jobTimer, userInfo = $loop);
+  }
+  loginfo($catalog.jobcontrol.logger, "Root timers started");
+</source>
+        <p>
+          In summary, this involves: 
+        </p>
+        <ul>
+          <li>traversing the job tree from the bottom up;</li>
+          <li>parse any timer expressions at the current tree
+            level using the Inq <code>compile()</code> function;</li>
+          <li>on the way out of the recursion, sort the current level
+            by the timers' <code>nextRuns</code> property and
+            the <code>Job</code>s' <code>JobOrder</code> field;</li>
+          <li>if a <code>Job</code>
+            does not define a timer, inherit the earliest one from
+            the (now sorted) children.</li>
+        </ul>
+        <p>
+          This leaves the job tree sorted throughout its depth
+          and any timer available at the top level. These timers are
+          then started as shown.
+        </p>
+      </section>
+      <p>
+        <a href="concurrency.html"><icon src="../images/nextpage.gif" alt="nextpage"/></a>
+      </p>
+    </section>
+  </body>
+</document>

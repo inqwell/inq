@@ -192,11 +192,11 @@ public class AnyCellRenderer extends    PropertyAccessMap
 
   public AnyCellRenderer(RenderInfo r)
   {
-    // Make a place-holder AnyComponent whose purpose is to hold the
-    // renderinfo until the proper one is created on first rendering
+    // Make a place-holder AnyComponent until the proper one is
+    // created on first rendering.
     // Note that setting the AnyComponent.setRenderInfo doesn't
     // do anything else because the component has no context.
-    renderer_ = new AnyComponent();
+    renderer_ = new AnySimpleComponent(); // TODO rationalise the interfaces here and create a minimal implementation
     renderer_.setRenderer(true);
     setValueToComponent_ = renderer_;
     renderInfo_ = r;
@@ -853,7 +853,6 @@ public class AnyCellRenderer extends    PropertyAccessMap
     if (c != renderer_.getComponent())
     {
       // The type of component required changed (or first use)
-      RenderInfo r = renderer_.getRenderInfo();
       renderer_ = MakeComponent.makeWrapper(c);
       
       // This method is only called when the default rendering is in effect.

@@ -1,0 +1,449 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright 2006 Inqwell Ltd.
+-->
+<!DOCTYPE document PUBLIC "-//APACHE//DTD Documentation V2.0//EN" "http://forrest.apache.org/dtd/document-v20.dtd">
+<document>
+  <header>
+    <title>Chat GUI</title>
+  </header>
+  <body>
+    <section id="intro">
+      <title>Introduction</title>
+      <p>
+        In this section we'll look at those areas of the chat GUI that
+        we have not already at least touched on, including the MVC used
+        and Inq's handling of styled text.
+      </p>
+      <p>
+        The <code>chat</code> client script resides in two
+        files - <code>chat.inq</code> which we have looked at already
+        and <code>chattab.inq</code> which we concentrate on
+        here. <code>chat.inq</code> is
+        the <a href="services.html#login">initial client script</a>.
+        It loads <code>chattab.inq</code> when it runs with the line
+      </p>
+      <source>
+loadclient("chattab.inq");
+</source>
+      <p>
+        where the argument to <code>loadclient()</code> is a url
+        resolved <em>by the Inq server</em> relative to the current module.
+      </p>
+      <note>The following sections explain the salient points of
+      the <code>chat</code> GUI. Issues are covered to the extent
+      appropriate to this example, however you may infer the
+      existence of more reference-level documentation that is yet
+      to be written up. Inqwell thanks you for your patience.</note>
+    </section>
+    <section id="creategui">
+      <title>Creating the Channel GUI</title>
+      <p>
+        The GUI subtree to handle a chat channel is created by the
+        function <code>chatTab()</code>, called
+        from the
+        service <a href="services.html#joinchannel"><code>joinChannelConfirm</code></a>.
+        It creates one of two forms, depending on whether the channel is
+        a 1-1 conversation or a conference
+      </p>
+      <figure src="images/chatguis.png" alt="Chat GUIs"/>
+      <p>
+        and these are laid-out in stages.
+      </p>
+      <section id="gList">
+        <title>The gList Properties</title>
+        <p>
+          When the GUI displays the participants it uses
+          a <code>gList</code>. In the GUI Basics section we discussed
+          how simple components use the <code>renderinfo</code>
+          property to establish
+          their <a href="../../primer/guibasics.html#mvc">MVC</a> relationship.
+          More complex components like lists also support MVC but require
+          more property settings to set this up.
+        </p>
+        <p>
+          A <code>gList</code> references
+          a <a href="../../primer/structures.html#nodeset">node set</a> to
+          provide it with a vector of items. The <code>modelRoot</code>
+          property is set with
+          a <a href="../../primer/nodes.html#pathfn"><code>path()</code></a>
+          that selects the participants list
+          within the <a href="index.html#nodespace">node space</a> we designed
+          for a chat channel:
+        </p>
+        <source>
+userList.properties.modelRoot = path($this.chatInsts.participantsList);
+</source>
+        <p>
+          Beneath the node set root, the <code>model</code> property uses
+          the simplest form
+          of <a href="../../primer/guibasics.html#renderinfo"><code>renderinfo</code></a>
+          expression that implies the <em>default path</em>
+          of <code>$this.ChannelParticipant.OnLine</code>.
+        </p>
+        <source>
+any listmodel.internal    = renderinfo(typedef=ChannelParticipant.OnLine);
+userList.properties.model = listmodel;
+</source>
+        <p>
+          Notice that there is no explicit dimensioning of the list. It
+          takes a width hint from the <code>ChannelParticipant.OnLine</code>
+          field, which was defined in its typedef by reference
+          to <code>OnLine.OnLine</code>, which in turn has a specified
+          width of 8 characters.
+        </p>
+        <section id="sorting">
+          <title>Keeping The List Sorted</title>
+          <p>
+            The participants list is dynamic - users may enter and leave the
+            channel at any time. It would be nice if the node set could remain
+            ordered as this happens. The ordering properties of <code>hmap</code>
+            were introduced in
+            the <a href="../../primer/types.html#hmap">discussion</a> of
+            that data type, however there are further considerations when
+            such a structure is being rendered by a GUI component.
+          </p>
+          <ul>
+            <li>Inq's MVC handling does not require the underlying node set
+            to be present initially and it may be replaced at any time. Should
+            this happen <code>gList</code> will re-evaluate the model root
+            node (using the <code>modelRoot</code> property) and re-render
+            the entire list.</li>
+            <li>Inq does not preserve node set order or any collating information
+            placed within it by a prior sort when the node set is copied between
+            client and server. In any case, we are not interested in keeping
+            the node set ordered within the server as there is no requirement
+            to do so.</li>
+          </ul>
+          <p>
+            For these reasons, GUI components that render node sets support
+            the <code>modelSort</code> property, whose value is a <code>func</code>
+            containing a
+            suitable <a href="../../primer/structures.html#sort">sort</a>
+            expression.
+          </p>
+        <source>
+userList.properties.modelSort =
+  func f = sort($this, $loop.ChannelParticipant.OnLine, ignorecase=true);
+</source>
+          <p>
+            Inq uses this expression to sort the underlying node
+            set when it is replaced and to find the appropriate insertion
+            position when individual children are added.
+          </p>
+        </section>
+      </section>
+      <section id="complexgui">
+        <title>More Complex GUI Events</title>
+        <p>
+          There are two examples of specifying GUI events using modifiers
+          to characterise the event more.
+        </p>
+        <p>
+          The text entry component, <code>taSend</code>,
+          looks for the <code>ENTER</code> key and consumes the event:
+        </p>
+        <source>
+// TextAreas don't generate action events on CR so we
+// use a key press event.  We consume the event so that
+// the newline is not inserted into the text area's
+// underlying document. Actions would be better but they
+// have not yet been implemented in Inq.
+gEvent(taSend, call sendChat(), event=(gKpressed),
+                                gModify=(keycode=VK_ENTER),
+                                consume=true);
+</source>
+        <p>
+          The participants list sets up a double-click to create a
+          private chat with the selected user:
+        </p>
+        <source>
+gEvent(userList, call spawnPrivate(), event=(gMclicked),
+                                      gModify=(count=2));
+</source>
+      </section>
+    </section>
+    <section id="funcs">
+      <title>Using funcs To Define Context Entry Points</title>
+      <p>
+        The <code>chatTab</code> function includes two
+        arguments <code>chatFuncs</code> and <code>tabFuncs</code>. These
+        are maps that are set up in the <code>joinChannelConfirm</code>
+        service, <code>chat.inq</code> refers:
+      </p>
+      <source>
+service joinChannelConfirm(any ChatChannel, any ChannelParticipant)
+{
+  // Create the GUI and set up the structures for this
+  // chat session.
+
+  smap tabFuncs;   // funcs into the channel context
+  smap chatFuncs;  // funcs into the chat context
+
+  func chatFuncs.spawnPrivate = call newPrivate(OnLine);
+
+
+  any newTab = call chatTab(ChatChannel,
+                            ChannelParticipant,
+                            parent=$this.channels,
+                            tabFuncs,
+                            chatFuncs,
+                            $this.vars.icons);
+
+  // Save the (now filled in) tabFuncs map in our context using the
+  // unique key of the given ChatChannel instance. Then we can use
+  // the appropriate set of tabFuncs to vector to the appropriate
+  // context
+  any k = getuniquekey(ChatChannel);
+  any $this.vars.{k}.tabFuncs = tabFuncs;
+}
+</source>
+      <p>
+        These maps contain <code>func</code> variables initialised with
+        entry points to the top and channel-level contexts.
+        When <code>joinChannelConfirm</code> runs it does so in the
+        top-level context. Creating <code>func chatFuncs.spawnPrivate</code>
+        provides a statement (a <code>call</code> statement is typical
+        but any script is valid) that runs in this context when invoked
+        with <code>xfunc()</code>. The <code>chatTab</code> function
+        retains <code>chatFuncs</code> beneath its context node:
+      </p>
+      <source>
+// Remember the funcs to the chat context we have been given
+any topLevel.vars.chatFuncs = chatFuncs;
+</source>
+      <p>
+        and calls <code>spawnPrivate</code> in the double-click callback
+        on the participants list:
+      </p>
+      <source>
+local function spawnPrivate()
+{
+  // Function points to newPrivate in the top-level window context
+  xfunc($this.vars.chatFuncs.spawnPrivate,
+        $this.userList.model.selection[0].OnLine);
+}
+</source>
+      <p>
+        Similarly, <code>tabFuncs</code> is passed (by reference)
+        to <code>chatTab</code> and retained in its context:
+      </p>
+      <source>
+// Remember also the map given to us. This is populated
+// when contextExtablished() is called also.
+any topLevel.vars.tabFuncs = tabFuncs;
+</source>
+      <p>
+        and filled in when <code>contextEstablished()</code> is called:
+      </p>
+      <source>
+func $this.vars.tabFuncs.leaveChannel  = call leaveChannel();
+func $this.vars.tabFuncs.clearChannel  = call clearChannel();
+func $this.vars.tabFuncs.inviteChannel = call inviteChannel(OnLine);
+func $this.vars.tabFuncs.chatReceived  = call chatReceived(ChatChannel, BackChat, baseStyle, urlRE, active);
+</source>
+      <p>
+        Of course, when calling from the top-level context into a
+        chat channel we need to know which channel to choose.
+        The <code>tabFuncs</code> for each channel is retained in the
+        top-level context by the primary key of the <code>ChatChannel</code>
+        instance:
+      </p>
+      <source>
+// Save the (now filled in) tabFuncs map in our context using the
+// unique key of the given ChatChannel instance. Then we can use
+// the appropriate set of tabFuncs to vector to the appropriate
+// context
+any k = getuniquekey(ChatChannel);
+any $this.vars.{k}.tabFuncs = tabFuncs;
+</source>
+    </section>
+    <section id="styled">
+      <title>Rendering Styled Text</title>
+        <p>
+        Inq supports styled text using the <code>style</code> data type.
+        Readers unfamiliar with styled text may refer to the relevant
+        section of
+        the <a class="fork" href="ext:swingtutorial/editorpane">Swing Tutorial</a>
+        although of course Inq provides its own methods of access to styled rendering.
+      </p>
+      <section id="styledef">
+        <title>Defining The Styles</title>
+        <p>
+          A <code>style</code> is created by initialising it from a <code>map</code>
+          whose contents comprise values with well-known keys to define the
+          character attributes. The function <code>chatWindow()</code>
+          in <code>chat.inq</code> creates styles that are used by all channel
+          contexts to render received messages.
+        </p>
+        <p>
+          If a style exists in the Inq hierarchy as the child of another style
+          then the parent is used to supply any attributes not specified in the child.
+          In this way style hierarchies can be created. The <code>chat</code>
+          client creates styles with the following script:
+        </p>
+        <source>
+// Set up some styles for rendering the chat.
+// First set up some maps with well-known keys describing the style
+// properties...
+string baseStyleDescr.@fontFamily = "Tahoma";   // basic style
+colour unameStyleDescr.@fg        = "#0000FF";  // username has blue added
+
+// ...then create the styles themselves from the above descriptions.
+// First the base style...
+style chat.vars.baseStyle = baseStyleDescr;
+
+// ...then the base style with added blue by creating the style
+// hierarchy baseStyle ---> unameStyle
+style chat.vars.baseStyle.unameStyle = unameStyleDescr;
+
+// Reuse blue for urls too.
+style chat.vars.baseStyle.urlStyle   = unameStyleDescr;
+</source>
+        <p>
+          Notice that <code>unameStyle</code> is a child style
+          of <code>baseStyle</code> so inherits its <code>@fontFamily</code>.
+        </p>
+      </section>
+      <section id="styleuse">
+        <title>Using The Styles To Render Text</title>
+        <p>
+          In <code>chattab.inq</code>, a chat message is rendered by the
+          function <code>chatReceived()</code>.
+        </p>
+        <section id="docaccess">
+          <title>Accessing The Document</title>
+          <p>
+            Inq provides access to a text component's
+            underlying <a class="fork" href="ext:j2seapi/apidocs/document">Document</a>
+            and constituent elements using a path. The root element, to which we want
+            to append our styled text, is accessed like this:
+          </p>
+          <source>
+any doc = $this.chat.model.root;
+</source>
+          <p>
+            This statement creates an alias to the root element, to which we want
+            to append the text. The end point of the document is expressed as
+            the last content element. We can create
+            a <a href="../../primer/nodes.html#pathfn"><code>path()</code></a>
+            that expresses this as follows:
+          </p>
+          <source>
+any atEnd = path(doc[last]);
+</source>
+        </section>
+        <section id="styledtext">
+          <title>Expressing Styled Text</title>
+          <p>
+            To actually use a <code>style</code> we combine it in a <code>map</code>
+            with the text we want to render in that style.
+          </p>
+          <figure src="images/chatmsg.png" alt="Chat Message"/>
+          <p>
+            To do this well-known keys are used to specify the style and text.
+            In <code>chat</code> the first thing we do is render the message
+            time with the base style defined earlier:
+          </p>
+          <source>
+// 1) When the message was sent
+any styledDate.@style = baseStyle;
+any styledDate.@txt   = render(BackChat.MsgTime, format="HH:mm");
+</source>
+          <p>
+            The <code>@txt</code> and <code>@style</code> children identify
+            the text to render and style to use respectively.
+            The <code>BackChat.MsgTime</code> field is of type <code>date</code>
+            so we convert it to a formatted string using the <code>render()</code>
+            function. Non-printing characters like tabs do not require style
+            information so they can be added without it:
+          </p>
+          <source>
+// A tab - these don't need any style info
+add("\t", atEnd);
+</source>
+        </section>
+        <section id="userstyle">
+          <title>User Information in Styles</title>
+          <p>
+            The <code>chat</code> utility implements the commonly found idea
+            of clickable URLs in the text pane. For the sake of completeness here,
+            a URL is found in the chat message by applying a regular expression
+            to it. In Inq, regular expressions are supported by the data
+            type <code>regex</code>. A <code>regex</code> is initialsed with
+            a pattern which only need be set once. A single <code>regex</code>
+            is setup in <code>chat.inq</code> though the pattern is too
+            outrageous to reproduce here.
+          </p>
+          <p>
+            A <code>regex</code>'s <code>sequence</code> property is used to establish
+            the text to which the pattern is applied. Successive reads of
+            the <code>find</code> property returns <code>true</code> if and
+            until there are no more matches. When there is a match,
+            the <code>start</code> and <code>end</code> properties return
+            the position of the match in the sequence.
+          </p>
+          <p>
+            If a URL is matched then it is rendered with its own style like this:
+          </p>
+          <source>
+style baseStyle.urlStyle.theUrl;
+any   baseStyle.urlStyle.theUrl.urlText = midstring(BackChat.MsgText, urlRE.properties.start, urlRE.properties.end - 1);
+any styledURL.@style  = baseStyle.urlStyle.theUrl;
+any styledURL.@txt = baseStyle.urlStyle.theUrl.urlText;
+add(styledURL, atEnd);
+</source>
+          <p>
+            This is what's happening:
+          </p>
+          <ul>
+            <li>A new style, called <code>theUrl</code> is created as a child
+            style of <code>urlStyle</code>.</li>
+            <li>This style is given the child <code>urlText</code>, however
+            this is now a well-known key (which all begin with <code>@</code>).
+            It resides in the style but has no effect.</li>
+            <li>The text to be rendered and <code>theUrl</code> are associated
+            in the same way as above and added to the text pane's document.</li>
+          </ul>
+          <p>
+            All of this makes more sense when we look at the event
+            handlers <code>mouseOverUrl()</code> and <code>clickOverUrl()</code>.
+            In the case of a text pane Inq includes the style at the
+            character position of the mouse coordinates in the event. Thus, we
+            can pick up whether the mouse is over a URL, since the matched text
+            is contained within it and launch something if clicked.
+          </p>
+        </section>
+      </section>
+    </section>
+    <section id="tabprops">
+      <title>Tab Child Properties</title>
+      <p>
+        When discussing the Inq GUI hierarchy, we briefly mentioned
+        in <a href="../../primer/guibasics.html#hierarchies">GUI Basics</a>
+        the fact that Inq components that are children of tab panes have
+        various properties that then become active and relate to the
+        tab parent. These are as follows:
+      </p>
+      <dl>
+        <dt><code>tabBackground</code></dt>
+        <dd>The tab's background colour</dd>
+        <dt><code>tabForeground</code></dt>
+        <dd>The tab's foreground colour</dd>
+        <dt><code>tabIcon</code></dt>
+        <dd>The tab's icon</dd>
+        <dt><code>tabTitle</code></dt>
+        <dd>The text displayed in the tab</dd>
+        <dt><code>tabToolTip</code></dt>
+        <dd>The tab's tooltip</dd>
+      </dl>
+      <p>
+        The <code>chat</code> utility uses some of these properties either
+        directly or with <code>gProperty</code> bindings in <code>chattab.inq</code>.
+      </p>
+      <p>
+        <a href="runchat.html"><icon src="../images/nextpage.gif" alt="nextpage"/></a>
+      </p>
+    </section>
+  </body>
+</document>

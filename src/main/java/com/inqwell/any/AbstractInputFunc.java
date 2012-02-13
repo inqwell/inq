@@ -264,7 +264,7 @@ public abstract class AbstractInputFunc extends    AbstractNamedFunc
   {
     Map ret = AbstractComposite.eventIdMap();
     
-    ret.add (exec__, this);
+    ret.add (exec__, this.getFQName());
     ret.add (EventConstants.EVENT_TYPE, type);
     
     return ret;

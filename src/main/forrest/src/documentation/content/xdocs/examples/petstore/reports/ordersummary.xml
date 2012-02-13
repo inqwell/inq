@@ -1,0 +1,294 @@
+<?xml version="1.0"?>
+<ordersummary>
+  <report>
+    <title>Order Summary</title>
+    <disclaimer>Petstore UK plc lorem ipsum dolor sit amet, consectetuer adipiscing elit,&#010;sed diam nonummy nibh euismod tincidunt ut laoreet dolore magna aliquam erat volutpat. Ut&#010;wisi enim ad minim veniam, quis nostrud exerci tation ullamcorper suscipit lobortis nisl&#010;ut aliquip ex ea commodo consequat. Duis autem vel eum iriure dolor in hendrerit in&#010;vulputate velit esse molestie consequat, vel illum dolore eu feugiat nulla facilisis&#010;at vero eros et accumsan et iusto odio dignissim qui blandit praesent luptatum zzril&#010;delenit augue duis dolore te feugait nulla facilisi.</disclaimer>
+  </report>
+  <summarytable>
+    <caption>Your orders between 06 Feb 2011 and Today:</caption>
+    <from nodeset="examples.petstore.types.Order"></from>
+    <column field="Order" halign="center" typedef="examples.petstore.types.Order"></column>
+    <column field="OrderDate" typedef="examples.petstore.types.Order"></column>
+    <column field="TotalPrice" typedef="examples.petstore.types.Order"></column>
+  </summarytable>
+  <data>
+    <Account typedef="examples.petstore.types.Account">
+      <Status field="Status">OK</Status>
+      <Phone field="Phone">555-555-5555</Phone>
+      <ZIP field="ZIP">94303</ZIP>
+      <State field="State">CA</State>
+      <Email field="Email">acid@yourdomain.com</Email>
+      <Account field="Account">ACID</Account>
+      <FirstName field="FirstName">ABC</FirstName>
+      <Addr1 field="Addr1">901 San Antonio Road</Addr1>
+      <Addr2 field="Addr2">MS UCUP02-206</Addr2>
+      <Country field="Country">USA</Country>
+      <LastName field="LastName">XYX</LastName>
+      <City field="City">Palo Alto</City>
+    </Account>
+    <orders nodeset="examples.petstore.types.Order">
+      <child>
+        <Order typedef="examples.petstore.types.Order">
+          <BillState field="BillState">CA</BillState>
+          <BillCity field="BillCity">Palo Alto</BillCity>
+          <ShipZIP field="ShipZIP">94303</ShipZIP>
+          <TotalPrice field="TotalPrice">37.00</TotalPrice>
+          <Order field="Order">1001</Order>
+          <Account field="Account">ACID</Account>
+          <Courier field="Courier">PetsToYou</Courier>
+          <ShipAddr1 field="ShipAddr1">901 San Antonio Road</ShipAddr1>
+          <CardExp field="CardExp">12/2011</CardExp>
+          <ShipAddr2 field="ShipAddr2">MS UCUP02-206</ShipAddr2>
+          <CreditCard field="CreditCard">12121212</CreditCard>
+          <BillToLastName field="BillToLastName">XYX</BillToLastName>
+          <BillToFirstName field="BillToFirstName">ABC</BillToFirstName>
+          <CardType field="CardType">VISA</CardType>
+          <ShipToFirstName field="ShipToFirstName">ABC</ShipToFirstName>
+          <OrderDate field="OrderDate">06 Mar 2011</OrderDate>
+          <ShipCity field="ShipCity">Palo Alto</ShipCity>
+          <BillAddr1 field="BillAddr1">901 San Antonio Road</BillAddr1>
+          <BillAddr2 field="BillAddr2">MS UCUP02-206</BillAddr2>
+          <Locale field="Locale">en</Locale>
+          <ShipCountry field="ShipCountry">USA</ShipCountry>
+          <BillCountry field="BillCountry">USA</BillCountry>
+          <ShipToLastName field="ShipToLastName">XYX</ShipToLastName>
+          <ShipState field="ShipState">CA</ShipState>
+          <Status field="Status">O</Status>
+          <BillZIP field="BillZIP">94303</BillZIP>
+        </Order>
+      </child>
+      <child>
+        <Order typedef="examples.petstore.types.Order">
+          <BillState field="BillState">CA</BillState>
+          <BillCity field="BillCity">Palo Alto</BillCity>
+          <ShipZIP field="ShipZIP">94303</ShipZIP>
+          <TotalPrice field="TotalPrice">608.48</TotalPrice>
+          <Order field="Order">1002</Order>
+          <Account field="Account">ACID</Account>
+          <Courier field="Courier">PetsToYou</Courier>
+          <ShipAddr1 field="ShipAddr1">901 San Antonio Road</ShipAddr1>
+          <CardExp field="CardExp">1/2011</CardExp>
+          <ShipAddr2 field="ShipAddr2">MS UCUP02-206</ShipAddr2>
+          <CreditCard field="CreditCard">123123123342</CreditCard>
+          <BillToLastName field="BillToLastName">XYX</BillToLastName>
+          <BillToFirstName field="BillToFirstName">ABC</BillToFirstName>
+          <CardType field="CardType">MASTER</CardType>
+          <ShipToFirstName field="ShipToFirstName">ABC</ShipToFirstName>
+          <OrderDate field="OrderDate">06 Mar 2011</OrderDate>
+          <ShipCity field="ShipCity">Palo Alto</ShipCity>
+          <BillAddr1 field="BillAddr1">901 San Antonio Road</BillAddr1>
+          <BillAddr2 field="BillAddr2">MS UCUP02-206</BillAddr2>
+          <Locale field="Locale">en</Locale>
+          <ShipCountry field="ShipCountry">USA</ShipCountry>
+          <BillCountry field="BillCountry">USA</BillCountry>
+          <ShipToLastName field="ShipToLastName">XYX</ShipToLastName>
+          <ShipState field="ShipState">CA</ShipState>
+          <Status field="Status">O</Status>
+          <BillZIP field="BillZIP">94303</BillZIP>
+        </Order>
+      </child>
+      <total>
+        <Order typedef="examples.petstore.types.Order">
+          <BillState field="BillState"></BillState>
+          <BillCity field="BillCity"></BillCity>
+          <ShipZIP field="ShipZIP"></ShipZIP>
+          <TotalPrice field="TotalPrice">£645.48</TotalPrice>
+          <Order field="Order"></Order>
+          <Account field="Account"></Account>
+          <Courier field="Courier"></Courier>
+          <ShipAddr1 field="ShipAddr1"></ShipAddr1>
+          <CardExp field="CardExp"></CardExp>
+          <ShipAddr2 field="ShipAddr2"></ShipAddr2>
+          <CreditCard field="CreditCard"></CreditCard>
+          <BillToLastName field="BillToLastName"></BillToLastName>
+          <BillToFirstName field="BillToFirstName"></BillToFirstName>
+          <CardType field="CardType"></CardType>
+          <ShipToFirstName field="ShipToFirstName"></ShipToFirstName>
+          <OrderDate field="OrderDate"></OrderDate>
+          <ShipCity field="ShipCity"></ShipCity>
+          <BillAddr1 field="BillAddr1"></BillAddr1>
+          <BillAddr2 field="BillAddr2"></BillAddr2>
+          <Locale field="Locale"></Locale>
+          <ShipCountry field="ShipCountry"></ShipCountry>
+          <BillCountry field="BillCountry"></BillCountry>
+          <ShipToLastName field="ShipToLastName"></ShipToLastName>
+          <ShipState field="ShipState"></ShipState>
+          <Status field="Status"></Status>
+          <BillZIP field="BillZIP"></BillZIP>
+        </Order>
+      </total>
+    </orders>
+  </data>
+  <INQmetadata>
+    <INQtypedef INQfqname="examples.petstore.types.Order">
+      <INQfield INQname="BillState">
+        <INQwidth INQname="BillState">2</INQwidth>
+        <INQlabel INQname="BillState">State</INQlabel>
+      </INQfield>
+      <INQfield INQname="BillCity">
+        <INQwidth INQname="BillCity">12</INQwidth>
+        <INQlabel INQname="BillCity">City</INQlabel>
+      </INQfield>
+      <INQfield INQname="ShipZIP">
+        <INQwidth INQname="ShipZIP">5</INQwidth>
+        <INQlabel INQname="ShipZIP">ZIP</INQlabel>
+      </INQfield>
+      <INQfield INQname="TotalPrice">
+        <INQisnumeric>true</INQisnumeric>
+        <INQwidth INQname="TotalPrice">9</INQwidth>
+        <INQlabel INQname="TotalPrice">Total Price</INQlabel>
+      </INQfield>
+      <INQfield INQname="Order">
+        <INQisnumeric>true</INQisnumeric>
+        <INQwidth INQname="Order">10</INQwidth>
+        <INQlabel INQname="Order">Order Number</INQlabel>
+      </INQfield>
+      <INQfield INQname="Account">
+        <INQwidth INQname="Account">16</INQwidth>
+        <INQlabel INQname="Account">Account</INQlabel>
+      </INQfield>
+      <INQfield INQname="Courier">
+        <INQwidth INQname="Courier">10</INQwidth>
+        <INQlabel INQname="Courier">Courier</INQlabel>
+      </INQfield>
+      <INQfield INQname="ShipAddr1">
+        <INQwidth INQname="ShipAddr1">16</INQwidth>
+        <INQlabel INQname="ShipAddr1">Address Line 1</INQlabel>
+      </INQfield>
+      <INQfield INQname="CardExp">
+        <INQwidth INQname="CardExp">7</INQwidth>
+        <INQlabel INQname="CardExp">Expiry Date</INQlabel>
+      </INQfield>
+      <INQfield INQname="ShipAddr2">
+        <INQwidth INQname="ShipAddr2">16</INQwidth>
+        <INQlabel INQname="ShipAddr2">Address Line 2</INQlabel>
+      </INQfield>
+      <INQfield INQname="CreditCard">
+        <INQwidth INQname="CreditCard">16</INQwidth>
+        <INQlabel INQname="CreditCard">Card Number</INQlabel>
+      </INQfield>
+      <INQfield INQname="BillToLastName">
+        <INQwidth INQname="BillToLastName">10</INQwidth>
+        <INQlabel INQname="BillToLastName">Last Name</INQlabel>
+      </INQfield>
+      <INQfield INQname="BillToFirstName">
+        <INQwidth INQname="BillToFirstName">10</INQwidth>
+        <INQlabel INQname="BillToFirstName">First Name</INQlabel>
+      </INQfield>
+      <INQfield INQname="CardType">
+        <INQwidth INQname="CardType">10</INQwidth>
+        <INQlabel INQname="CardType">Card Type</INQlabel>
+        <INQenum INQinternal="VISA">Visa/Delta/Electron</INQenum>
+        <INQenum INQinternal="MASTER">MasterCard/EuroCard</INQenum>
+        <INQenum INQinternal="AMEX">American Express</INQenum>
+        <INQenum INQinternal="DINERS">Diners Club</INQenum>
+      </INQfield>
+      <INQfield INQname="ShipToFirstName">
+        <INQwidth INQname="ShipToFirstName">10</INQwidth>
+        <INQlabel INQname="ShipToFirstName">First Name</INQlabel>
+      </INQfield>
+      <INQfield INQname="OrderDate">
+        <INQwidth INQname="OrderDate">12</INQwidth>
+        <INQlabel INQname="OrderDate">Date</INQlabel>
+      </INQfield>
+      <INQfield INQname="ShipCity">
+        <INQwidth INQname="ShipCity">12</INQwidth>
+        <INQlabel INQname="ShipCity">Shipping
+City</INQlabel>
+      </INQfield>
+      <INQfield INQname="BillAddr1">
+        <INQwidth INQname="BillAddr1">16</INQwidth>
+        <INQlabel INQname="BillAddr1">Address Line 1</INQlabel>
+      </INQfield>
+      <INQfield INQname="BillAddr2">
+        <INQwidth INQname="BillAddr2">16</INQwidth>
+        <INQlabel INQname="BillAddr2">Address Line 2</INQlabel>
+      </INQfield>
+      <INQfield INQname="Locale">
+        <INQwidth INQname="Locale">2</INQwidth>
+        <INQlabel INQname="Locale">Locale</INQlabel>
+      </INQfield>
+      <INQfield INQname="ShipCountry">
+        <INQwidth INQname="ShipCountry">16</INQwidth>
+        <INQlabel INQname="ShipCountry">Country</INQlabel>
+      </INQfield>
+      <INQfield INQname="BillCountry">
+        <INQwidth INQname="BillCountry">16</INQwidth>
+        <INQlabel INQname="BillCountry">Country</INQlabel>
+      </INQfield>
+      <INQfield INQname="ShipToLastName">
+        <INQwidth INQname="ShipToLastName">10</INQwidth>
+        <INQlabel INQname="ShipToLastName">Last Name</INQlabel>
+      </INQfield>
+      <INQfield INQname="ShipState">
+        <INQwidth INQname="ShipState">2</INQwidth>
+        <INQlabel INQname="ShipState">State</INQlabel>
+      </INQfield>
+      <INQfield INQname="Status">
+        <INQwidth INQname="Status">10</INQwidth>
+        <INQlabel INQname="Status">Status</INQlabel>
+        <INQenum INQinternal="O">Open</INQenum>
+        <INQenum INQinternal="C">Cancelled</INQenum>
+        <INQenum INQinternal="A">Allocated</INQenum>
+        <INQenum INQinternal="S">Shipped</INQenum>
+      </INQfield>
+      <INQfield INQname="BillZIP">
+        <INQwidth INQname="BillZIP">5</INQwidth>
+        <INQlabel INQname="BillZIP">ZIP</INQlabel>
+      </INQfield>
+    </INQtypedef>
+    <INQtypedef INQfqname="examples.petstore.types.Account">
+      <INQfield INQname="Status">
+        <INQwidth INQname="Status">10</INQwidth>
+        <INQlabel INQname="Status">Status</INQlabel>
+        <INQenum INQinternal="OK">OK</INQenum>
+        <INQenum INQinternal="SU">Suspended</INQenum>
+        <INQenum INQinternal="CA">Cancelled</INQenum>
+      </INQfield>
+      <INQfield INQname="Phone">
+        <INQwidth INQname="Phone">16</INQwidth>
+        <INQlabel INQname="Phone">Phone</INQlabel>
+      </INQfield>
+      <INQfield INQname="ZIP">
+        <INQwidth INQname="ZIP">5</INQwidth>
+        <INQlabel INQname="ZIP">ZIP</INQlabel>
+      </INQfield>
+      <INQfield INQname="State">
+        <INQwidth INQname="State">2</INQwidth>
+        <INQlabel INQname="State">State</INQlabel>
+      </INQfield>
+      <INQfield INQname="Email">
+        <INQwidth INQname="Email">20</INQwidth>
+        <INQlabel INQname="Email">Email</INQlabel>
+      </INQfield>
+      <INQfield INQname="Account">
+        <INQwidth INQname="Account">16</INQwidth>
+        <INQlabel INQname="Account">Account</INQlabel>
+      </INQfield>
+      <INQfield INQname="FirstName">
+        <INQwidth INQname="FirstName">10</INQwidth>
+        <INQlabel INQname="FirstName">First Name</INQlabel>
+      </INQfield>
+      <INQfield INQname="Addr1">
+        <INQwidth INQname="Addr1">16</INQwidth>
+        <INQlabel INQname="Addr1">Address Line 1</INQlabel>
+      </INQfield>
+      <INQfield INQname="Addr2">
+        <INQwidth INQname="Addr2">16</INQwidth>
+        <INQlabel INQname="Addr2">Address Line 2</INQlabel>
+      </INQfield>
+      <INQfield INQname="Country">
+        <INQwidth INQname="Country">16</INQwidth>
+        <INQlabel INQname="Country">Country</INQlabel>
+      </INQfield>
+      <INQfield INQname="LastName">
+        <INQwidth INQname="LastName">10</INQwidth>
+        <INQlabel INQname="LastName">Last Name</INQlabel>
+      </INQfield>
+      <INQfield INQname="City">
+        <INQwidth INQname="City">12</INQwidth>
+        <INQlabel INQname="City">City</INQlabel>
+      </INQfield>
+    </INQtypedef>
+  </INQmetadata>
+</ordersummary>

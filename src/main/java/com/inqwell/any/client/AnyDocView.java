@@ -59,7 +59,7 @@ import com.inqwell.any.Transaction;
 import com.inqwell.any.beans.AnyEvent;
 import com.inqwell.any.beans.TextF;
 
-public abstract class AnyDocView extends    AnyComponent
+public abstract class AnyDocView extends    AnySimpleComponent
                                  implements TextF
 {
 	private AnyDocument document_;
@@ -116,15 +116,6 @@ public abstract class AnyDocView extends    AnyComponent
     documentEventTypes__.add(EventConstants.D_REMOVE);
   }
   
-  public AnyDocView()
-  {
-	}
-
-  public AnyDocView(Container c)
-  {
-  	super(c);
-	}
-
   public void setValidateInsert(Any insert)
   {
     AnyFuncHolder.FuncHolder insertExpr =

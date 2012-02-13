@@ -14,7 +14,7 @@
 package com.inqwell.any;
 
 /**
- * Cancel a timer task previously created with <code>ScheduleAt</code>.
+ * Manually fire a timer task.
  * <p>
  * @author $Author: sanderst $
  * @version $Revision: 1.2 $

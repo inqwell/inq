@@ -8,9 +8,11 @@
 
 package com.inqwell.any;
 
-import java.util.Iterator;
 import java.util.HashMap;
+
 import com.inqwell.any.debug.DebugMap;
+import com.inqwell.any.identity.AnyMapDecor;
+import com.inqwell.any.identity.AnyMapEgDecor;
 
 /**
  * AnyMap is a general collection class mapping keys of type Any to
@@ -68,12 +70,34 @@ public abstract class AnyMap extends    PropertyAccessMap
     if (a == this)
       return true;
 
-    if (!(a instanceof Map))
+    if (!(a instanceof AnyMap))
       return false;
 
-    Map m = (Map)a;
+    AnyMap m = (AnyMap)a;
 
     return getMap().equals(m.getMap());
+  }
+
+  public boolean valueEquals(Map m)
+  {
+    if (m == this)
+      return true;
+
+    if (m instanceof AnyMap)
+    {
+      return value_.equals(((AnyMap)m).getMap());
+    }
+    else if (m instanceof AnyMapEgDecor)
+    {
+      // Not commutative in this case
+      return m.valueEquals(this);
+    }
+    else if (m instanceof AnyMapDecor)
+    {
+      // Not commutative in this case
+      return m.valueEquals(this);
+    }
+    return this.equals(m);
   }
 
   public Object clone() throws CloneNotSupportedException
@@ -145,10 +169,6 @@ public abstract class AnyMap extends    PropertyAccessMap
 		if (beforeAdd(key, value))
 		{
       handleDuplicates(key);
-	//		if (value == null)
-	//			throw new IllegalArgumentException("Adding null value with key " + key);
-	//		if (key == null)
-	//			throw new IllegalArgumentException("Adding value with null key " + value);
 	    value_.put (key, value);
 			afterAdd(key, value);
 	  }
@@ -213,7 +233,7 @@ public abstract class AnyMap extends    PropertyAccessMap
     return a;
   }
 
-  public java.util.Map getMap ()
+  protected java.util.Map getMap()
   {
     return value_;
   }

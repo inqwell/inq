@@ -1,0 +1,649 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright 2006 Inqwell Ltd.
+-->
+<!DOCTYPE document PUBLIC "-//APACHE//DTD Documentation V2.0//EN" "http://forrest.apache.org/dtd/document-v20.dtd">
+<document>
+  <header>
+    <title>Expressions</title>
+  </header>
+  <body>
+    <section id="intro">
+      <title>Expressions</title>
+      <p>
+        An expression is any executable construct, which is everything in the
+        grammar except:
+      </p>
+      <ul>
+        <li>a <code>function</code> or <code>service</code> definition</li>
+        <li>a <code>typedef</code> or <code>resource</code> declaration</li>
+        <li>the null statemment, "<code>;</code>"</li>
+      </ul>
+      <p>
+        These are termed <em>non-executables</em>.
+        The <code>function</code>, <code>service</code>, <code>typedef</code>
+        and <code>resource</code> constructs have the effect of creating their
+        entity in the Inq environment where the script was parsed. The
+        null statement has no effect at all.
+      </p>
+      <p>
+        An expression is evaluated to yield a value and to cause any effect
+        it may have, such as creating new nodes or altering existing values.
+      </p>
+    </section>
+    <section id="constvar">
+      <title>Constants and Variables</title>
+      <p>
+        An expression evaluates to a constant value if it is either:
+      </p>
+      <ul>
+        <li>a <a href="types.html#value-types">value type</a>
+          constant;</li>
+        <li>a node that is an alias to a value type constant;</li>
+        <li>a node that is an alias to a variable where mutation
+          via this alias would compromise the environment, known
+          as <em>field ripping</em> and discussed in the
+          section <a href="txn.html">Transactions</a>.</li>
+      </ul>
+      <p>
+        An alias to a value type constant is created by an anonymous
+        declaration to a literal value:
+      </p>
+      <source>
+any consts.nominalTemp = 25;
+</source>
+      <p>
+        or to a function whose return value is such:
+      </p>
+      <source>
+any constValue = call returnsConstValue();
+</source>
+      <p>
+        A variable is changed by one of the mutating operators
+      </p>
+      <ul>
+        <li>assignment</li>
+        <li>pre/post increment/decrement</li>
+      </ul>
+      <p>
+        and the <code>setnull()</code> function.
+        Mutation can only occur through a
+        path reference, that is an expression of the form
+      </p>
+      <source>
+[&lt;prefix&gt;]node1.node2.node3
+</source>
+      <p>
+        where the optional prefix denotes one of the
+        specific <a href="nodes.html#pathprefices">node spaces</a>.
+      </p>
+      <section id="perror">
+        <title>Parse-time Assignment Errors</title>
+        <p>
+          Although the orthogonal nature of the Inq language suggests
+          that it should be possible, assignment to an arbitrary
+          expression is an error. For example, all functions have a
+          return value. The script
+          below is semantically equivalent to the
+          statement <code>$this.container.currentTemp = 27;</code>
+        </p>
+        <source>
+local function currentTemp()
+{
+  $this.container.currentTemp;
+}
+
+.
+.
+
+call currentTemp() = 27;   // parse-time error
+</source>
+      </section>
+      <section id="rerror">
+        <title>Run-time Assignment Errors</title>
+        <p>
+          The Inq run-time intervenes in the evaluation of a mutation
+          to perform more than just its effect when the
+          containing map
+        </p>
+        <ul>
+          <li>is a managed instance in the server environment</li>
+          <li>contains one or more variables that have been bound
+            to a GUI view with <code>renderinfo</code> in the
+            client environment.</li>
+        </ul>
+        <p>
+          In these cases Inq respectively enters the instance into
+          the current transaction and raises a model event to
+          refresh the GUI view. To correct the parse error in the
+          above example we can rewrite the assignment as follows:
+        </p>
+        <source>
+any v = call currentTemp();
+v = 27;  // run-time error
+</source>
+        <p>
+          However, if <code>$this.container</code> is being managed
+          by Inq then obtaining another reference to the
+          value is an occurrence of <a href="txn.html#ripping">field ripping</a>
+          and performing mutation via this reference
+          generates a run-time error. Field ripping can occur in either of
+          the following situations
+        </p>
+        <ul>
+          <li>an <a href="types.html#anonymousdecl">anonymous declaration</a></li>
+          <li>passing a <a href="module.html#byrefvalue">by-reference</a>
+            argument to a function</li>
+        </ul>
+        <p>
+          Though not, in itself, illegal, field ripping makes
+          a constant out of the underlying variable. The value
+          will be seen via the alias, but mutations
+          through it would circumvent the run-time management
+          and so are prevented. Aliases through unmanaged containers
+          are not subject to any checks and do not generate
+          mutation exceptions.
+        </p>
+      </section>
+    </section>
+    <section id="operators">
+      <title>Operators</title>
+      <p>
+        Individual expression terms are combined with operators to
+        create expression groups. The following table lists the operators in
+        order of their evaluation precedence:
+      </p>
+      <table>
+        <caption>Operator Precedence, Highest to Lowest</caption>
+        <tr>
+          <th>Operator</th>
+          <th>Description</th>
+        </tr>
+        <tr>
+          <td><code>&lt;expression&gt;</code><br/>
+          <code>()</code><br/>
+          <code>++</code><br/>
+          <code>--</code>
+          </td>
+          <td>A built-in function or construct<br/>
+          Grouping parentheses<br/>
+          Post-increment<br/>
+          Post-decrement
+          </td>
+        </tr>
+        <tr>
+          <td><code>-</code><br/>
+          <code>!</code><br/>
+          <code>++</code><br/>
+          <code>--</code>
+          </td>
+          <td>Unary Minus<br/>
+          Logical Not<br/>
+          Pre-increment<br/>
+          Pre-decrement
+          </td>
+        </tr>
+        <tr>
+          <td><code>^^</code>
+          </td>
+          <td>Exponentiation
+          </td>
+        </tr>
+        <tr>
+          <td><code>*</code><br/>
+          <code>/</code><br/>
+          <code>%</code>
+          </td>
+          <td>Multiplication<br/>
+          Division<br/>
+          Remainder
+          </td>
+        </tr>
+        <tr>
+          <td><code>+</code><br/>
+          <code>-</code>
+          </td>
+          <td>Binary addition<br/>
+          and subtraction
+          </td>
+        </tr>
+        <tr>
+          <td>
+          <code>&lt;</code>
+          <code>&lt;=</code><br/>
+          <code>&gt;</code>
+          <code>&gt;=</code><br/>
+          <code>~~</code>
+          </td>
+          <td>
+          Less than /
+          Less than or equal to<br/>
+          Greater than /
+          Greater than or equal to<br/>
+          Regular Expression match
+          </td>
+        </tr>
+        <tr>
+          <td><code>==</code><br/>
+          <code>!=</code>
+          </td>
+          <td>Equal to<br/>
+          Not equal to
+          </td>
+        </tr>
+        <tr>
+          <td><code>&amp;&amp;</code></td>
+          <td>Logical AND</td>
+        </tr>
+        <tr>
+          <td><code>||</code></td>
+          <td>Logical OR</td>
+        </tr>
+        <tr>
+          <td><code>? :</code></td>
+          <td>Ternary</td>
+        </tr>
+        <tr>
+          <td><code>=</code><br/>
+          <code>+=</code>
+          <code>-=</code><br/>
+          <code>*=</code>
+          <code>/=</code>
+          <code>%=</code><br/>
+          <code>&amp;&amp;=</code>
+          <code>||=</code>
+          </td>
+          <td>Assignment<br/>
+          Addition/subtraction assignment<br/>
+          Multiplication/division/remainder assignment<br/>
+          Logical AND/OR assignment
+          </td>
+        </tr>
+      </table>
+      <p>
+        With the exception of assignment, all operators associate
+        left-to-right, that is evaluation of an
+        expression occurs in this direction within a precedence group.
+        Assignment associates right-to-left.
+      </p>
+    </section>
+    <section id="evalorder">
+      <title>Order of Evaluation</title>
+      <p>
+        All terms of an expression are evaluated unless the they are
+        operands to the operators <code>&amp;&amp;</code> (logical
+        AND), <code>||</code> (logical OR) or <code>?:</code> (ternary).
+      </p>
+      <section id="mbinary">
+        <title>Mathematical Binary Operators</title>
+        <p>
+          A mathematical binary operator is processed in the following stages:
+        </p>
+        <ol>
+          <li>the left hand operand is evaluated;</li>
+          <li>the right hand operand is evaluated;</li>
+          <li>if either operand
+            is <a href="types.html#nullconst">unresolved null</a>
+          an exception is thrown;</li>
+          <li>if either operand is the null value the result of
+            the operation is the null constant;</li>
+          <li>if the operands are of different types, the operand
+            of lower <a href="types.html#value-types">rank</a>
+            is converted to that of the higher;</li>
+          <li>the operation is performed.</li>
+        </ol>
+        <p>
+          The result of the operation is a value of the same (or highest)
+          rank, except for the relational operators, which return
+          a <code>boolean</code>.
+        </p>
+      </section>
+      <section id="cbinary">
+        <title>Conditional Operators</title>
+        <p>
+          A conditional binary operator is processed in the following stages:
+        </p>
+        <ol>
+          <li>the left hand operand is evaluated
+            and <a href="types.html#convbool">converted to a boolean value</a>
+            if required;</li>
+          <li>if the operator is <code>&amp;&amp;</code> and the left
+            operand evaluates to <code>false</code> the operation
+          returns <code>false</code>;</li>
+          <li>if the operator is <code>||</code> and the left operand
+            evaluates to <code>true</code> the operation
+          returns <code>true</code>;</li>
+          <li>the right hand operand is evaluated
+            and <a href="types.html#convbool">converted to a boolean value</a>
+            if required;</li>
+          <li>if an operand
+            is <a href="types.html#nullconst">unresolved null</a>
+          it is equivalent to <code>false</code>;</li>
+          <li>if either operand is the null value the result of
+            the operation is <code>false</code>;</li>
+          <li>the operation is performed.</li>
+        </ol>
+        <p>
+          The ternary operator evaluates its condition. If the result
+          is <code>true</code> the second operand is evaluated and its
+          result returned. If it is <code>false</code> the third operand
+          is evaluated. The second and third operands do not have to
+          return results of the same type.
+        </p>
+      </section>
+      <section id="opother">
+        <title>Other Operators</title>
+        <p>
+          A number of other operations are defined that, by their appearance,
+          might have been deemed built-in functions. They are operators
+          because, unlike functions
+        </p>
+        <ul>
+          <li>multiple operands are evaluated left-to-right;</li>
+          <li>numeric operands can be of any type.</li>
+        </ul>
+        <table>
+          <caption>Other Operators</caption>
+            <tr>
+              <th>Operator</th>
+              <th>Description</th>
+              <th>Return Type</th>
+            </tr>
+            <tr>
+              <td><code>sqrt(x)</code></td>
+              <td>Returns the correctly rounded positive square root of the argument</td>
+              <td><code>double</code></td>
+            </tr>
+            <tr>
+              <td><code>sin(x)</code></td>
+              <td>Returns the trigonometric sine of an angle. The argument is in radians</td>
+              <td><code>double</code></td>
+            </tr>
+            <tr>
+              <td><code>cos(x)</code></td>
+              <td>Returns the trigonometric cosine of an angle. The argument is in radians</td>
+              <td><code>double</code></td>
+            </tr>
+            <tr>
+              <td><code>tan(x)</code></td>
+              <td>Returns the trigonometric tangent of an angle. The argument is in radians</td>
+              <td><code>double</code></td>
+            </tr>
+            <tr>
+              <td><code>asin(x)</code></td>
+              <td>Returns the arc sine of an angle, in the range of -pi/2 through pi/2</td>
+              <td><code>double</code></td>
+            </tr>
+            <tr>
+              <td><code>acos(x)</code></td>
+              <td>Returns the arc cosine of an angle, in the range of 0.0 through pi</td>
+              <td><code>double</code></td>
+            </tr>
+            <tr>
+              <td><code>atan(x)</code></td>
+              <td>Returns the arc tangent of an angle, in the range of -pi/2 through pi/2</td>
+              <td><code>double</code></td>
+            </tr>
+            <tr>
+              <td><code>ceil(x)</code></td>
+              <td>Returns the smallest (closest to negative infinity) double value that is not
+                less than the argument and is equal to a mathematical integer</td>
+              <td><code>double</code></td>
+            </tr>
+            <tr>
+              <td><code>floor(x)</code></td>
+              <td>Returns the largest (closest to positive infinity) double value that is not
+                greater than the argument and is equal to a mathematical integert</td>
+              <td><code>double</code></td>
+            </tr>
+            <tr>
+              <td><code>todegrees(x)</code></td>
+              <td>Converts an angle measured in radians to an approximately equivalent angle
+                measured in degrees</td>
+              <td><code>double</code></td>
+            </tr>
+            <tr>
+              <td><code>toradians(x)</code></td>
+              <td>Converts an angle measured in degrees to an approximately equivalent
+                angle measured in radians</td>
+              <td><code>double</code></td>
+            </tr>
+            <tr>
+              <td><code>exp(x)</code></td>
+              <td>Returns Euler's number <em>e</em> raised to the power of the argument</td>
+              <td><code>double</code></td>
+            </tr>
+            <tr>
+              <td><code>logn(x)</code></td>
+              <td>Returns the natural logarithm (base <em>e</em>) of the argument</td>
+              <td><code>double</code></td>
+            </tr>
+            <tr>
+              <td><code>round(x)</code></td>
+              <td>Returns the closest integer to the argument</td>
+              <td><code>int</code> if the argument is of <code>float</code> or lower
+                rank, <code>long</code> otherwise</td>
+            </tr>
+            <tr>
+              <td><code>max(x, y)</code></td>
+              <td>Returns the argument <code>x</code> or <code>y</code>, whichever has the greater
+                value</td>
+              <td>One of the two arguments is returned, regardless of whether either
+                was converted to a higher rank to make the comparison</td>
+            </tr>
+        </table>
+      </section>
+    </section>
+    <section id="callfunc">
+      <title>Function Calls</title>
+      <p>
+        Function calls can be divided into two categories
+      </p>
+      <ul>
+        <li>calls to scripted functions, defined with the <code>function</code>
+          construct;</li>
+        <li>calls to built-in functions.</li>
+      </ul>
+      <p>
+        In either case, Inq does not define the order of evaluation of
+        the function arguments, so applications cannot rely on side-effects
+        that make one argument dependent on another.
+      </p>
+      <section id="scriptfunc">
+        <title>Scripted Functions</title>
+        <p>
+          Functions are described
+          in <a href="module.html">Modules, Functions and Services</a>.
+          Each argument in a <code>call</code> statement is evaluated
+          in no particular order. Argument passing then proceeds as
+          follows:
+        </p>
+        <ol>
+          <li>If the argument evaluates
+          to <a href="types.html#nullconst">unresolved null</a> the
+          corresponding argument is unavailable in the called function,
+          that is references to it will result in unresolved null.</li>
+          <li>The function definition determines whether the argument is
+          passed by <a href="module.html#byrefvalue">value or by reference</a>.
+          If passed by value the
+          argument is copied to a value of the type of the defined argument.
+          No ranking alignment takes place, so the argument value must
+          be <a href="types.html#conversion">compatible</a> with the
+          defined type. If the argument evaluates to the null
+          constant (or is the null value for the type), the defined
+          argument will be the null value for its type.</li>
+          <li>If passed by reference, the value itself is available in the
+          called function and mutations, subject to exceptions because
+          of <a href="txn.html#ripping">field ripping</a>, will be visible
+          in it after the call returns.</li>
+        </ol>
+
+      </section>
+      <section id="builtinfunc">
+        <title>Built-in Functions</title>
+        <p>
+          The order of argument evaluation and even whether an argument will
+          be evaluated is not defined.
+          In some cases, a built-in function requires an argument to actually
+          be (rather than just convertible to) a particular value or container
+          type.
+        </p>
+        <p>
+          Arguments to built-in functions are always passed by reference.
+          Unless explicitly stated in a function's synopsis,
+          arguments are not mutated.
+        </p>
+      </section>
+    </section>
+    <section id="defequal">
+      <title>Definition of Equality</title>
+      <p>
+      </p>
+      <section id="valequal">
+        <title>Equality Between Value Types</title>
+        <p>
+          The equality operator performs ranking alignment of its operands, so
+          two values can be equal regardless of whether they are the same
+          type. The following example compares values of the <code>double</code>
+          and <code>int</code> types:
+        </p>
+        <source>
+sqrt(225) == 15;
+<strong>true</strong>
+</source>
+        <section id="decequal">
+          <title>Fixed Precision Decimals</title>
+          <p>
+            A fixed precision decimal value can only be compared equal to another
+            fixed precision decimal and values with differing precision will
+            always be not equal:
+          </p>
+          <source>
+decimal:2 d2 = "1.23";
+<strong>1.23</strong>
+decimal:3 d3 = "1.230";
+<strong>1.230</strong>
+d2 == d3;
+<strong>false</strong>
+</source>
+        </section>
+        <section id="strequal">
+          <title>Strings</title>
+          <p>
+            Two string values are equal if they represent the same sequence of
+            characters as each other.
+          </p>
+        </section>
+        <section id="nullequal">
+          <title>Null values and The null Constant</title>
+          <p>
+            If two values are the null value for their type then they are equal,
+            whether or not they are of the same type.
+          </p>
+          <p>
+            A value that is null is equal to the null constant:
+          </p>
+          <source>
+string s = null;
+
+int i;
+<strong>0</strong>
+setnull(i);
+
+i == s;   // i and s are both null
+<strong>true</strong>
+
+i == null;
+<strong>true</strong>
+
+isnull(s);
+<strong>true</strong>
+</source>
+        </section>
+      </section>
+      <section id="containerequal">
+        <title>Equality Of Container Types</title>
+        <p>
+          In general, containers are considered equal if they are of the
+          same generic type (<code>map</code>, <code>array</code>
+          or <code>set</code>) and contain the same number of children
+          whose values are equal. The equality operator is applied to the
+          container operands and recursively to any children that are,
+          themselves, containers, to the deepest level.
+        </p>
+        <p>
+          For maps, whose children are keyed, there is the additional
+          requirement that the key set in the two operands must also
+          be equal.
+        </p>
+        <p>
+          Arrays are always ordered, so two arrays are
+          only equal if their children are equal and occur in the same order.
+          Though the hash-based containers can support ordering, this is
+          not considered when evaluating equality.
+        </p>
+        <p>
+          If the children being compared at any point during the evaluation
+          are value types then <em>no</em> ranking alignment takes place.
+          Consider the following:
+        </p>
+        <source>
+array a1 = (2, 3);    // both values of type int
+<strong>[2, 3]</strong>
+array a2 = (2, 3l);   // one int, one long
+<strong>[2, 3]</strong>
+a1 == a2;
+<strong>false</strong>
+</source>
+        <p>
+          Here is another example that shows different map types
+          compare equal and independently of any ordering
+        </p>
+        <source>
+omap om1;         // Explicitly declare an ordered map
+<strong>{} []</strong>
+any om1.a = 4;    // Put in an integer and a float as children "a" and "b"
+<strong>4</strong>
+any om1.b=2.0f;
+<strong>2.0</strong>
+any sm1.a=4;      // The smap in implicitly created by these declarations
+<strong>4</strong>
+any sm1.b=2.0f;
+<strong>2.0</strong>
+
+// Just display the two maps. The omap shows the ordering
+// of the children, which is as they were inserted
+sm1;
+<strong>{a=4, b=2.0}</strong>
+om1;
+<strong>{a=4, b=2.0} [a, b]</strong>
+
+// Compare them
+om1 == sm1;
+<strong>true</strong>
+
+// Sort the ordered map. The maps are still equal
+sort(om1, $this);
+<strong>{a=4, b=2.0} [b, a]</strong>
+om1 == sm1;
+<strong>true</strong>
+
+// Of course, equality is commutative
+sm1 == om1;
+<strong>true</strong>
+</source>
+      </section>
+    </section>
+    <section id="parserexec">
+      <title>Parser Execution</title>
+      <p>
+        Irrespective of
+        its <a href="invoking.html#inq-modes">mode of operation</a>, the
+        parser executes statements as they are parsed. The non-executables
+        of <code>function</code> and <code>service</code> definitions
+        are placed into their respective name spaces for the package of the
+        defining parse module.
+      </p>
+    </section>
+  </body>
+</document>

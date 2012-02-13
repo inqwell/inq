@@ -1,0 +1,81 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * Inqwell Job Control Package
+ *
+ * Common definitions.
+ *
+ *
+ * NOTE - BE CAREFUL NOT TO OVERRIDE PROPER PERSISTENT TYPE NAMES!!!!
+ *
+ * Private & Confidential Copyright � Inqwell Ltd 2007.
+ * All rights reserved.
+ */
+package inq.jobcontrol;
+
+#include <i18n.inq>
+
+typedef date JobTime     width=15 format="dd MMM yyyy HH:mm:ss";
+typedef long JobDuration width=15;
+
+typedef string Description width=32;
+
+typedef	string Active = "N" label = {i18n}.jc.job.ACTIVE
+(
+  Y  : "Y" : "Active";
+  N  : "N" : "Inactive";
+);
+
+/**
+ * A process running a box of jobs can either be running one of them
+ * or waiting for the schedule time of the next job in sequence.
+ */
+typedef string JobState label = {i18n}.jc.job.JOB_STATE
+(
+  IDLE    : "I" : "Idle";
+  RUNNING : "R" : "Running";
+  WAITING : "W" : "Waiting";
+);
+
+/**
+ * Whether a box will continue to run subsequent jobs if the current one
+ * returns an error.
+ */
+typedef string ContinueOnError = "C" label = {i18n}.jc.job.ON_BOX_ERROR
+(
+  ABORT    : "A" : "Abort";
+  CONTINUE : "C" : "Continue";
+);
+
+/**
+ * Whether a box will run its child jobs according to their scheduled start
+ * time (when specified) or consecutively. The first job in a box (starting
+ * at the top level) is always driven by its start time.
+ */
+typedef string BoxType = "S" label = {i18n}.jc.job.BOX_TYPE
+(
+  TIMED    : "T" : "Timed";
+  SEQUENCE : "S" : "Sequence";
+);
+
+/**
+ * A state variable is established at (say) $catalog.jobcontrol.treeState
+ * that allows the job dispatcher process and user processes to cooperate
+ * with each other: user changes to the job tree are not permitted while
+ * the job dispatcher is updating its view of the tree and likewise, user
+ * transactions can only happen one at a time in between the job tree picking
+ * up on the changes.
+ */
+typedef string JobTreeState = "S"
+(
+  STARTUP      : "S" : "Startup";
+  IDLE         : "I" : "Idle";
+  USER_START   : "U" : "User Start";
+  USER_END     : "E" : "User End";
+  DISPATCHER   : "D" : "Dispatcher";
+);

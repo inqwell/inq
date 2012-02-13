@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright 2008 Inqwell Ltd.
+-->
+<!DOCTYPE document PUBLIC "-//APACHE//DTD Documentation V2.0//EN" "http://forrest.apache.org/dtd/document-v20.dtd">
+<document>
+  <header>
+    <title>Licensing Information</title>
+  </header>
+  <body>
+    <section id="license">
+      <title>Inq License</title>
+      <p>
+        Inq is licensed under
+        the <a href="ext:www.opensource.org/licenses/artistic">Artistic License 2.0</a>.
+      </p>
+    </section>
+  </body>
+</document>

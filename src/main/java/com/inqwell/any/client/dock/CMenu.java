@@ -12,5 +12,6 @@ import com.inqwell.any.client.dock.AnyCAction.ActionContainer;
 public class CMenu extends    bibliothek.gui.dock.common.action.CMenu
                    implements ActionContainer
 {
+  public void afterLayout() {}
 }
 

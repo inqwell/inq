@@ -1,0 +1,48 @@
+// Declare the functions
+local function byValue(int iArg)
+{
+  writeln($catalog.system.out, "Inside \e iArg is " + iArg);
+  iArg = 27;
+  writeln($catalog.system.out, "Inside \e iArg now " + iArg);
+}
+
+local function byReference(any iArg)
+{
+  writeln($catalog.system.out, "Inside \e iArg is " + iArg);
+  iArg = 27;
+  writeln($catalog.system.out, "Inside \e iArg now " + iArg);
+}
+
+int iArg = 32;
+
+call byValue(iArg);
+writeln($catalog.system.out, "After returning iArg is still " + iArg);
+
+call byReference(iArg);
+writeln($catalog.system.out, "After returning iArg has become " + iArg);
+
+// Note - only value types support the value/reference option. Container
+// types are always passed by reference, as shown here, so it is clearer
+// to always use "any"
+
+local function container(smap m, set s)
+{
+  // Change the map by adding something
+  string m.c = "Ice cream added by function \e";
+
+  // Try removing something from the set
+  s -= 3;
+}
+
+smap m;
+int m.i = 99;
+
+set s = (1,2,3,4);
+
+writeln($catalog.system.out, "Initially m is " + m);
+writeln($catalog.system.out, "and s is " + s);
+
+call container(m, s);
+
+writeln($catalog.system.out, "m now looks like " + m);
+writeln($catalog.system.out, "s now looks like " + s);

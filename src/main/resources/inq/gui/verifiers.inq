@@ -265,6 +265,83 @@ local function saveLayout(any desktop)
 }
 
 /**
+ * Create a menu containing a radio selection for the
+ * available logging levels
+ * @param logLevebCb 
+ */
+function loggingMenu(func logLevelCb)
+{
+  // images
+  any images.severe  = image("images/logging/severe.gif");
+  any images.warning = image("images/logging/warning.gif");
+  any images.info    = image("images/logging/info.gif");
+  any images.config  = image("images/logging/config.gif");
+  any images.fine    = image("images/logging/fine.gif");
+  any images.finer   = image("images/logging/finer.gif");
+  any images.finest  = image("images/logging/finest.gif");
+  any images.all     = image("images/logging/all.gif");
+  any images.off     = image("images/logging/off.gif");
+  
+  // menu
+  gMenu logLevelMenu;
+  
+  // items
+  gMenuRadio items.bSevere;   items.bSevere.properties.renderInfo  = renderinfo(LOG_SEVERE,  label="Severe");  // TODO i18n
+  gMenuRadio items.bWarning;  items.bWarning.properties.renderInfo = renderinfo(LOG_WARNING, label="Warning"); // ...
+  gMenuRadio items.bInfo;     items.bInfo.properties.renderInfo    = renderinfo(LOG_INFO, label="Info");
+  gMenuRadio items.bConfig;   items.bConfig.properties.renderInfo  = renderinfo(LOG_CONFIG, label="Config");
+  gMenuRadio items.bFine;     items.bFine.properties.renderInfo    = renderinfo(LOG_FINE, label="Fine");
+  gMenuRadio items.bFiner;    items.bFiner.properties.renderInfo   = renderinfo(LOG_FINER, label="Finer");
+  gMenuRadio items.bFinest;   items.bFinest.properties.renderInfo  = renderinfo(LOG_FINEST, label="Finest");
+  gMenuRadio items.bAll;      items.bAll.properties.renderInfo     = renderinfo(LOG_ALL, label="All");
+  gMenuRadio items.bOff;      items.bOff.properties.renderInfo     = renderinfo(LOG_OFF, label="Off");
+  items.bSevere.properties.icon  = images.severe;
+  items.bWarning.properties.icon = images.warning;
+  items.bInfo.properties.icon    = images.info;
+  items.bConfig.properties.icon  = images.config;
+  items.bFine.properties.icon    = images.fine;
+  items.bFiner.properties.icon   = images.finer;
+  items.bFinest.properties.icon  = images.finest;
+  items.bAll.properties.icon     = images.all;
+  items.bOff.properties.icon     = images.off;
+  
+  // Button group and its event
+  gButtonGroup items.bg; gEvent(items.bg, call changeLogLevel());
+  
+  // Make the group a context node. Its a marginal decision
+  // but there is one item of data that this function
+  // renders - the log level - and it needs to keep the
+  // call back function
+  items.bg.properties.contextNode = true;
+  int items.bg.vars.logLevel     = LOG_INFO;
+  any items.bg.vars.logLevelCb   = logLevelCb;
+  items.bg.properties.renderInfo = renderinfo($this.vars.logLevel);
+
+  items.bSevere.properties.buttonGroup  = items.bg;
+  items.bWarning.properties.buttonGroup = items.bg;
+  items.bInfo.properties.buttonGroup    = items.bg;
+  items.bConfig.properties.buttonGroup  = items.bg;
+  items.bFine.properties.buttonGroup    = items.bg;
+  items.bFiner.properties.buttonGroup   = items.bg;
+  items.bFinest.properties.buttonGroup  = items.bg;
+  items.bAll.properties.buttonGroup     = items.bg;
+  items.bOff.properties.buttonGroup     = items.bg;
+  
+  // Layout the menu. Note the button group must be in the context
+  // and this can be made to happen by adding it to the layout....
+  layout(items, logLevelMenu, "bSevere bWarning bInfo bConfig bFine bFiner bFinest Separator bAll bOff bg");
+  
+  // We could also have done "any logLevelMenu.bg = bg;"
+  // return the menu
+  logLevelMenu;
+}
+
+local function changeLogLevel()
+{
+  xfunc($this.vars.logLevelCb, $this.vars.logLevel);
+}
+
+/**
  * Attempt to restore the named desktop state
  */
 function restoreDesktop(any desktopName)

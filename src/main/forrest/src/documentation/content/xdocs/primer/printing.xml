@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright 2006 Inqwell Ltd.
+-->
+<!DOCTYPE document PUBLIC "-//APACHE//DTD Documentation V2.0//EN" "http://forrest.apache.org/dtd/document-v20.dtd">
+<document>
+  <header>
+    <title>Printing In Inq</title>
+  </header>
+  <body>
+    <fixme author="Tom">To Be Written</fixme>
+    <section id="layout">
+      <title>Document Layout</title>
+    </section>
+    <section id="script">
+      <title>Submitting Printjobs from Script</title>
+    </section>
+    <section id="client">
+      <title>Using the Built-in Print Dialog</title>
+    </section>
+  </body>
+</document>

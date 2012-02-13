@@ -1181,11 +1181,11 @@ service updateOk(any clientInfo, func okCallback)
  * This version expects obj to be a typedef instance (or at least its a map) and
  * its uniquekey value is extracted.
  */
-service updateObjOk(any obj, any clientInfo, func okCallback)
+service notifyItem(any item, any info, func ack)
 {
   // we provide the callback with the whole object and its ukey,
   // so the function can pick what it needs
-  xfunc(okCallback, obj, ukey = getuniquekey(obj), clientInfo);
+  xfunc(ack, item, info);
 }
 
 /**

@@ -49,8 +49,7 @@ import com.inqwell.any.channel.OutputChannel;
 public class LoginOK extends Exec
 {
 
-  private static Any functionPath__ = new ConstString("system.exprs.LoginOK");
-  public  static Any ochannel__     = new ConstString("ochannel");
+  private final static Any functionPath__ = new ConstString("system.exprs.LoginOK");
 
   public LoginOK() throws AnyException
   {
@@ -114,7 +113,7 @@ public class LoginOK extends Exec
 
       Map root = getTransaction().getProcess().getRoot();
 
-      OutputChannel oc = (OutputChannel)root.get(ochannel__);
+      OutputChannel oc = (OutputChannel)root.get(UserProcess.ochannel__);
 
       oc.write(e);
       oc.flushOutput();

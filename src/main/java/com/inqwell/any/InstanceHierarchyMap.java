@@ -82,7 +82,7 @@ public class InstanceHierarchyMap extends    AnyPMap
     init();
     
     if (maintainOrder)
-      order_ = initOrderBacking();
+      initOrderBacking();
   }
   
   /**
@@ -165,7 +165,6 @@ public class InstanceHierarchyMap extends    AnyPMap
 
   public boolean contains(Any key)
   {
-	  //System.out.println("InstanceHierarchyMap.contains("+key+") - delete marked " + deleteMarked_);
 	  boolean ret = true;
 	
     synchronized(this)
@@ -423,15 +422,9 @@ public class InstanceHierarchyMap extends    AnyPMap
 		// Note also that when called by our parent the parameter is
 		// our name in the parent.
 		// For other listeners the parameter is passed on to the multiplexer
-		//if ((eventParam != null) && l != getParentAny())
-		//{
-			//throw new IllegalArgumentException
-								// ("event parameter only allowed for parent listener");
-		//}
 		
 		if (l == getParentAny())
 		{
-			//System.out.println ("InstanceHierarchyMap.addEventListener() establishing parent listener");
 			parentListener_  = l;
 			nameInContainer_ = eventParam;
 		}
@@ -592,14 +585,14 @@ public class InstanceHierarchyMap extends    AnyPMap
   public void sort (Array orderBy)
   {
 	  comparator_ = null;
-  	order_ = initOrderBacking();
+  	initOrderBacking();
 		AbstractComposite.sortOrderable(this, orderBy);
 	}
 	
   public void sort (OrderComparator c)
   {
 	  comparator_ = c;
-  	order_ = initOrderBacking();
+  	initOrderBacking();
 		AbstractComposite.sortOrderable(this, c);
 		if (comparator_ != null)
       comparator_.setTransaction(Transaction.NULL_TRANSACTION);
@@ -614,7 +607,7 @@ public class InstanceHierarchyMap extends    AnyPMap
 	  else
 	  	comparator_ = null; 
 	
-  	order_ = initOrderBacking();
+  	initOrderBacking();
 		AbstractComposite.sortOrderable(this, orderBy, comparator_);
 		if (comparator_ != null)
 		  comparator_.setTransaction(Transaction.NULL_TRANSACTION);
@@ -644,15 +637,11 @@ public class InstanceHierarchyMap extends    AnyPMap
 	  Any v = this.get(a);
 	  this.removeByVector(i);
 
-		//System.out.println ("InstanceHierarchyMap.reorder " + a + " " + v);
-
     comparator_.setOrderMode(Map.I_VALUES);
 		int insertionPosition = AbstractComposite.findInsertionPosition(this,
 			                                                              comparator_,
 			                                                              v);
 			
-		//System.out.println ("InstanceHierarchyMap.reorder adding at" + insertionPosition);
-
 		if (insertionPosition < 0)
 		{
 	    this.add(a, v);
@@ -667,19 +656,18 @@ public class InstanceHierarchyMap extends    AnyPMap
 	
   public java.util.List getList ()
   {
-  	order_ = initOrderBacking();
+  	initOrderBacking();
 		return order_.getList();
   }
 
   public Array getArray()
   {
-  	order_ = initOrderBacking();
-    return order_;
+  	return initOrderBacking();
   }
   
   public void removeByVector (int at)
   {
-  	order_ = initOrderBacking();
+  	initOrderBacking();
   	Any key = order_.remove(at);
     // don't want to do indexOf in beforeRemove, above, in this case
     Array order = order_;
@@ -696,7 +684,7 @@ public class InstanceHierarchyMap extends    AnyPMap
   
   public void removeByVector (Any at)
   {
-  	order_ = initOrderBacking();
+  	initOrderBacking();
   	index_.copyFrom(at);
   	this.removeByVector(index_.getValue());
   }
@@ -753,7 +741,7 @@ public class InstanceHierarchyMap extends    AnyPMap
   
   public Any getByVector (int at)
   {
-    order_ = initOrderBacking();
+    initOrderBacking();
     removeAllDeleted();
   	Any key = order_.get(at);
     
@@ -768,7 +756,7 @@ public class InstanceHierarchyMap extends    AnyPMap
   
   public Any getKeyOfVector(int at)
   {
-    order_ = initOrderBacking();
+    initOrderBacking();
     removeAllDeleted();
     Any key = order_.get(at);
     return key;
@@ -782,7 +770,7 @@ public class InstanceHierarchyMap extends    AnyPMap
   
   public void addByVector(Any value)
   {
-  	order_ = initOrderBacking();
+  	initOrderBacking();
   	Any key = IdentityOf.identityOf(value);
   	add(key, value);
   }
@@ -804,7 +792,7 @@ public class InstanceHierarchyMap extends    AnyPMap
 		if (at > entries())
 			throw new ArrayIndexOutOfBoundsException(at);
 			
-  	order_ = initOrderBacking();
+  	initOrderBacking();
   	
   	if (at < entries())
   	{
@@ -834,7 +822,7 @@ public class InstanceHierarchyMap extends    AnyPMap
   
   public void reverse()
   {
-    order_ = initOrderBacking();
+    initOrderBacking();
     order_.reverse();
   }
   
@@ -988,7 +976,9 @@ public class InstanceHierarchyMap extends    AnyPMap
 			order.add(key);
 		}
 		
-		return order;
+		order_ = order;
+		
+		return order_;
 	}
 	
 	protected void finalize() throws Throwable
@@ -1075,9 +1065,6 @@ public class InstanceHierarchyMap extends    AnyPMap
 			if (p != null)
 				e.setParameter(p);
 			
-			//System.out.println("InstanceHierarchyMap.fireEvent() " + p);
-			//System.out.println("InstanceHierarchyMap.fireEvent() " + e);
-			//System.out.println("InstanceHierarchyMap.fireEvent() " + pl);
 			pl.processEvent(e);
 		}
   }

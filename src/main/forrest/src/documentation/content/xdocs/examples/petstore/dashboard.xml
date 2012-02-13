@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright 2006 Inqwell Ltd.
+-->
+<!DOCTYPE document PUBLIC "-//APACHE//DTD Documentation V2.0//EN" "http://forrest.apache.org/dtd/document-v20.dtd">
+<document>
+  <header>
+    <title>Petstore Dashboard</title>
+  </header>
+  <body>
+    <section id="intro">
+      <title>Petstore Dashboard</title>
+      <p>
+        The "dashboard" is petstore's initial screen. It appears
+        because <code>userStart.inq</code>, the script returned by
+        the client login sequence, amongst other things includes
+        this:
+      </p>
+      <source>
+// Load the gui elements of petstore
+loadclient("userMain.inq");
+  .
+  .
+</source>
+      <p>
+        The dashboard GUI is implemented in <code>gui/userMain.inq</code>.
+      </p>
+      <note><code>loadclient()</code> resolves URLs relative to the current
+      script.</note>
+      <p>
+        The dashboard GUI is a simple layout of buttons. Their properties
+        are configured, a layout performed and event handlers attached.
+        The Table Layout is used. For further details see on using table
+        layout see the Inq <a class="fork" href="../../primer/tablelayout.pdf">Mini Guide</a>.
+      </p>
+      <p>
+        The dashboard looks like this:
+      </p>
+      <figure src="images/psdash.png" alt="dashboard"/>
+      <p>
+        <a href="account.html"><icon src="../images/nextpage.gif" alt="nextpage"/></a>
+      </p>
+    </section>
+  </body>
+</document>

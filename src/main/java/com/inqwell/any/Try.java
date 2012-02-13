@@ -80,10 +80,16 @@ public class Try extends    AbstractFunc
     // try/catch block then this will be set
     ExceptionI outerEx = null;
 
-    // If an exception is raised then this will be set.
+    // If an exception is raised in the try or transaction block
+    // then this will be set.
     ExceptionI curEx   = null;
     
+    // For break/continue in the face of try/catch
     FlowControlException flowEx = null;
+    
+    // Whether we've been killed. If so allow any finally
+    // expresswion to be executed.
+    boolean killed = false;
 
     // These are used to return either AnyException, AnyRuntimeException
     // or FlowControlException from the catch block (when there is one)
@@ -110,7 +116,10 @@ public class Try extends    AbstractFunc
 																 a,
 																 try_);
 
-      if (isNestedTransaction())
+			// No exception occurred. If we are a nested transaction then
+      // commit now, unless there is a finally expression, in
+			// which case we defer committing until after then
+      if (isNestedTransaction() && finally_ == null)
       {
         commitException = true;  // if an exception is thrown during the commit
         // We want to distinguish between an exception that may
@@ -122,6 +131,18 @@ public class Try extends    AbstractFunc
 
 		// There are a few exception possibilities
 		
+		// Have we been killed?
+		catch(ProcessKilledException pkex)
+		{
+		  // We have been killed - reset the killed flag
+		  // temporarily. The flag is checked at each statement
+		  // for rapid exit, but we execute finally blocks on
+		  // the way out. We don't execute catch blocks
+		  killed = true;
+		  ((UserProcess)t.getProcess()).resetKilled(false);
+		  // t.abort(); No - abort after any finally block and at the
+		  //            level of the transaction
+		}
 		// break/continue are implemented as exceptions
     catch(FlowControlException flex)
     {
@@ -152,22 +173,26 @@ public class Try extends    AbstractFunc
 
         // If the catch expression throws (either a new exception or
         // by rethrowing the one just caught) then the return value from
-        // doCatch is that exception. In the Java sense, execution continues
+        // doExpression is that exception. In the Java sense, execution continues
         // as normal for the time being and the Java throw happens in
         // the Java finally...
 				ret = doExpression(catch_, a, t, anyEx, anyREx, aflowEx);
+				
+				// Check for process killed happening while executing the
+				// catch block. The flag in the process has already been reset.
+				killed = (anyREx[0] instanceof ProcessKilledException);
 
-        // What happens in the case of a nested transaction? We've
-        // already aborted it prior to the catch expression though it
-        // remains viable and in the process, so the catch expression
-        // could have used it.
+        // What happens in the case of a nested transaction? If it was
+				// a commit exception then we've already aborted it prior to
+        // the catch expression though it remains viable and in the
+        // process, so the catch expression could have used it.
         // We define that successful execution of the catch expression
         // means we have dealt with the exception (which includes aborting
         // the current nested transaction contents) and that anything
         // now contained within it should be committed. We do this in
         // the (Java!) finally block.
 
-        // Further comments: if the catch expression above *does* throw
+        // Further, if the catch expression above *does* throw
 				// then we (may) have a new exception leaving here (after the
 				// Java finally and any Inq finally). The Inq line number will be
 				// the point at which the catch expression threw, which is OK.
@@ -224,6 +249,7 @@ public class Try extends    AbstractFunc
 
         outerEx = pushException(arex, t, true);
 				ret = doExpression(catch_, a, t, anyEx, anyREx, aflowEx);
+				killed = (anyREx[0] instanceof ProcessKilledException);
 
         if (finally_ != null)
           throwLine = t.getLineNumber();
@@ -257,6 +283,7 @@ public class Try extends    AbstractFunc
         outerEx = pushException(curEx, t, true);
 
 				ret = doExpression(catch_, a, t, anyEx, anyREx, aflowEx);
+				killed = (anyREx[0] instanceof ProcessKilledException);
 
         if (finally_ != null)
           throwLine = t.getLineNumber();
@@ -288,21 +315,77 @@ public class Try extends    AbstractFunc
       {
         try
         {
+        	// Check if the process was killed at a lower stack frame
+        	// and temporarily reset for the execution of the finally
+        	// block.
+        	killed |= ((UserProcess)t.getProcess()).resetKilled(false);
+        	
           ret    = EvalExpr.evalFunc(t,
                                      a,
                                      finally_);
           if (isNestedTransaction())
           {
-            commitException = true;  // if an exception is thrown during the commit
-            // We want to distinguish between an exception that may
-            // have occurred during normal script and one that occurs
-            // in the commit phase.
-            t.commit();
+          	if (killed                          // already killed
+                || (catch_ == null &&           // there is no catch block...
+                    curEx != null)              // ...an exception was thrown
+                || (catch_ != null &&           // there is a catch block...
+                    (anyEx[0] != null ||        // ...it threw an exception
+                     anyREx[0] != null)))
+          	{
+          		t.abort();
+          	}
+          	else
+          	{
+              commitException = true;  // if an exception is thrown during the commit
+              // We want to distinguish between an exception that may
+              // have occurred during normal script and one that occurs
+              // in the commit phase.
+              t.commit();
+          	}
           }
+        }
+        catch(ProcessKilledException pkex)
+        {
+          // Process killed during finally execution
+          killed = true;
+          ((UserProcess)t.getProcess()).resetKilled(true);
+          if (isNestedTransaction())
+            t.abort();
         }
         catch (FlowControlException flex)
         {
           flowEx = flex;
+          // Meh - even messier when someone codes a break/continue/return
+          // inside a finally block....
+          try
+          {
+            if (isNestedTransaction())
+            {
+            	if (killed                          // already killed
+                  || (catch_ == null &&           // there is no catch block...
+                      curEx != null)              // ...an exception was thrown
+                  || (catch_ != null &&           // there is a catch block...
+                      (anyEx[0] != null ||        // ...it threw an exception
+                       anyREx[0] != null)))
+            	{
+            		t.abort();
+            	}
+            	else
+            	{
+                commitException = true;  // if an exception is thrown during the commit
+                // We want to distinguish between an exception that may
+                // have occurred during normal script and one that occurs
+                // in the commit phase.
+                t.commit();
+            	}
+            }
+          }
+          catch(Exception ex)
+          {
+          	fe = ex;
+            if (isNestedTransaction())
+              t.abort();
+          }
         }
         catch (Exception ex)
         {
@@ -325,14 +408,14 @@ public class Try extends    AbstractFunc
         // little pointless. TODO: Consider this.
         popException(outerEx, curEx, t);
       }
-      else
+      else  // No Inq finally {}
       {
         popException(outerEx, curEx, t);
 
         // There is no finally expression. If there is a nested transaction
         // and we are not about to throw an exception (either because there was
-        // no catch block, the catch block itself threw or re-threw) then
-        // commit it. If there is an exception then abort it.
+        // no catch block, the catch block itself threw or re-threw or the
+        // process was killed) then commit it. Otherwise abort it.
         // Its OK to call commit() if the transaction
         // has already been aborted because of some problem earlier.
         // Its also OK to call commit() even when there is nothing in
@@ -340,7 +423,8 @@ public class Try extends    AbstractFunc
         // got added by a successful catch execution.
         if (isNestedTransaction())
         {
-          if ((catch_ == null &&           // there is no catch block...
+          if (killed 
+           || (catch_ == null &&           // there is no catch block...
                curEx != null)              // ...an exception was thrown
            || (catch_ != null &&           // there is a catch block...
                (anyEx[0] != null ||        // ...it threw an exception
@@ -374,6 +458,9 @@ public class Try extends    AbstractFunc
         parent.getProcess().setTransaction(parent);
         parent.setChild(null);
       }
+      
+      // Put the killed flag back in for upper frames
+      ((UserProcess)t.getProcess()).resetKilled(killed);
 
       // If we are to throw then it happens now. There are a number of exception
       // sources:
@@ -399,7 +486,8 @@ public class Try extends    AbstractFunc
       }
       else if (anyEx != null && anyEx[0] != null)
       {
-        // Restore the line number at the point of error.  If there
+        // Catch block (re)threw.
+      	// Restore the line number at the point of error.  If there
         // is no finally exception then we are about to throw it, so
         // put the correct line number back for the Inq stack.
         if (throwLine > 0)
@@ -409,6 +497,7 @@ public class Try extends    AbstractFunc
       }
       else if (anyREx != null && anyREx[0] != null)
       {
+      	// As above
         if (throwLine > 0)
           t.setLineNumber(throwLine);
         
@@ -416,6 +505,7 @@ public class Try extends    AbstractFunc
       }
       else if (curEx != null && catch_ == null)
       {
+      	// Try threw, there is no catch block
         if (throwLine > 0)
           t.setLineNumber(throwLine);
         
@@ -426,7 +516,7 @@ public class Try extends    AbstractFunc
       }
       
       // Check if there was a flow control exception and if so throw it
-      // for processing by the containing loop. Of course, it doesn't make
+      // for processing by the containing loop/call. Of course, it doesn't make
       // much sense to have such a statement in both catch and finally
       // when both of these are present, but we give priority to the
       // catch one.
@@ -567,6 +657,10 @@ public class Try extends    AbstractFunc
     }
     catch(AnyRuntimeException e)
     {
+    	// NB. This could be a ProcessKilledException. Pass
+    	// it back through here as a convenience. Reset
+    	// the killed flag in any case
+      ((UserProcess)t.getProcess()).resetKilled(false);
       anyREx[0] = e;
     }
     catch(Exception e)

@@ -237,34 +237,19 @@ public abstract class LocalTransaction extends    TwoPhaseTransaction
 	 */
 	protected boolean doCopyOnWrite(Map m) throws AnyException
 	{
-		// Check we haven't already got a transaction instance
-//		if (isJoined(m))
-//			return false;
-    
-    // Instead of the above, use this alternative which takes into
-    // account any parent txn and whether the candidate instance is
-    // joined in that.
-//    if (getTransInstance(m) != m)
-//      return false;
-
 		join(m);
 		
 		Map tInstance = (Map)m.getDescriptor().newInstance();
 		tInstance.copyFrom(m);
     
-    // Bit hacky but we put the public instance inside the
-    // private one using the unique key slot.  (I don't think
-    // these can escape or if they do that it matters anyway)
-    // This is used in Declare and Call to ensure that the pub
-    // instance is aliased/passed to give correct semantics in
-    // these cases.
-    // tInstance.setUniqueKey(m);
-
 		// Add the transaction copy to the participants_ collection.
 		// We map the original (public) instance to the transaction's
 		// (private) instance.
-//		System.out.println ("copyOnWrite participants_: " + participants_);
     addActiveObject(m, tInstance);
+    
+    // If there is a join function then call it as the instance is
+    // being placed into the transaction
+    m.getDescriptor().join(m, this);
     
 		return true;
 	}
@@ -396,8 +381,7 @@ public abstract class LocalTransaction extends    TwoPhaseTransaction
             System.out.println("Resync event "  + e);
           }
 				}
-        if (eventList_ != null)
-          eventList_.add(e);
+				addEvent(e);
         
         // If the event is a create event and we are not raising
         // create events then don't fire it. All other event types

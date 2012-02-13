@@ -41,15 +41,15 @@ then
 fi
 
 # Args required for all modes - don't change these
-INQCOMMONARGS="-Dinq.home=$INQHOME -Djava.util.logging.config.file=$INQHOME/etc/log.properties -Djava.util.logging.manager=com.inqwell.any.AnyLogManager"
+INQCOMMONARGS="-Dinq.home=$INQHOME -Djava.util.logging.manager=com.inqwell.any.AnyLogManager"
 
 # VM args to the server. Use whatever you wish
 if [ "$INQSERVERARGS" = "" ]
 then
   INQSERVERARGS="-server -Xmx512m"
 fi
-# Add the headless system property
-INQSERVERARGS="$INQSERVERARGS -Djava.awt.headless=true"
+# Add the headless and logging config system properties
+INQSERVERARGS="$INQSERVERARGS -Djava.awt.headless=true -Djava.util.logging.config.file=$INQHOME/etc/server.log.properties"
 
 # If you use ioXMLX to produce a DOM tree then Inq needs to know
 # the class to instantiate for the root Document node. This

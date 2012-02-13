@@ -78,8 +78,6 @@ public final class Server extends PropertyAccessMap
 	private NodeSpecification  domain_;
 	private boolean            domainSet_ = false;
 
-	private RouteMessage       routeMessage_;
-
   private Map                propertyMap_;
   private Call               createMetaF_;
   
@@ -105,9 +103,6 @@ public final class Server extends PropertyAccessMap
 		lockManager_  = new LockManager();
 
     Globals.lockManager__ = lockManager_;
-
-		// Creates and catalogs the routing tables
-		routeMessage_ = new RouteMessage();
 	}
 
 	public boolean lock(Process p, Any a) throws AnyException
@@ -370,10 +365,8 @@ public final class Server extends PropertyAccessMap
       sargs.add(RunInq.source__, initURL);
       SendRequest sr = new SendRequest(RunInq.servicePath__,
                                        null,
-                                       null,
                                        sargs,
-                                       c,
-                                       null);
+                                       c);
       sr.setTransaction(p.getTransaction());
       sr.exec(null);
 

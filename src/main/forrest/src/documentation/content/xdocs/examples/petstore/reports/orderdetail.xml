@@ -1,0 +1,529 @@
+<?xml version="1.0"?>
+<orderdetail>
+  <order>
+    <caption>Order Summary:</caption>
+    <column field="Order" halign="center" typedef="examples.petstore.types.Order"></column>
+    <column field="OrderDate" typedef="examples.petstore.types.Order"></column>
+    <column field="TotalPrice" typedef="examples.petstore.types.Order"></column>
+  </order>
+  <itemstable>
+    <caption>Items:</caption>
+    <from nodeset="examples.petstore.types.LineItem"></from>
+    <column field="Item" typedef="examples.petstore.types.Item"></column>
+    <column field="Category" typedef="examples.petstore.types.Product"></column>
+    <column field="Name" typedef="examples.petstore.types.Product"></column>
+    <column field="Qty" typedef="examples.petstore.types.LineItem"></column>
+    <column field="UnitPrice" typedef="examples.petstore.types.LineItem"></column>
+    <column field="Price" typedef="examples.petstore.types.ValueHelper"></column>
+  </itemstable>
+  <report>
+    <title>Order Summary</title>
+    <disclaimer>Petstore UK plc lorem ipsum dolor sit amet, consectetuer adipiscing elit,&#010;sed diam nonummy nibh euismod tincidunt ut laoreet dolore magna aliquam erat volutpat. Ut&#010;wisi enim ad minim veniam, quis nostrud exerci tation ullamcorper suscipit lobortis nisl&#010;ut aliquip ex ea commodo consequat. Duis autem vel eum iriure dolor in hendrerit in&#010;vulputate velit esse molestie consequat, vel illum dolore eu feugiat nulla facilisis&#010;at vero eros et accumsan et iusto odio dignissim qui blandit praesent luptatum zzril&#010;delenit augue duis dolore te feugait nulla facilisi.</disclaimer>
+  </report>
+  <data>
+    <items nodeset="examples.petstore.types.LineItem">
+      <child>
+        <LineItem typedef="examples.petstore.types.LineItem">
+          <Qty field="Qty">2</Qty>
+          <Order field="Order">1002</Order>
+          <UnitPrice field="UnitPrice">18.50</UnitPrice>
+          <Item field="Item">EST-13</Item>
+          <LineItem field="LineItem">1002</LineItem>
+        </LineItem>
+        <Item typedef="examples.petstore.types.Item">
+          <ListPrice field="ListPrice">18.50</ListPrice>
+          <Attr5 field="Attr5"></Attr5>
+          <Product field="Product">RP-LI-02</Product>
+          <Attr4 field="Attr4"></Attr4>
+          <Attr3 field="Attr3"></Attr3>
+          <Attr2 field="Attr2"></Attr2>
+          <Attr1 field="Attr1">Green Adult</Attr1>
+          <Status field="Status">P</Status>
+          <Supplier field="Supplier">1</Supplier>
+          <Item field="Item">EST-13</Item>
+          <LastPrice field="LastPrice"></LastPrice>
+          <LastPriceMove field="LastPriceMove"></LastPriceMove>
+          <UnitCost field="UnitCost">12.00</UnitCost>
+        </Item>
+        <Product typedef="examples.petstore.types.Product">
+          <Name field="Name">Iguana</Name>
+          <Description field="Description">Friendly green friend</Description>
+          <Category field="Category">REPTILES</Category>
+          <Product field="Product">RP-LI-02</Product>
+          <Icon field="Icon">lizard2.gif</Icon>
+        </Product>
+        <OrderStatus typedef="examples.petstore.types.OrderStatus">
+          <Order field="Order">1002</Order>
+          <Status field="Status">O</Status>
+          <LineItem field="LineItem">1002</LineItem>
+          <Timestamp field="Timestamp">06 Mar 2011 18:02:29</Timestamp>
+        </OrderStatus>
+        <OrderTotal typedef="examples.petstore.types.ValueHelper">
+          <Count field="Count"></Count>
+          <String field="String"></String>
+          <Price field="Price">37.00</Price>
+          <Dummy field="Dummy"></Dummy>
+        </OrderTotal>
+      </child>
+      <child>
+        <LineItem typedef="examples.petstore.types.LineItem">
+          <Qty field="Qty">3</Qty>
+          <Order field="Order">1002</Order>
+          <UnitPrice field="UnitPrice">93.50</UnitPrice>
+          <Item field="Item">EST-16</Item>
+          <LineItem field="LineItem">1004</LineItem>
+        </LineItem>
+        <Item typedef="examples.petstore.types.Item">
+          <ListPrice field="ListPrice">93.50</ListPrice>
+          <Attr5 field="Attr5"></Attr5>
+          <Product field="Product">FL-DLH-02</Product>
+          <Attr4 field="Attr4"></Attr4>
+          <Attr3 field="Attr3"></Attr3>
+          <Attr2 field="Attr2"></Attr2>
+          <Attr1 field="Attr1">Adult Female</Attr1>
+          <Status field="Status">P</Status>
+          <Supplier field="Supplier">1</Supplier>
+          <Item field="Item">EST-16</Item>
+          <LastPrice field="LastPrice"></LastPrice>
+          <LastPriceMove field="LastPriceMove"></LastPriceMove>
+          <UnitCost field="UnitCost">12.00</UnitCost>
+        </Item>
+        <Product typedef="examples.petstore.types.Product">
+          <Name field="Name">Persian</Name>
+          <Description field="Description">Friendly house cat, doubles as a princess</Description>
+          <Category field="Category">CATS</Category>
+          <Product field="Product">FL-DLH-02</Product>
+          <Icon field="Icon">cat1.gif</Icon>
+        </Product>
+        <OrderStatus typedef="examples.petstore.types.OrderStatus">
+          <Order field="Order">1002</Order>
+          <Status field="Status">A</Status>
+          <LineItem field="LineItem">1004</LineItem>
+          <Timestamp field="Timestamp">06 Mar 2011 18:02:53</Timestamp>
+        </OrderStatus>
+        <OrderTotal typedef="examples.petstore.types.ValueHelper">
+          <Count field="Count"></Count>
+          <String field="String"></String>
+          <Price field="Price">280.50</Price>
+          <Dummy field="Dummy"></Dummy>
+        </OrderTotal>
+      </child>
+      <child>
+        <LineItem typedef="examples.petstore.types.LineItem">
+          <Qty field="Qty">2</Qty>
+          <Order field="Order">1002</Order>
+          <UnitPrice field="UnitPrice">145.49</UnitPrice>
+          <Item field="Item">EST-23</Item>
+          <LineItem field="LineItem">1003</LineItem>
+        </LineItem>
+        <Item typedef="examples.petstore.types.Item">
+          <ListPrice field="ListPrice">145.49</ListPrice>
+          <Attr5 field="Attr5"></Attr5>
+          <Product field="Product">K9-RT-02</Product>
+          <Attr4 field="Attr4"></Attr4>
+          <Attr3 field="Attr3"></Attr3>
+          <Attr2 field="Attr2"></Attr2>
+          <Attr1 field="Attr1">Adult Female</Attr1>
+          <Status field="Status">P</Status>
+          <Supplier field="Supplier">1</Supplier>
+          <Item field="Item">EST-23</Item>
+          <LastPrice field="LastPrice"></LastPrice>
+          <LastPriceMove field="LastPriceMove"></LastPriceMove>
+          <UnitCost field="UnitCost">100.00</UnitCost>
+        </Item>
+        <Product typedef="examples.petstore.types.Product">
+          <Name field="Name">Labrador Retriever</Name>
+          <Description field="Description">Great hunting dog</Description>
+          <Category field="Category">DOGS</Category>
+          <Product field="Product">K9-RT-02</Product>
+          <Icon field="Icon">dog5.gif</Icon>
+        </Product>
+        <OrderStatus typedef="examples.petstore.types.OrderStatus">
+          <Order field="Order">1002</Order>
+          <Status field="Status">A</Status>
+          <LineItem field="LineItem">1003</LineItem>
+          <Timestamp field="Timestamp">06 Mar 2011 18:02:33</Timestamp>
+        </OrderStatus>
+        <OrderTotal typedef="examples.petstore.types.ValueHelper">
+          <Count field="Count"></Count>
+          <String field="String"></String>
+          <Price field="Price">290.98</Price>
+          <Dummy field="Dummy"></Dummy>
+        </OrderTotal>
+      </child>
+    </items>
+    <Account typedef="examples.petstore.types.Account">
+      <Status field="Status">OK</Status>
+      <Phone field="Phone">555-555-5555</Phone>
+      <ZIP field="ZIP">94303</ZIP>
+      <State field="State">CA</State>
+      <Email field="Email">acid@yourdomain.com</Email>
+      <Account field="Account">ACID</Account>
+      <FirstName field="FirstName">ABC</FirstName>
+      <Addr1 field="Addr1">901 San Antonio Road</Addr1>
+      <Addr2 field="Addr2">MS UCUP02-206</Addr2>
+      <Country field="Country">USA</Country>
+      <LastName field="LastName">XYX</LastName>
+      <City field="City">Palo Alto</City>
+    </Account>
+    <Order typedef="examples.petstore.types.Order">
+      <BillState field="BillState">CA</BillState>
+      <ShipZIP field="ShipZIP">94303</ShipZIP>
+      <BillCity field="BillCity">Palo Alto</BillCity>
+      <TotalPrice field="TotalPrice">£608.48</TotalPrice>
+      <Account field="Account">ACID</Account>
+      <Order field="Order">1002</Order>
+      <Courier field="Courier">PetsToYou</Courier>
+      <ShipAddr1 field="ShipAddr1">901 San Antonio Road</ShipAddr1>
+      <CreditCard field="CreditCard">123123123342</CreditCard>
+      <ShipAddr2 field="ShipAddr2">MS UCUP02-206</ShipAddr2>
+      <CardExp field="CardExp">1/2011</CardExp>
+      <BillToLastName field="BillToLastName">XYX</BillToLastName>
+      <BillToFirstName field="BillToFirstName">ABC</BillToFirstName>
+      <CardType field="CardType">MASTER</CardType>
+      <ShipToFirstName field="ShipToFirstName">ABC</ShipToFirstName>
+      <OrderDate field="OrderDate">06 Mar 2011</OrderDate>
+      <ShipCity field="ShipCity">Palo Alto</ShipCity>
+      <BillAddr1 field="BillAddr1">901 San Antonio Road</BillAddr1>
+      <BillAddr2 field="BillAddr2">MS UCUP02-206</BillAddr2>
+      <Locale field="Locale">en</Locale>
+      <ShipCountry field="ShipCountry">USA</ShipCountry>
+      <BillCountry field="BillCountry">USA</BillCountry>
+      <ShipToLastName field="ShipToLastName">XYX</ShipToLastName>
+      <ShipState field="ShipState">CA</ShipState>
+      <Status field="Status">O</Status>
+      <BillZIP field="BillZIP">94303</BillZIP>
+    </Order>
+  </data>
+  <INQmetadata>
+    <INQtypedef INQfqname="examples.petstore.types.Order">
+      <INQfield INQname="BillState">
+        <INQwidth INQname="BillState">2</INQwidth>
+        <INQlabel INQname="BillState">State</INQlabel>
+      </INQfield>
+      <INQfield INQname="BillCity">
+        <INQwidth INQname="BillCity">12</INQwidth>
+        <INQlabel INQname="BillCity">City</INQlabel>
+      </INQfield>
+      <INQfield INQname="ShipZIP">
+        <INQwidth INQname="ShipZIP">5</INQwidth>
+        <INQlabel INQname="ShipZIP">ZIP</INQlabel>
+      </INQfield>
+      <INQfield INQname="TotalPrice">
+        <INQisnumeric>true</INQisnumeric>
+        <INQwidth INQname="TotalPrice">9</INQwidth>
+        <INQlabel INQname="TotalPrice">Total Price</INQlabel>
+      </INQfield>
+      <INQfield INQname="Order">
+        <INQisnumeric>true</INQisnumeric>
+        <INQwidth INQname="Order">10</INQwidth>
+        <INQlabel INQname="Order">Order Number</INQlabel>
+      </INQfield>
+      <INQfield INQname="Account">
+        <INQwidth INQname="Account">16</INQwidth>
+        <INQlabel INQname="Account">Account</INQlabel>
+      </INQfield>
+      <INQfield INQname="Courier">
+        <INQwidth INQname="Courier">10</INQwidth>
+        <INQlabel INQname="Courier">Courier</INQlabel>
+      </INQfield>
+      <INQfield INQname="ShipAddr1">
+        <INQwidth INQname="ShipAddr1">16</INQwidth>
+        <INQlabel INQname="ShipAddr1">Address Line 1</INQlabel>
+      </INQfield>
+      <INQfield INQname="CardExp">
+        <INQwidth INQname="CardExp">7</INQwidth>
+        <INQlabel INQname="CardExp">Expiry Date</INQlabel>
+      </INQfield>
+      <INQfield INQname="ShipAddr2">
+        <INQwidth INQname="ShipAddr2">16</INQwidth>
+        <INQlabel INQname="ShipAddr2">Address Line 2</INQlabel>
+      </INQfield>
+      <INQfield INQname="CreditCard">
+        <INQwidth INQname="CreditCard">16</INQwidth>
+        <INQlabel INQname="CreditCard">Card Number</INQlabel>
+      </INQfield>
+      <INQfield INQname="BillToLastName">
+        <INQwidth INQname="BillToLastName">10</INQwidth>
+        <INQlabel INQname="BillToLastName">Last Name</INQlabel>
+      </INQfield>
+      <INQfield INQname="BillToFirstName">
+        <INQwidth INQname="BillToFirstName">10</INQwidth>
+        <INQlabel INQname="BillToFirstName">First Name</INQlabel>
+      </INQfield>
+      <INQfield INQname="CardType">
+        <INQwidth INQname="CardType">10</INQwidth>
+        <INQlabel INQname="CardType">Card Type</INQlabel>
+        <INQenum INQinternal="VISA">Visa/Delta/Electron</INQenum>
+        <INQenum INQinternal="MASTER">MasterCard/EuroCard</INQenum>
+        <INQenum INQinternal="AMEX">American Express</INQenum>
+        <INQenum INQinternal="DINERS">Diners Club</INQenum>
+      </INQfield>
+      <INQfield INQname="ShipToFirstName">
+        <INQwidth INQname="ShipToFirstName">10</INQwidth>
+        <INQlabel INQname="ShipToFirstName">First Name</INQlabel>
+      </INQfield>
+      <INQfield INQname="OrderDate">
+        <INQwidth INQname="OrderDate">12</INQwidth>
+        <INQlabel INQname="OrderDate">Date</INQlabel>
+      </INQfield>
+      <INQfield INQname="ShipCity">
+        <INQwidth INQname="ShipCity">12</INQwidth>
+        <INQlabel INQname="ShipCity">Shipping
+City</INQlabel>
+      </INQfield>
+      <INQfield INQname="BillAddr1">
+        <INQwidth INQname="BillAddr1">16</INQwidth>
+        <INQlabel INQname="BillAddr1">Address Line 1</INQlabel>
+      </INQfield>
+      <INQfield INQname="BillAddr2">
+        <INQwidth INQname="BillAddr2">16</INQwidth>
+        <INQlabel INQname="BillAddr2">Address Line 2</INQlabel>
+      </INQfield>
+      <INQfield INQname="Locale">
+        <INQwidth INQname="Locale">2</INQwidth>
+        <INQlabel INQname="Locale">Locale</INQlabel>
+      </INQfield>
+      <INQfield INQname="ShipCountry">
+        <INQwidth INQname="ShipCountry">16</INQwidth>
+        <INQlabel INQname="ShipCountry">Country</INQlabel>
+      </INQfield>
+      <INQfield INQname="BillCountry">
+        <INQwidth INQname="BillCountry">16</INQwidth>
+        <INQlabel INQname="BillCountry">Country</INQlabel>
+      </INQfield>
+      <INQfield INQname="ShipToLastName">
+        <INQwidth INQname="ShipToLastName">10</INQwidth>
+        <INQlabel INQname="ShipToLastName">Last Name</INQlabel>
+      </INQfield>
+      <INQfield INQname="ShipState">
+        <INQwidth INQname="ShipState">2</INQwidth>
+        <INQlabel INQname="ShipState">State</INQlabel>
+      </INQfield>
+      <INQfield INQname="Status">
+        <INQwidth INQname="Status">10</INQwidth>
+        <INQlabel INQname="Status">Status</INQlabel>
+        <INQenum INQinternal="O">Open</INQenum>
+        <INQenum INQinternal="C">Cancelled</INQenum>
+        <INQenum INQinternal="A">Allocated</INQenum>
+        <INQenum INQinternal="S">Shipped</INQenum>
+      </INQfield>
+      <INQfield INQname="BillZIP">
+        <INQwidth INQname="BillZIP">5</INQwidth>
+        <INQlabel INQname="BillZIP">ZIP</INQlabel>
+      </INQfield>
+    </INQtypedef>
+    <INQtypedef INQfqname="examples.petstore.types.Account">
+      <INQfield INQname="Status">
+        <INQwidth INQname="Status">10</INQwidth>
+        <INQlabel INQname="Status">Status</INQlabel>
+        <INQenum INQinternal="OK">OK</INQenum>
+        <INQenum INQinternal="SU">Suspended</INQenum>
+        <INQenum INQinternal="CA">Cancelled</INQenum>
+      </INQfield>
+      <INQfield INQname="Phone">
+        <INQwidth INQname="Phone">16</INQwidth>
+        <INQlabel INQname="Phone">Phone</INQlabel>
+      </INQfield>
+      <INQfield INQname="ZIP">
+        <INQwidth INQname="ZIP">5</INQwidth>
+        <INQlabel INQname="ZIP">ZIP</INQlabel>
+      </INQfield>
+      <INQfield INQname="State">
+        <INQwidth INQname="State">2</INQwidth>
+        <INQlabel INQname="State">State</INQlabel>
+      </INQfield>
+      <INQfield INQname="Email">
+        <INQwidth INQname="Email">20</INQwidth>
+        <INQlabel INQname="Email">Email</INQlabel>
+      </INQfield>
+      <INQfield INQname="Account">
+        <INQwidth INQname="Account">16</INQwidth>
+        <INQlabel INQname="Account">Account</INQlabel>
+      </INQfield>
+      <INQfield INQname="FirstName">
+        <INQwidth INQname="FirstName">10</INQwidth>
+        <INQlabel INQname="FirstName">First Name</INQlabel>
+      </INQfield>
+      <INQfield INQname="Addr1">
+        <INQwidth INQname="Addr1">16</INQwidth>
+        <INQlabel INQname="Addr1">Address Line 1</INQlabel>
+      </INQfield>
+      <INQfield INQname="Addr2">
+        <INQwidth INQname="Addr2">16</INQwidth>
+        <INQlabel INQname="Addr2">Address Line 2</INQlabel>
+      </INQfield>
+      <INQfield INQname="Country">
+        <INQwidth INQname="Country">16</INQwidth>
+        <INQlabel INQname="Country">Country</INQlabel>
+      </INQfield>
+      <INQfield INQname="LastName">
+        <INQwidth INQname="LastName">10</INQwidth>
+        <INQlabel INQname="LastName">Last Name</INQlabel>
+      </INQfield>
+      <INQfield INQname="City">
+        <INQwidth INQname="City">12</INQwidth>
+        <INQlabel INQname="City">City</INQlabel>
+      </INQfield>
+    </INQtypedef>
+    <INQtypedef INQfqname="examples.petstore.types.ValueHelper">
+      <INQfield INQname="Count">
+        <INQisnumeric>true</INQisnumeric>
+        <INQwidth INQname="Count">10</INQwidth>
+        <INQlabel INQname="Count">Count</INQlabel>
+      </INQfield>
+      <INQfield INQname="String">
+        <INQwidth INQname="String">10</INQwidth>
+        <INQlabel INQname="String">String</INQlabel>
+      </INQfield>
+      <INQfield INQname="Price">
+        <INQisnumeric>true</INQisnumeric>
+        <INQwidth INQname="Price">9</INQwidth>
+        <INQlabel INQname="Price">Total Price
+£</INQlabel>
+      </INQfield>
+      <INQfield INQname="Dummy">
+        <INQisnumeric>true</INQisnumeric>
+        <INQwidth INQname="Dummy">10</INQwidth>
+        <INQlabel INQname="Dummy">Dummy</INQlabel>
+      </INQfield>
+    </INQtypedef>
+    <INQtypedef INQfqname="examples.petstore.types.Product">
+      <INQfield INQname="Name">
+        <INQwidth INQname="Name">16</INQwidth>
+        <INQlabel INQname="Name">Name</INQlabel>
+      </INQfield>
+      <INQfield INQname="Description">
+        <INQwidth INQname="Description">32</INQwidth>
+        <INQlabel INQname="Description">Description</INQlabel>
+      </INQfield>
+      <INQfield INQname="Category">
+        <INQwidth INQname="Category">16</INQwidth>
+        <INQlabel INQname="Category">Category</INQlabel>
+      </INQfield>
+      <INQfield INQname="Product">
+        <INQwidth INQname="Product">10</INQwidth>
+        <INQlabel INQname="Product">Product</INQlabel>
+      </INQfield>
+      <INQfield INQname="Icon">
+        <INQwidth INQname="Icon">10</INQwidth>
+        <INQlabel INQname="Icon">Icon</INQlabel>
+      </INQfield>
+    </INQtypedef>
+    <INQtypedef INQfqname="examples.petstore.types.OrderStatus">
+      <INQfield INQname="Status">
+        <INQwidth INQname="Status">10</INQwidth>
+        <INQlabel INQname="Status">Status</INQlabel>
+        <INQenum INQinternal="O">Open</INQenum>
+        <INQenum INQinternal="C">Cancelled</INQenum>
+        <INQenum INQinternal="A">Allocated</INQenum>
+        <INQenum INQinternal="S">Shipped</INQenum>
+      </INQfield>
+      <INQfield INQname="Order">
+        <INQisnumeric>true</INQisnumeric>
+        <INQwidth INQname="Order">10</INQwidth>
+        <INQlabel INQname="Order">Order Number</INQlabel>
+      </INQfield>
+      <INQfield INQname="LineItem">
+        <INQisnumeric>true</INQisnumeric>
+        <INQwidth INQname="LineItem">10</INQwidth>
+        <INQlabel INQname="LineItem">LineItem</INQlabel>
+      </INQfield>
+      <INQfield INQname="Timestamp">
+        <INQwidth INQname="Timestamp">19</INQwidth>
+        <INQlabel INQname="Timestamp">Last Updated</INQlabel>
+      </INQfield>
+    </INQtypedef>
+    <INQtypedef INQfqname="examples.petstore.types.Item">
+      <INQfield INQname="ListPrice">
+        <INQisnumeric>true</INQisnumeric>
+        <INQwidth INQname="ListPrice">9</INQwidth>
+        <INQlabel INQname="ListPrice">Price</INQlabel>
+      </INQfield>
+      <INQfield INQname="Attr5">
+        <INQwidth INQname="Attr5">16</INQwidth>
+        <INQlabel INQname="Attr5">Attr5</INQlabel>
+      </INQfield>
+      <INQfield INQname="Product">
+        <INQwidth INQname="Product">10</INQwidth>
+        <INQlabel INQname="Product">Product</INQlabel>
+      </INQfield>
+      <INQfield INQname="Attr4">
+        <INQwidth INQname="Attr4">16</INQwidth>
+        <INQlabel INQname="Attr4">Attr4</INQlabel>
+      </INQfield>
+      <INQfield INQname="Attr3">
+        <INQwidth INQname="Attr3">16</INQwidth>
+        <INQlabel INQname="Attr3">Attr3</INQlabel>
+      </INQfield>
+      <INQfield INQname="Attr2">
+        <INQwidth INQname="Attr2">16</INQwidth>
+        <INQlabel INQname="Attr2">Attr2</INQlabel>
+      </INQfield>
+      <INQfield INQname="Attr1">
+        <INQwidth INQname="Attr1">16</INQwidth>
+        <INQlabel INQname="Attr1">Attr1</INQlabel>
+      </INQfield>
+      <INQfield INQname="Status">
+        <INQwidth INQname="Status">10</INQwidth>
+        <INQlabel INQname="Status">Status</INQlabel>
+        <INQenum INQinternal="P">Pet</INQenum>
+        <INQenum INQinternal="F">Feral</INQenum>
+        <INQenum INQinternal="N">Not Available</INQenum>
+      </INQfield>
+      <INQfield INQname="Supplier">
+        <INQisnumeric>true</INQisnumeric>
+        <INQwidth INQname="Supplier">10</INQwidth>
+        <INQlabel INQname="Supplier">Supplier</INQlabel>
+      </INQfield>
+      <INQfield INQname="Item">
+        <INQwidth INQname="Item">16</INQwidth>
+        <INQlabel INQname="Item">Item</INQlabel>
+      </INQfield>
+      <INQfield INQname="LastPrice">
+        <INQisnumeric>true</INQisnumeric>
+        <INQwidth INQname="LastPrice">9</INQwidth>
+        <INQlabel INQname="LastPrice">Last Price</INQlabel>
+      </INQfield>
+      <INQfield INQname="LastPriceMove">
+        <INQwidth INQname="LastPriceMove">10</INQwidth>
+        <INQlabel INQname="LastPriceMove">LastPriceMove</INQlabel>
+        <INQenum INQinternal="S">Same</INQenum>
+        <INQenum INQinternal="U">Up</INQenum>
+        <INQenum INQinternal="D">Down</INQenum>
+      </INQfield>
+      <INQfield INQname="UnitCost">
+        <INQisnumeric>true</INQisnumeric>
+        <INQwidth INQname="UnitCost">9</INQwidth>
+        <INQlabel INQname="UnitCost">UnitCost</INQlabel>
+      </INQfield>
+    </INQtypedef>
+    <INQtypedef INQfqname="examples.petstore.types.LineItem">
+      <INQfield INQname="Qty">
+        <INQisnumeric>true</INQisnumeric>
+        <INQwidth INQname="Qty">5</INQwidth>
+        <INQlabel INQname="Qty">Quantity</INQlabel>
+      </INQfield>
+      <INQfield INQname="Item">
+        <INQwidth INQname="Item">16</INQwidth>
+        <INQlabel INQname="Item">Item</INQlabel>
+      </INQfield>
+      <INQfield INQname="Order">
+        <INQisnumeric>true</INQisnumeric>
+        <INQwidth INQname="Order">10</INQwidth>
+        <INQlabel INQname="Order">Order Number</INQlabel>
+      </INQfield>
+      <INQfield INQname="UnitPrice">
+        <INQisnumeric>true</INQisnumeric>
+        <INQwidth INQname="UnitPrice">9</INQwidth>
+        <INQlabel INQname="UnitPrice">Unit Price
+£</INQlabel>
+      </INQfield>
+      <INQfield INQname="LineItem">
+        <INQisnumeric>true</INQisnumeric>
+        <INQwidth INQname="LineItem">10</INQwidth>
+        <INQlabel INQname="LineItem">LineItem</INQlabel>
+      </INQfield>
+    </INQtypedef>
+  </INQmetadata>
+</orderdetail>

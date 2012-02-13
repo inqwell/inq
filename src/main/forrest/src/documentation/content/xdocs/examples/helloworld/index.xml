@@ -1,0 +1,399 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright 2006 Inqwell Ltd.
+-->
+<!DOCTYPE document PUBLIC "-//APACHE//DTD Documentation V2.0//EN" "http://forrest.apache.org/dtd/document-v20.dtd">
+<document>
+  <header>
+    <title>Hello World</title>
+  </header>
+  <body>
+    <section id="intro">
+      <title>Introduction</title>
+      <p>
+        By way of an introduction to Inq client-server applications, here is
+        the traditional <code>Hello World!</code>. The server defines a
+        simple <a href="../../primer/typedef.html">typedef</a>
+        whose <code>HelloWorld</code> field is rendered in the GUI by a
+        text field and a label. Any connected client that alters the field
+        has their update propagated to itself and all the others via
+        of Inq <a href="../../primer/process.html#serverevents"> process
+        event flows</a>.
+      </p>
+      <p>
+        This example illustrates the Inq concepts of
+      </p>
+      <ul>
+      <li>
+        creating server script to define typedefs and services;
+      </li>
+      <li>
+        client script to create and layout a GUI and bind views to model data;
+      </li>
+      <li>
+        logging into the server and client initialisation;
+      </li>
+      <li>
+        invoking server-side script in GUI callbacks.
+      </li>
+      </ul>
+    </section>
+    <section id="server">
+      <title>The Server Script</title>
+      <p>
+        The Hello World server is scripted
+        in <code>examples/helloworld/helloSrv.inq</code>. Here is the entire file:
+      </p>
+      <source>
+// Hello World as Inq Client-Server
+//   - server side
+
+package examples.helloworld;
+
+// Define an in-memory type. It has a string field and
+// an integer primary key field
+typedef Hello
+{
+  fields
+  (
+    int    Hello = 0;
+    string HelloWorld = "Hello, world";
+  )
+
+  construct(
+  {
+    if ($this.Hello != 0)
+      throw("Hello is a singleton");
+  })
+
+  pkey
+  (
+    fields(Hello)
+  )
+}
+
+/**
+ * The Login service for the examples.helloworld package is run
+ * when the client logs in as this package.
+ *
+ * For demo purposes it doesn't do anything other
+ * than respond with the client source.
+ */
+service Login(string loginName, string passwd)
+{
+  call system:LoginOK(url="helloClient.inq");
+}
+
+/**
+ * Similarly the Logout service. Nothing to do.
+ */
+service Logout()
+{
+}
+
+service initHello()
+{
+  any k = new(Hello.pkey);
+  k.Hello = 0;
+  read(Hello, k);
+  add(Hello, path($this.vars.Hello));
+}
+
+service sayHello(any Hello)
+{
+  $this.vars.Hello = Hello;
+}
+
+// Create the one and only Hello instance.
+create(new(Hello));
+</source>
+      <section id="package">
+        <title>The examples.helloworld Package and Login Service</title>
+        <p>
+          An Inq parse module can specify
+          a <a href="../../primer/module.html#pkgimport"><code>package</code></a>
+          directive into which the typedefs, services and global functions it
+          defines reside. Any references to these not qualified with a package
+          name imply the current package.
+        </p>
+        <p>
+          As well as being a name space, a package can also represent an
+          application subsystem to the client. In that case, users log in
+          to the server specifying the package defining their application
+          and the package must define a service called <code>Login()</code>.
+        </p>
+        <figure src="images/loginseq.png" alt="loginsequence"/>
+        <p>
+          Hello World defines the package <code>examples.helloworld</code>.
+          Its <code>Login()</code> service does the minimum of calling the
+          predefined function <code>LoginOK()</code> passing the URL of
+          the client-side script:
+        </p>
+        <source>
+/**
+ * The Login service for the examples.helloworld package is run
+ * when the client logs in as this package.
+ *
+ * For demo purposes it doesn't do anything other
+ * than respond with the client source.
+ */
+service Login(string loginName, string passwd)
+{
+  call system:LoginOK(url="helloClient.inq");
+}
+</source>
+<!--
+        <note>Further discussion of client login and the <code>Login</code>
+        service will be given in Inq's authorisation and privilege
+        package, yet to be released.</note>
+-->
+      </section>
+      <section id="typedef">
+      <title>The Hello Typedef</title>
+        <p>
+          An Inq server
+          creates <a href="../../primer/typedef.html#structures">managed instances</a>
+          of typedefs and defines their life-cycle stages. When in
+          the managed state, mutations to typedef fields cause events to be
+          emitted to
+          all <a href="../../primer/process.html#serverevents">observers</a>
+          of the instance. Thus, to achieve our client-server Hello World
+          we need a typedef:
+        </p>
+        <source>
+// Define an in-memory type. It has a string field and
+// an integer primary key field
+typedef Hello
+{
+  fields
+  (
+    int    Hello = 0;
+    string HelloWorld = "Hello, world";
+  )
+
+  construct(
+  {
+    if ($this.Hello != 0)
+      throw("Hello is a singleton");
+  })
+
+  pkey
+  (
+    fields(Hello)
+  )
+}
+</source>
+        <p>
+          Every typedef requires at least:
+        </p>
+        <ul>
+        <li>a definition of its fields;</li>
+        <li>a primary key to establish an instance's uniqueness.</li>
+        </ul>
+        <p>
+          In addition, we've defined a <code>construct</code> statement
+          whose purpose is to veto the creation of <code>Hello</code>
+          instances whose primary key field <code>Hello</code> is anything other
+          than zero. This means there will only ever be one instance, which
+          is created at the end of <code>helloSrv.inq</code>.
+        </p>
+        <source>
+// Create the one and only Hello instance.
+create(new(Hello));
+</source>
+      </section>
+      <section id="inithello">
+      <title>The initHello() Service</title>
+        <p>
+          In order to receive events, a client's User process must place
+          the <code>Hello</code> instance in its permanent node space.
+          The <code>initHello()</code> service obtains the server's managed
+          instance by using the <code>read()</code> function and applying the
+          primary key:
+        </p>
+        <source>
+service initHello()
+{
+  any k = new(Hello.unique);
+  k.Hello = 0;
+  read(Hello, k);
+  add(Hello, path($this.vars.Hello));
+}
+</source>
+        <p>
+          The use of
+          the <a href="../../primer/events.html#evaddrepl"><code>add()</code></a>
+          function raises an event that emanates from <code>$this.vars.Hello</code>.
+          Being a User process with a connected peer client, this event is
+          propagated to the client carrying the <code>Hello</code> instance
+          and its path in the node space. The client processes this event by
+          establishing the instance at the same path.
+        </p>
+      </section>
+      <section id="sayhello">
+      <title>The sayHello() Service</title>
+        <p>
+          The <code>sayHello(any Hello)</code> service
+          accepts the modified instance from the client and updates the
+          server's managed one by assigning to it. If the instance
+          was modified an event is raised and relayed all observers and
+          their client, where the modified text is repainted.
+        </p>
+        <source>
+service sayHello(any Hello)
+{
+  $this.vars.Hello = Hello;
+}
+</source>
+      </section>
+    </section>
+    <section id="client">
+      <title>The Client Script</title>
+      <p>
+        The Hello World client is scripted
+        in <code>examples/helloworld/helloClient.inq</code>. This script
+        is sent to the client for execution by the server when
+        the <code>Login()</code> service calls <code>LoginOK()</code>, described
+        above.
+      </p>
+      <p>
+        The script defines <code>createGui()</code> along with
+        supporting functions and calls <code>createGui()</code> at the end.
+      </p>
+      <section id="creategui">
+      <title>The createGUI() Function</title>
+        <p>
+          This function creates the Hello World GUI which looks like this:
+        </p>
+        <figure src="images/helloworld.png" alt="Hello World GUI"/>
+        <p>
+          As discussed in <a href="../../primer/guibasics.html">Gui Basics</a>,
+          setting up a GUI is a process of component creation, binding components
+          to their model data, performing the required visual layout and
+          attaching any event handler callbacks.
+        </p>
+        <p>
+          First, we create a window:
+        </p>
+        <source>
+// Create and setup a top level window
+gWindow win;
+win.properties.title = "Inq Hello World";
+win.properties.contextNode = true;
+win.properties.defaultCloseOperation = EXIT_ON_CLOSE;
+</source>
+        <p>
+          At this point the client's permanent node space is empty.
+          Setting the <code>contextNode</code> property to <code>true</code>
+          means that when the layout is complete and <code>win</code> is placed
+          somewhere under <code>$root</code>, event handlers will run
+          with <code>win</code> as the context and <code>$path</code> as
+          whatever <code>win</code>'s path is from the root. Inq's node
+          hierarchy and the various node spaces are introduced in the section
+          on <a href="../../primer/nodes.html">Hierarchical Data Structures</a>.
+        </p>
+        <p>
+          The window is placed in the node space by the line:
+        </p>
+        <source>
+// Place the window in the node space
+any $this.win = win;
+</source>
+        <p>
+          Next, the text field and label are created as follows:
+        </p>
+        <source>
+// Create a text field and a label both rendering $this.vars.Hello.HelloWorld
+// First setup the text field...
+gTextField tf;
+tf.properties.selectOnFocus = true;
+tf.properties.renderInfo = renderinfo($this.vars.Hello.HelloWorld, editable=true);
+gEvent(tf, call sendHello());
+
+// ...then the label
+gLabel lbl;
+lbl.properties.renderInfo = renderinfo($this.vars.Hello.HelloWorld);
+gEvent(lbl, call contextEstablished(), event=(gContext));
+</source>
+        <p>
+          Point by point, here's what is happening:
+        </p>
+        <ol>
+        <li><code>selectOnFocus</code> is an Inq-defined property on text
+        components that selects the contents when focus is gained. This is just
+        a convenience as you are invited to type something in.</li>
+        <li>The <code>renderInfo</code> property accepts
+        a <a href="../../primer/guibasics.html#renderinfo"><code>renderinfo</code></a>
+        expression that binds the text field (and label below) to a path in
+        the node space. Whenever events arise from that path (or from an
+        ancestor in such a way that the component would be affected, say
+        if <code>vars</code> was removed), Inq's MVC handling refreshes the
+        viewing components. Similarly, when input is received in the text
+        field, <code>$this.vars.Hello.HelloWorld</code> is updated.</li>
+        <li>All components support the <code>gContext</code> event. It fires
+        when the component's context is known, that is when the component resides
+        in a node space where an ancestor specifies itself as a context node (in
+        this example, that being <code>win</code>). We've applied this to
+        the label so we can invoke <code>initHello()</code> in the server
+        with the correct context. Contexts are discussed further in the
+        example <a href="../chat/index.html">chat</a> application.</li>
+        <li>The <a href="../../primer/guibasics.html#defaultevent">default event</a>
+        for a text field is when the return-key is pressed. We've attached
+        the <code>sendHello</code> function so the client can
+        invoke <code>sendHello()</code> in the server. This happens at
+        the context path of <code>$root.win</code>.</li>
+        </ol>
+      </section>
+      <section id="contextest">
+      <title>The contextEstablished() Callback</title>
+        <p>
+          When the client node space of <code>$root.win</code> is established,
+          the <code>contextEstablished()</code> function runs at this path.
+          This is a typical pattern to follow so that a client can initialise
+          its node space and then invoke the server in the correct context.
+        </p>
+        <p>
+          Above we described the <code>initHello()</code> service and how
+          the <code>add</code> function raises an event which is propagated to
+          the client. Having set up the <code>renderInfo</code> property
+          on the GUI components, we now see that:
+        </p>
+        <ol>
+        <li>the component's model data is automatically established in the
+        client via event propagation and</li>
+        <li>the path of the model data in the server is the same as that
+        being rendered in the client, so this event is picked up by Inq's MVC
+        to refresh the components.</li>
+        </ol>
+      </section>
+      <section id="sendhello">
+      <title>The sendHello() Callback</title>
+        <p>
+          Finally, the <code>sendHello()</code> function invokes
+          the <code>sayHello()</code> service in the server.
+        </p>
+        <source>
+// Update the server-side instance. We (and anyone else logged in) are
+// observing the Hello instance, so our GUI is updated that way.
+local function sendHello()
+{
+  send sayHello($this.vars.Hello);
+}
+</source>
+        <p>
+          Note that
+          the <a href="../../primer/guibasics.html#rinfofire"><code>firemodel</code></a>
+          modifier was not used when the callback was set up, so the GUI
+          is updating from the event propagating from the server to all observers.
+        </p>
+        <p>
+          Move on to the <a href="runhello.html">next section</a> to run
+          this example.
+        </p>
+      </section>
+      <p>
+        <a href="runhello.html"><icon src="../images/nextpage.gif" alt="nextpage"/></a>
+      </p>
+    </section>
+  </body>
+</document>

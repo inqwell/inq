@@ -226,13 +226,6 @@ public class AnyDialog extends    AnyWindow
     ss.maybeSync();
   }
 
-  public AnyDialog() {}
-
-  public AnyDialog(JDialog d)
-  {
-		super(d);
-	}
-
 	public void setObject(Object d)
 	{
 		//System.out.println ("AnyDialog.setObject " + d);

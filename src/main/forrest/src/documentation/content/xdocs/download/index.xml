@@ -1,0 +1,139 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright 2006 Inqwell Ltd.
+-->
+<!DOCTYPE document PUBLIC "-//APACHE//DTD Documentation V2.0//EN" "http://forrest.apache.org/dtd/document-v20.dtd">
+<document>
+  <header>
+    <title>Download Inq</title>
+  </header>
+  <body>
+    <section id="bin">
+      <title>Binary Distribution</title>
+      <p>
+        Binary downloads are available <a href="ext:downloads/bin">here</a>.
+      </p>
+      <p>
+        Inq itself only requires Java<sup>TM</sup> J2SE 1.6. Individual
+        applications, such
+        as <a href="../examples/petstore/index.html">petstore</a>, require
+        additional support that they detail.
+        There are also some simple command line scripts in
+        the <code>./examples/...</code> directories. These demonstrate various
+        features of the Inq language including some mathematical problems, file
+        handling, xml processing and JMS messaging. If there are things you would
+        like added please ask.
+      </p>
+      <p>
+        Inq includes binary distributions
+        of <a class="fork" href="ext:dock">Docking Frames</a>,
+        <a class="fork" href="ext:jcalendar">JCalendar</a>,
+        <a class="fork" href="ext:jline.sourceforge.net/home">JLine</a>
+        and <a class="fork" href="ext:tablelayout/home">TableLayout</a>. Their
+        licenses are included in the README. JLine is used to provide
+        history at the Inq command line prompt presently for non-Windows
+        platforms only. 
+      </p>
+      <p>
+        The binary distribution is ready to run - just download, the
+        appropriate <code>...dist...</code> file, unpack and
+        follow the specific setup requirements for any of the example applications
+        found under <code>./app/examples</code>.
+      </p>
+      <section id="inqhome">
+        <title>INQHOME</title>
+        <p>
+          Where you unpack inq becomes INQHOME. It is not necessary
+          to establish the environment variable <code>$INQHOME</code>
+          or <code>%INQHOME%</code> on Windows systems, however you
+          may wish to do so if you have more than one version present on your
+          system. Furthermore, please avoid spaces in the %INQHOME% directory path.
+        </p>
+        <p>
+          On Mac OS X set <code>$INQHOME</code> if you have problems with
+          the <code>inq</code> launcher script and <code>readlink</code>.
+        </p>
+        <p>
+          On Linux/Unix systems it may be useful to set up symbolic links
+          for the <code>inq</code> launcher, for example:
+        </p>
+        <source>
+/bin/inq -> /home/tom/apps/inq-alternatives/bin/inq
+</source>
+        <p>
+          and (for example)
+        </p>
+        <source>
+/home/tom/apps/inq-alternatives -> inq-1.1.1-SNAPSHOT
+</source>
+      </section>
+      <section id="path">
+        <title>PATH</title>
+        <p>
+          Again, not strictly necessary but convenient to
+          add <code>&lt;INQHOME&gt;/bin</code> to your
+          system's <code>PATH</code> variable (though see also notes
+          notes on the <a href="../primer/invoking.html#shebang">shebang flag</a>).
+          It is also necessary to add the command
+          directories of any utilities required by the examples (for
+          example <code>fop</code> used by petstore).
+        </p>
+      </section>
+    </section>
+    <section id="src">
+      <title>Github Source</title>
+      <p>
+        The Inq source is available at
+        the <a class="fork" href="ext:github-inq">github</a>.
+        To build Inq you will
+        require <a class="fork" href="ext:maven">Apache Maven</a>. You can
+        then build with
+      </p>
+      <source>
+mvn package
+</source>
+        <p>
+          The main artifact is only the Inq classes, however there are a
+          number of assemblies as follows
+        </p>
+        <dl>
+          <dt><strong>inq-{version}-dependencies.jar</strong></dt>
+          <dd>the dependencies - may be useful to add to your IDE
+          so Inq compiles there.</dd>
+          <dt><strong>inq-{version}-runtime.jar</strong></dt>
+          <dd>the Inq classes and their dependencies in a single jar.
+          This is the jar that is required for Inq to run and resides
+          in the <code>lib</code> directory.</dd>
+          <dt><strong>inq-{version}-dist.[tar.gz|zip]</strong></dt>
+          <dd>the Inq distribution. Unpack one of these to install Inq.</dd>
+        </dl>
+      <section id="jcalendar">
+        <title>JCalendar</title>
+        <p>
+          The Inq team have made some additions to JCalendar. There is a
+          summary <a href="ext:www.inqwell.com/jcalendar-inqwell">here</a>. The
+          source is at <a class="fork" href="ext:github-jcalendar">github</a>
+          and <a class="fork" href="ext:jcalendar-api">javadoc</a> is available.
+        </p>
+      </section>
+    </section>
+    <section id="version">
+      <title>Version History</title>
+      <section id="r1.2">
+        <title>1.2</title>
+        <p>
+          Job Control application added. Supports batch jobs in Inq and demonstrates
+          advanced transaction usage.
+        </p>
+        <p>
+          Included web site in distribution jar.
+        </p>
+        <p>
+          Includes initial Docking Frames support. Persistent layouts of multiple dockables are
+          supported and restored on restart. See <code>./examples/gui/mdock.inq</code>. There is
+          no <code>CStation</code> access yet.
+        </p>
+      </section>
+    </section>
+  </body>
+</document>

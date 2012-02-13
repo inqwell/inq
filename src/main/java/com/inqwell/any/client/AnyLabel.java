@@ -36,7 +36,7 @@ import javax.swing.tree.DefaultTreeCellRenderer;
  * A label wrapper whose primary purpose is to act as a labeling
  * item for some other component.
  */
-public class AnyLabel extends AnyComponent
+public class AnyLabel extends AnySimpleComponent
 {
   protected JLabel       l_;
   

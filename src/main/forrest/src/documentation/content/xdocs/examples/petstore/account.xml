@@ -1,0 +1,223 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright 2006 Inqwell Ltd.
+-->
+<!DOCTYPE document PUBLIC "-//APACHE//DTD Documentation V2.0//EN" "http://forrest.apache.org/dtd/document-v20.dtd">
+<document>
+  <header>
+    <title>My Account</title>
+  </header>
+  <body>
+    <section id="intro">
+      <title>My Account</title>
+      <p>
+      The My Account function is the simplest client/server part of petstore.
+      The window is launched from the dashboard by
+      calling <code>gui/myAccount.inq:showMyAccount()</code>. It follows the
+      common pattern for creating a GUI that is
+      a <a href="../../primer/guibasics.html#context">context node</a> and
+      exchanging with the server during initialisation: 
+      </p>
+      <ol>
+        <li>create and configure the components</li>
+        <li>choose a suitable component on which to apply the <code>gContext</code>
+        event</li>
+        <li>complete any required initialisation in the event handler, 
+        running in the new context.</li>
+      </ol>
+      <p>
+        My Account is built on the following Inq features:
+      </p>
+      <ol>
+        <li>The GUI creates no data of its own - each component
+        has its <code>renderinfo</code> property set, binding it to a
+        node</li>
+        <li>The service <code>initAccount()</code> in the server places
+        the Account instance at the path <code>$this.vars.Account</code>.
+        This automatically propagates the instance to the client at the
+        same path
+        via Inq's <a href="../../primer/process.html#eventflows">event propagation</a>
+        from server to client</li>
+        <li>Corresponding events in client cause the GUI to render the
+        data via <a href="../../primer/guibasics.html#mvc">automatic MVC</a>.</li>
+      </ol>
+      <section id="layout">
+        <title>Layout Features</title>
+        <p>
+          Here is the My Account window:
+        </p>
+        <figure src="images/psaccount.png" alt="MyAccount"/>
+        <p>
+          We'll use it as an example to introduce features supported
+          by Inq's GUI <code>layout()</code> function. Here is the invocation
+          it uses:
+        </p>
+        <source>
+  // layout the components
+  layout(., myAccount, "Scroll Margin d:3
+                        Caption {i18n}.ps.title.ACCOUNT_DETAILS;
+                        Table  Columns labels1=GRID_PREF, 5, comps1=GRID_FILL, 10, labels2=GRID_PREF, 5, comps2=GRID_FILL
+                          Gap 3 Rows
+                               GRID_PREF,
+                               GRID_PREF,
+                               GRID_PREF,
+                               GRID_PREF,
+                               GRID_PREF,
+                               GRID_PREF,
+                               GRID_FILL,
+                               buttons=GRID_PREF;
+                        {
+                          Column labels1
+                          {
+                            Label tfAccount
+                            Label tfFirstName
+                            Label tfLastName
+                            Label tfAddr1
+                            Label tfAddr2
+                            Label tfEmail
+                          }
+                          
+                          Column comps1
+                          {
+                            tfAccount
+                            tfFirstName
+                            tfLastName
+                            tfAddr1
+                            tfAddr2
+                            HSpan comps2 tfEmail
+                          }
+                          
+                          Column labels2
+                          {
+                            Label tfPhone
+                            Label tfCity
+                            Label tfState
+                            Label tfZIP
+                            Label tfCountry
+                          }
+                          
+                          Column comps2
+                          {
+                            tfPhone
+                            tfCity
+                            tfState
+                            tfZIP
+                            tfCountry
+                          }
+                          
+                        } // end Table
+                        
+                        Geometry xy:vf
+                        Margin d:3
+                        Table  Columns 0.25, GRID_FILL, 0.25, 5, 0.25
+                          Rows GRID_PREF;
+                        {
+                          Cell 0 0 bSave
+                          Cell 2 0 bDiscard
+                          Cell 4 0 bCancel
+                        }
+                        ");
+</source>
+        <p>
+          This discussion assumes you are familiar with the table
+          layout <a href="../../primer/tablelayout.pdf">Mini Guide</a>.
+          There is also further information about <code>layout()</code>
+          in the <a href="../../primer/guibasics.html">GUI Basics</a> section.
+        </p>
+        <section id="layoutgeneral">
+          <title>General</title>
+          <p>
+            The <code>layout()</code> function parses a <em>layout string</em>
+            that contains layout qualifiers, specifies graphical containers with
+            their constraints and references components to create the GUI
+            containment hierarchy. Components do not have to pre-exist: those
+            that are significant to the application will have been created
+            and possibly configured with property settings prior to layout,
+            however <code>layout()</code> can also create components as
+            it goes along, usually to achieve a desired appearance. 
+          </p>
+          <p>
+            The general form of a layout clause is 
+          </p>
+          <source>
+&lt;layout-clause&gt; = [ &lt;qualifier&gt; ] ( &lt;container&gt; "{" &lt;layout-clause&gt; "}"
+                                  | &lt;component&gt;
+                                  | &lt;directive&gt;
+                                  ) 
+</source>
+          <p>
+            Keywords in the layout syntax begin with an upper-case letter.
+            Layout begins with a simple column container, that is comonents (or
+            containers) at the top level are laid out vertically in the order
+            they appear in the string.
+          </p>
+          <p>
+            We go through the My Account example, explaining the details.
+          </p>
+        </section>
+        <section id="layoutqualifiers">
+          <title>Layout Qualifiers</title>
+          <p>
+            There are three qualifiers
+            here, <code>Scroll</code>, <code>Margin d:3</code>
+            and <code>Caption {i18n}.ps.title.ACCOUNT_DETAILS;</code>
+          </p>
+          <p>
+            <code>Scroll</code> makes what follows scrollable. More of a
+            demonstration in this case, see what happens when reducing the
+            size of the window.
+          </p>
+          <p>
+            <code>Margin d:3</code> places a three pixel margin around what
+            follows.
+          </p>
+          <p>
+            <code>Caption {i18n}.ps.title.ACCOUNT_DETAILS;</code> resolves the
+            expression and uses its result to place the look and feel's
+            default title border around what follows.
+          </p>
+        </section> 
+        <section id="definetable">
+          <title>The Table Definition</title>
+          <p>
+            The layout string then specifies a <em>Table</em> container - again
+            <a href="../../primer/tablelayout.pdf">Mini Guide</a> refers. The
+            preferred formatting of the string is to express the columns on
+            a single line and the rows one per line, making the table easier
+            to visualise.
+          </p>
+        </section>
+        <section id="labeldir">
+          <title>The Label Directive</title>
+          <p>
+            Clauses like <code>Label tfAccount</code> (used when filling the
+            table cells) are examples of
+            the <code>Label</code> directive. This clause creates a label
+            during the layout based on the the associated
+            component's <code>renderInfo</code> property. The label text
+            will be the default, inherited from
+            the <a href="../../primer/guibasics.html#renderinfo"><code>renderinfo</code></a>'s specified <code>typedef</code>
+            and <code>field</code> or any that was provided with
+            the <code>label = </code> argument. It can be seen
+            how useful it is to <a href="anatomy.html#common">centralise</a> labels
+            in <a href="../../primer/typedef.html#intro">typedef</a>s and
+            have them accessible when building the GUI.
+          </p>
+        </section>
+        <section id="geom">
+          <title>The Geometry Qualifier</title>
+          <p>
+            A second table (in the top-level vertical box) contains the
+            buttons. This is qualified with <code>Geometry xy:vf</code>,
+            which means allow the following to stretch and shrink in
+            the <code>x</code> direction while remaining fixed along
+            the <code>y</code> axis.
+          </p>
+        </section> 
+      </section>
+      <p>
+        <a href="neworder.html"><icon src="../images/nextpage.gif" alt="nextpage"/></a>
+      </p>
+    </section>
+  </body>
+</document>

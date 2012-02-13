@@ -13,7 +13,7 @@
 // this is all transparent to Inq).
 // Reusable dockables are associated with a function
 // to recreate them when the desktop is restored.
-// Usage: ./mdock.inq to create default desktop
+// Usage: ./mdock.inq to create default desktop (inq -in mdock.inq for windows)
 //        ./mdock.inq -load to restore last desktop
 // See also http://dock.javaforge.com/
 
@@ -57,9 +57,10 @@ function createGui(any parent, any name)
   gTextField tfText;
   string parent.vars.text = "Hello";
   tfText.properties.renderInfo = renderinfo($this.vars.text, label="Text", editable=true);
+  gEvent(tfText, firemodel=true);
 
   layout(., parent, "Table Columns GRID_PREF, 5, GRID_FILL
-                     Rows GRID_PREF, GRID_PREF;
+                     Rows GRID_PREF;
                      {
                        Row
                        {
@@ -71,7 +72,8 @@ function createGui(any parent, any name)
 
   if (name == "Dock1")
   {
-    // Actions demonstration
+    // Actions demonstration. Create various actions, set up their
+    // properties and any events, then lay them out
 
     gDockButton b;
     b.properties.icon = image("cp:///com/inqwell/any/tools/q16.png");
@@ -105,13 +107,62 @@ function createGui(any parent, any name)
     gButton b1;
     b1.properties.text = "1";
     gTextField tf1;
+    
+    gDockButtonGroup bg;
+    bg.properties.renderInfo = renderinfo($this.vars.text);
+    gEvent(bg, firemodel=true);
+    
+    gDockRadio r1;
+    gDockRadio r2;
+    gDockRadio r3;
+    r1.properties.renderInfo = renderinfo("1", label="R1");
+    r2.properties.renderInfo = renderinfo("2", label="R2");
+    r3.properties.renderInfo = renderinfo("3", label="R3");
+    r1.properties.selectedIcon = image("RedCircle.gif");
+    r2.properties.selectedIcon = image("YellowCircle.gif");
+    r3.properties.selectedIcon = image("GreenCircle.gif");
+    r1.properties.icon = 
+      r2.properties.icon = 
+      r3.properties.icon = image("BlackCircle.gif");
+    r1.properties.buttonGroup = bg;
+    r2.properties.buttonGroup = bg;
+    r3.properties.buttonGroup = bg;
 
-    // Now lay out all the actions
-    gDockActions actions;
-    layout(., parent, actions, "b m { m1 m2 m3 } popup { b1 tf1 }");
+    gDockCheck c;
+    c.properties.renderInfo = renderinfo($this.vars.text, label="Check Box");
+    c.properties.icon           = image("GreenFlag.gif");
+    c.properties.selectedIcon   = image("Padlock.gif");
+    c.properties.checkedValue   = "checked";
+    c.properties.uncheckedValue = "unchecked";
+    gEvent(c, firemodel=true);
+
+    // Now lay out all the actions.
+    // 1. Fetch the root action container as a property of the dockable
+    any actions = parent.properties.actions;
+    // 2. Lay out the actions: when the context is established the
+    // actions will be accessible as $this.b, $this.m, $this.m1 etc
+    // while the graphical groupings are as shown in the layout string. 
+    layout(., parent, actions, "b
+                                m 
+                                {
+                                  m1
+                                  m2
+                                  Separator
+                                  m3
+                                }
+                                popup
+                                {
+                                  b1
+                                  tf1
+                                }
+                                Separator
+                                r1
+                                r2
+                                r3 bg
+                                c");
 
     // Tell the dockable what its actions are
-    parent.properties.actions = actions;
+    //parent.properties.actions = actions;
   }
 
   // Show the dockable
@@ -166,10 +217,11 @@ local function contextEstablished()
   }
 }
 
+
 gWindow win;
 win.properties.defaultCloseOperation = EXIT_ON_CLOSE;
 win.properties.title = "Dock Main Frame";
-win.properties.size = array size = (300,200);
+win.properties.size = array size = (450,200);
 win.properties.contextNode = true;
 gEvent(win, call contextEstablished(), event=(gContext));
 any $this.win = win;

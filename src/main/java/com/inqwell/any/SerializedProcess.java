@@ -62,11 +62,16 @@ public class SerializedProcess extends    SimpleMap
 	 * process out of a <code>wait()</code> in which it is deadlocked
 	 * with one or more competing processes.
 	 */
-	public void kill(Process p) throws AnyException
-	{
+  public void kill(Process p) throws AnyException
+  {
     throw new UnsupportedOperationException();
-	}
-	
+  }
+  
+  public boolean killed()
+  {
+    throw new UnsupportedOperationException();
+  }
+  
   public void interrupt()
   {
     throw new UnsupportedOperationException();

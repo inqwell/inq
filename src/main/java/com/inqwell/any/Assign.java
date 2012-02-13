@@ -30,7 +30,6 @@ public class Assign extends MutatingOperator
     // croak now
 		if (op2 == null)
       notResolved(op2);
-			//throw new IllegalArgumentException ("Attempt to assign from null");
 
     op1_ = op1;
     op2_ = op2;

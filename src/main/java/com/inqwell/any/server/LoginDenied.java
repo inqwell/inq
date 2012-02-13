@@ -89,7 +89,7 @@ public class LoginDenied extends Exec
 
       Map root = getTransaction().getProcess().getRoot();
 
-      OutputChannel oc = (OutputChannel)root.get(LoginOK.ochannel__);
+      OutputChannel oc = (OutputChannel)root.get(UserProcess.ochannel__);
 
       oc.write(e);
       oc.flushOutput();

@@ -1,0 +1,922 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright 2006 Inqwell Ltd.
+-->
+<!DOCTYPE document PUBLIC "-//APACHE//DTD Documentation V2.0//EN" "http://forrest.apache.org/dtd/document-v20.dtd">
+<document>
+  <header>
+    <title>More About I/O Keys</title>
+  </header>
+  <body>
+    <section id="intro">
+      <title>Introduction</title>
+      <p>
+        We have introduced <a href="nodes.html">hierarchical data structures</a>
+        and talked a little about how managed typedef instances
+        are <a href="typedef.html#instancelifecycle">returned</a>
+        using Inq's <code>read()</code> statement. Part of
+        application design is to define the groupings of instances the
+        application will manipulate. Inq formalises these groupings by
+        expressing them as keys, which are then referenced in
+        the <code>read()</code> and <code>aggregate()</code> statements
+        that are used to build instance structures.
+      </p>
+      <p>
+        In this section we discuss in more detail the types of key supported
+        by Inq, whether Inq caches the values yielded by a key and the relevant
+        caching options when the typedef is bound to an SQL server.
+      </p>
+    </section>
+    <section id="keydefstruct">
+      <title>The Structure of a Key Definition</title>
+      <p>
+        A key definition comprises at most the following elements:
+      </p>
+    <dl>
+      <dt><strong>Key Fields</strong></dt>
+      <dd>
+        <p>
+        In the simplest case, a key is made up only of a subset of the fields
+        of its enclosing typedef. It is possible, however, to create additional
+        fields by referencing other typedef entities or aliases.
+        </p>
+      </dd>
+      <dt><strong>Eligibility Expression</strong></dt>
+      <dd>
+        <p>
+        If a key is cached Inq will try to maintain the instance(s) held
+        against key values as instance fields are mutated. As we discuss
+        further below, this is simple when the key yields instances only
+        for equality, however if the underlying i/o configuration applies
+        the key value some other way, say with an inequality or complex
+        logical expression, a cached key requires an expression to mirror
+        this logic. When instances are mutated, constructed or destroyed Inq
+        uses the eligibility expression to ensure that any key value
+        currently in the cache maps to the correct (set of) instances.
+        </p>
+        <p>
+        If a key is not cached then any eligibility expression
+        is never used.
+        </p>
+      </dd>
+      <dt><strong>Key Volatility</strong></dt>
+      <dd>
+        <p>
+        As an alternative to an eligibility expression, a key can be defined
+        as <code>volatile</code>. In this case the cache is discarded whenever
+        any instance fields that comprise the key are modified.
+        </p>
+      </dd>
+      <dt><strong>Auxiliary Configuration</strong></dt>
+      <dd>
+        <p>
+        The so-called <code>auxcfg</code> data is information that is opaque to
+        the key itself but applies to the i/o mechanism the typedef is
+        bound to. Inq currently supports in-memory only and relational
+        database systems, so the <code>auxcfg</code> data contains SQL
+        statements and data for argument marshalling.
+        </p>
+      </dd>
+      <dt><strong>Explicit Foreign Key Fields</strong></dt>
+      <dd>
+        <p>
+        A key's <code>auxcfg</code> data may use foreign keys without these fields
+        being part of the key definition itself. For Inq to maintain a key cache
+        under these circumstances it must be told which typedef fields are being
+        used as foreign keys by the i/o mechanism. As we will see in the examples
+        below, the cache is discarded when an instance's explicit foreign key field is
+        modified.
+        </p>
+      </dd>
+    </dl>
+    </section>
+    <section id="keytypes">
+      <title>Primary, Unique and Non-Unique Keys</title>
+      <section id="primarykey">
+      <title>The Primary Key</title>
+      <p>
+        Every typedef must have a primary key that is composed only of fields
+        of the typedef itself, no matter whether the fields themselves were
+        native declarations or defined using references to entities or aliases.
+        Inq uses the primary key in the following ways:
+      </p>
+      <ul>
+        <li>The primary key is unique and its value is what defines the identity
+        of a typedef instance to Inq.</li>
+        <li>The primary key is always cached, allowing Inq to manage a single
+        internal object reference for a given instance. Inq can then propagate
+        events to any processes holding such a reference.</li>
+      </ul>
+      <p>
+        Once in the managed state, the primary key field(s) of an instance cannot
+        be modified. Attempting to do so causes a run-time error.
+      </p>
+      <p>
+        The name of the primary key is "pkey" and cannot be specified otherwise.
+        There are also these restrictions that apply to the primary key:
+      </p>
+      <ul>
+        <li>the key must have equality semantics (that is it must only retrieve
+          instances whose field(s) exactly match the key value);</li>
+        <li>an eligibility expression is not permitted.</li>
+      </ul>
+    </section>
+    <section id="uniquekeys">
+      <title>Unique Keys</title>
+      <p>
+        Any number of additional unique keys can be defined as part of a typedef's
+        configuration. Not surprisingly, an error occurs if a transaction tries
+        to create a new instance or modify an existing one to violate this
+        condition.
+      </p>
+      <p>
+        A unique key value can return zero or one instance when applied to its
+        typedef. If there is a mis-configuration between Inq and the underlying
+        i/o binding (defined by the key's <code>auxcfg</code>) and this rule is
+        violated, Inq reports an error.
+      </p>
+    </section>
+    <section id="nonuniquekeys">
+      <title>Non-Unique Keys</title>
+      <p>
+        Any number of non-unique keys can be defined as part of a typedef's
+        configuration. There are no restrictions on how many instances
+        a non-unique key value can return or, put another way, on how many
+        instances can have the same value for a non-unique key.
+      </p>
+      <p>
+        Inq assumes a key is non-unique unless specified otherwise.
+      </p>
+    </section>
+    </section>
+    <section id="examples">
+      <title>Example Key Definitions</title>
+      <p>
+        To put all this together we will discuss examples showing all types
+        of key definition and how these operate when the
+        typedef is bound to an SQL server.
+      </p>
+      <p>
+        We will see how extending the simple cases introduced in the previous
+        section covers the use of table joins, keys that include inequalities and
+        the effect these issues have on whether the key should be cached.
+      </p>
+      <p>
+        To discuss these issues consider the following one-to-many relationship:
+      </p>
+      <figure src="images/entitycpty.png" alt="One To Many"/>
+      <p>
+        A top-level legal entity has many regional sub-divisions, or
+        counterparties, so that <code>Cpty.Entity</code> is a foreign key
+        from <code>Entity.Entity</code>.
+      </p>
+      <p>
+        The attribute <code>Entity.Type</code> is an
+        enumeration. <code>Entity.GlobalLimit</code> is a numeric that
+        can take a positive value or <code>null</code>, meaning there is no limit.
+        When reviewing the examples, sample SQL to create these types as tables
+        is: <a class="fork" href="examples/mysql/XYEntity.sql"><code>Entity</code></a>
+        and <a class="fork" href="examples/mysql/XYCpty.sql"><code>Cpty</code></a>
+      </p>
+      <section id="expkey">
+        <title><code>Cpty</code> Primary Key</title>
+        <p>
+          Primary keys are the easiest to define because they always take the
+          same form and are restricted to:
+        </p>
+        <ul>
+          <li>equality semantics, so no eligibility expression;</li>
+          <li>caching cannot be disabled;</li>
+          <li>only typedef fields can be used.</li>
+        </ul>
+        <p>
+          When defining the key field(s), it doesn't matter if the fields themselves
+          were defined by referencing other entity or alias definitions, just that
+          the primary key's field list only specifies names from the typedef.
+        </p>
+        <p>
+          Here is the beginning of the <code>Cpty</code> typedef. As we are
+          concentrating on key definitions, qualifiers to specify widths, labels
+          and so forth have been omitted for clarity.
+        </p>
+        <source>
+typedef Cpty
+{
+  fields
+  (
+    string        Cpty;
+    LongName;
+    Entity;
+    Currency      BaseCurrency;
+    Country       DomicileCountry;
+    Active;
+    LastUpdated;
+    User;
+  )
+   .
+   .
+   .
+</source>
+      <p>
+        The primary key must be the first key to follow the definition of the
+        fields. Here is what it looks like:
+      </p>
+      <source>
+  pkey
+  (
+    fields (Cpty)
+
+    #include &lt;{db}/xyCpty.pkey.sql&gt;
+  )
+</source>
+      <p>
+        The primary key is introduced with the keyword <code>pkey</code>. The
+        <code>fields</code> construct is a comma separated list of identifiers
+        that must be typedef field names.
+      </p>
+      <p>
+        The most complex part of the primary key is the <code>auxcfg</code>
+        expression. As we saw in the discussion of typedefs, it can be useful
+        to place this in a separate file.
+      </p>
+      <p>
+        Inq uses the primary key not only to read instances from i/o but
+        also to create, modify and delete them. When binding to a
+        relational database the <code>auxcfg</code> data is a map of
+        well-known (map) keys to SQL statements. Here are some examples
+      </p>
+      <!--<dl>-->
+      <section id="expkey_mysql_plain">
+        <!--<dt><a class="fork" href="examples/mysql/xyCpty.pkey.plain.sql">MySql Using Plain SQL</a></dt>
+        <dd>-->
+        <title>MySql Using Plain SQL</title>
+          <p>
+          This example uses <a class="fork" href="examples/mysql/xyCpty.pkey.plain.sql">plain SQL</a>.
+          If you are familiar with JDBC<sup>TM</sup>,
+          that is SQL that contains all arguments as formatted strings. This
+          method is not as manageable as using prepared statements as outlined
+          in the next example but can be used in the unlikely event the
+          JDBC driver for your database implementation does not support them.
+          </p>
+          <p>
+          The <code>select-stmt</code> key maps to a string that contains the
+          select statement used in the primary and all other keys. It is common to
+          use a table alias in preparation for more complex SQL in other keys
+          that joins with other tables.
+          </p>
+          <p>
+          The <code>read-sql</code> element uses a substitution syntax applied
+          once against the <code>auxcfg</code> map and on each use against the
+          value supplied for the primary key. This substitution syntax can use
+          formatting strings in the same way
+          as <a class="fork" href="ext:j2seapi/apidocs/messageformat">MessageFormat</a>
+          does for positional arguments.
+          </p>
+          <p>
+          The <code>write-sql</code> element contains the SQL to update or create
+          a single typedef instance. As we see when processing
+          the <code>LastUpdated</code> column, a format string to render
+          a date appropriate
+          for the SQL implementation and required granularity for the application
+          must be included.
+          </p>
+          <p>
+          Lastly, the <code>delete-sql</code> element contains the SQL to delete
+          a single typedef instance using the same <code>where</code> clause
+          as <code>read-sql</code>.
+          </p>
+       <!-- </dd>-->
+      </section>
+      <section id="expkey_mysql_prepared">
+        <title>MySql Using Prepared SQL</title>
+          <p>
+          Here is another example but this time implemented using the
+          JDBC <a class="fork" href="examples/mysql/xyCpty.pkey.prepared.sql">prepared statement</a>
+          syntax. Inq will use a prepared statement
+          when the element <code>prepared</code>
+          is included with the value of boolean <code>true</code>.
+          This method has the advantage of not
+          requiring conversion of the arguments into strings, so no
+          formatting is required. Everything is expressed in terms of the
+          underlying Inq data types and their mapping to those of the table
+          columns, meaning that there is no inference of precision in the
+          format strings. The small disadvantage
+          is that prepared statements require ordering of the arguments
+          whereas the symbolic reference of Inq's plain SQL parameterised
+          syntax did not. Depending on your chosen database, this may require
+          more work, as shown in the Oracle example below. For MySql, though,
+          we are in luck.
+          </p>
+          <p>
+          Inq marshalls the pkey (read) and typedef (write) fields in the
+          order they appear in their respective <code>fields</code> clauses.
+          The prepared version is therefore not only better but also
+          easier than the plain version.
+          </p>
+        </section>
+        <section id="expkey_mysql_stproc">
+        <title>MySql Using A Stored Procedure</title>
+          <p>
+          If we specify the well-known key <code>stproc</code> then Inq will
+          invoke the SQL as
+          a <a class="fork" href="examples/mysql/xyCpty.pkey.stproc.sql">stored procedure call</a>.
+          In terms of SQL
+          maintenence this method has the disadvantage that the select
+          statement cannot be reused in this or any other Inq key defined
+          in the typedef, because it is in the database engine.
+          </p>
+          <p>
+          This approach uses the same parameter marshalling as prepared statements.
+          Note that Inq sets all arguments as input-only and expects the stored
+          procedure to return a result set (in this case, containing a single row).
+          </p>
+        </section>
+        <section id="expkey_oracle_plain">
+          <title>Oracle Equivalents</title>
+          <p>
+          The <a class="fork" href="examples/oracle/xyCpty.pkey.plain.sql">Oracle plain SQL</a>
+          version illustrates how the necessary string formatting can become more
+          complex.
+          The <a class="fork" href="examples/oracle/xyCpty.pkey.prepared.sql">prepared statement</a>
+          version is easier, however we do need to explicitly marshall the arguments.
+          The <code>write-order</code> element is used by Inq to reference the typedef
+          fields as required by the SQL syntax. Inq also supports a <code>read-order</code>,
+          which is used in the <code>read-sql</code> and <code>delete-sql</code> statements.
+          In this case the SQL statements are not complex and the default ordering of the key
+          fields is appropriate. We will see how <code>read-order</code> is used when
+          discussing keys used for filtering.
+          </p>
+        </section>
+      </section>
+      <section id="exnukey">
+        <title><code>Cpty</code> Key By DomicileCountry</title>
+        <p>
+        Suppose we had determined while analysing the application that we needed a list
+        of <code>Cpty</code> instances selected by the <code>DomicileCountry</code>
+        field. Such a key could be defined like this:
+        </p>
+        <source>
+key ByDomicileCountry
+(
+  fields(DomicileCountry)
+  auxcfg( map(
+  "prepared", true,
+  "read-sql",
+    "
+      {select-stmt}
+      where DomicileCountry  = ?
+    "
+  ))
+)
+</source>
+        <p>
+        All keys other than the primary must be named. As a convention, these names
+        are of the form <code>By&lt;KeyFields&gt;</code>. Using only typedef fields,
+        this key does not add much to our discussion other than to demonstrate:
+        </p>
+        <ul>
+          <li>the <code>select-stmt</code> defined in the primary key
+          is available by symbolic reference;</li>
+          <li>there is no need to use an <code>include</code> file when the syntax
+          of what is specific to the key is trivial (that is, invariant amongst
+          the SQL engines the application will run on).</li>
+        </ul>
+        <p>
+        This is a non-unique key, that being the default in all cases except the
+        primary. To define a unique key, specify the <code>unique</code> keyword
+        after the name:
+        </p>
+        <source>
+key BySomeUniqueFieldSet unique
+(
+   .
+   .
+</source>
+      </section>
+      <section id="exnjoinkey">
+        <title>Joining Entity and Cpty</title>
+        <p>
+          In data designs with normalised relationships it is common to define
+          a set of instances of one typedef that are determined by a foreign key
+          join to another. In our <code>Entity</code> and <code>Cpty</code> example,
+          we would like the set of <code>Cpty</code> instances for a given
+          value of the related <code>Entity.Type</code> field. We define a key to
+          do that like this:
+        </p>
+        <source>
+key ByEntityType cached=true
+(
+  fields(Entity.Type EntityType)
+
+  foreign(Entity)
+
+  auxcfg( map(
+  "prepared", true,
+  "read-sql",
+    "
+      {select-stmt},
+      XYEntity E
+      where  C.Entity = E.Entity     // Table Join
+      and    E.Type   = ?            // Foreign field
+    "
+  ))
+)
+</source>
+      <p>
+        The first thing to note is that the key field is not part of
+        the <code>Cpty</code> typedef, so instead it is defined by making
+        a reference to <code>Entity.Type</code>. Had we left it there, the
+        key field would have the name <code>Type</code>, however we
+        provide the localised name of <code>EntityType</code> to emphasise
+        the fact that we are importing the field. Providing an alias like
+        this does not have any effect other than to rename the field.
+      </p>
+      <p>
+        By default, Inq does not cache keys that include references to
+        other typedef entities or aliases, that is when one or more
+        key fields is not part of the enclosing typedef. There are two
+        reasons why the cache of <code>EntityType</code> values could
+        become invalid
+      </p>
+      <ol>
+        <li>the value of the foreign key <code>Type</code> in a
+          related instance of <code>Entity</code> changes;</li>
+        <li>the foreign key field <code>Entity</code> in an instance
+          of <code>Cpty</code>
+          changes.</li>
+      </ol>
+      <p>
+        Respectively, these events take place 1) in a different typedef and 2)
+        on a typedef field that is not part of the key. Inq automatically handles
+        the first case. When a key field is defined using a typedef field
+        reference then (applying this example) Inq will flush that key's cache
+        under the following circumstances:
+      </p>
+      <ul>
+        <li>the value of <code>Entity.Type</code> is changed in any instance
+        of <code>Entity</code>;</li>
+        <li>an instance of <code>Entity</code> is created or destroyed.</li>
+      </ul>
+      <p>
+        In the second case, the join of the <code>Entity</code>
+        and <code>Cpty</code> database tables is actually implemented in
+        the SQL statement. This is opaque to Inq and if the key was not
+        cached would be of no consequence. If, as here, we elect to cache the
+        key by specifying <code>cached=true</code> then we must also inform Inq
+        of foreign key usage by the i/o
+        configuration using a <code>foreign</code> clause. This is a comma
+        separated list of any typedef fields that are not themselves already
+        key fields
+      </p>
+      <p>
+        Again, Inq flushes the cache when <code>Cpty.Entity</code> changes
+        or an instance of <code>Cpty</code> is created or destroyed.
+      </p>
+      </section>
+      <section id="exnotequal">
+        <title>Keys With Inequalities</title>
+        <p>
+          In the examples presented so far, the i/o configuration has used the
+          key value in simple equality expressions, that is, the <code>where</code>
+          clause is of the
+          form <em><code>&lt;table_column&gt; = &lt;key_value&gt;</code></em>
+          and there has been a one-to-one correspondence between a key value
+          and the set of instances it yields. If an application design requires
+          more than this
+          then there are further considerations when configuring cached keys.
+        </p>
+        <p>
+          Here is an example for the <code>Entity</code> typedef that uses a range
+          to define the set of qualifying instances:
+        </p>
+        <source>
+key ByGlobalLimitRange cached=true
+(
+  fields(Entity.GlobalLimit GlobalLimitLower,
+         Entity.GlobalLimit GlobalLimitUpper)
+
+  eligible
+  (
+    $this.instance.GlobalLimit  &gt;= $this.key.GlobalLimitLower &amp;&amp;
+    $this.instance.GlobalLimit  &lt;= $this.key.GlobalLimitUpper
+  )
+
+  auxcfg( map(
+  "prepared", true,
+  "read-sql",
+    "
+      {select-stmt}
+      where  E.GlobalLimit &gt;= ?
+      and    E.GlobalLimit &lt;= ?
+    "
+  ))
+)
+</source>
+        <p>
+          In this case the <code>where</code> clause tests that the table
+          column <code>GlobalLimit</code> is within the range defined by
+          the key fields <code>GlobalLimitLower</code>
+          and <code>GlobalLimitUpper</code>. Inq supports this kind of
+          key with the following features:
+        </p>
+        <dl>
+          <dt>Key Fields</dt>
+          <dd><p>The key fields are not part of the typedef and are defined
+          using references. In this example we have referenced a field of the
+          enclosing typedef, although this is no different from any other
+          entity or alias reference.</p></dd>
+          <dt>Caching</dt>
+          <dd><p>As we saw above, defining fields using references turns off
+          caching. We would like to enable it so we explicitly turn it
+          back on.</p></dd>
+          <dt>Eligibility Expression</dt>
+          <dd><p>For Inq to correctly maintain the cache
+          an <em>eligibility expression</em> must be defined that duplicates the
+          logic of the SQL <code>where</code> clause. This takes the form
+          of <code>eligible(</code><em><code>&lt;statement&gt;</code></em><code>)</code>
+          and is called when Inq commits a transaction.</p>
+          <p>The <code>eligible</code> expression returns true or false and is
+          passed two arguments via <code>$this</code>. The
+          path <code>$this.instance</code>
+          refers to the instance being committed (whether created, mutated or destroyed)
+          while <code>$this.key</code> refers to a key value held in the cache.</p>
+          Inq may invoke the eligibility expression on a given instance more than once,
+          each time with a different key value, depending on the current state of
+          the cache.
+          </dd>
+        </dl>
+        <note>If caching is disabled then the eligibility expression is not used,
+        however not defining one in cached keys with an inequality will produce undefined
+        results.</note>
+        <p>
+          Although we have defined a non-unique key in this example, the use
+          of an eligibility expression also applies to unique keys. Such
+          a situation would apply, for example, with a data type whose instances
+          include a <em>from</em> and <em>to</em> date field where no two instances
+          can have overlapping date ranges.
+        </p>
+      </section>
+      <section id="exfilter">
+        <title>Keys as Filters</title>
+        <p>
+          Lastly, we cover the implementation of arbitrary filters. It is common
+          for applications to have "browser" style front end GUIs that define a
+          set of input parameters. Users can set specific values or wild-card
+          a parameter so that a narrow or wide set of instances can be returned.
+          Suppose we would like to define a filter to yield the set
+          of <code>Cpty</code> instances according to their
+        </p>
+        <ol>
+          <li><code>DomicileCountry</code></li>
+          <li><code>BaseCurrency</code></li>
+          <li><code>Active</code></li>
+          <li><code>Entity</code></li>
+          <li>related <code>Entity.Type</code></li>
+          <li>an upper and lower bound of the
+            related <code>Entity.GlobalLimit</code></li>
+        </ol>
+        <p>Here is a key definition for <code>Cpty</code> to accomplish that:</p>
+        <source>
+key Filter volatile=true
+(
+  fields(DomicileCountry,
+         BaseCurrency,
+         Active,
+         Entity,
+         Entity.Type EntityType,
+         Entity.GlobalLimit GlobalLimitLower,
+         Entity.GlobalLimit GlobalLimitUpper)
+
+  <a class="fork" href="examples/mysql/xyCpty.Filter.sql">#include &lt;{db}xyCpty.Filter.sql&gt;</a>
+)
+</source>
+        <p>
+          The <code>volatile</code> option implicitly enables caching and
+          causes the cache to be flushed whenever any typedef field
+          that is part of the key is mutated, or when an instance is
+          created or destroyed. This is an extension of the behaviour
+          described above for key fields defined by references and explicit
+          foreign keys. Had the <code>volatile</code> qualifier been omitted
+          the <code>Filter</code> key would default to non-cached.
+        </p>
+        <p>
+          There is a foreign key field <code>Entity</code>, which
+          although used in the SQL join, is an Inq key field and because
+          the key is defined as <code>volatile</code>, an explicit <code>foreign</code>
+          clause is not necessary.
+        </p>
+        <p>
+          If we look at the SQL statement we can see that it has quite
+          a complex structure including tests for <code>NULL</code>, which
+          is the technique for wildcarding that filter parameter. This is
+          typical of filtering keys. No eligibility expression
+          is required because Inq does not maintain the cache as the native key
+          fields are changed. The use instead of <code>volatile</code>
+          <!--
+          It is possible to write an eligibility
+          expression that replicates this logic (for the curious
+          its <a href="examples/filter_eligible.inq">here</a>) but the
+          use of <code>volatile</code>
+          -->
+          is based on the assumptions that:
+        </p>
+        <ol>
+          <li>Use of the key is driven by the users themselves, so is
+            perhaps relatively infrequent in comparison to the activity
+           generated by a batch process.</li>
+          <li>The types involved are part of the application's static data,
+            that is they are not updated often so the cache remains
+          valid most of the time</li>
+        </ol>
+        <p>
+          Even though this example uses a join we could still have declared it as
+          a cached key and supplied an eligibility expression. The expression
+          would be this:
+        </p>
+        <source>
+eligible
+  (
+    ( $this.instance.DomicileCountry == $this.key.DomicileCountry ||
+      isnull($this.key.DomicileCountry) ) &amp;&amp;
+
+    ( $this.instance.BaseCurrency == $this.key.BaseCurrency ||
+      isnull($this.key.BaseCurrency) )    &amp;&amp;
+
+    ( $this.instance.Entity == $this.key.Entity ||
+      isnull($this.key.Entity) )
+
+    ( $this.instance.Active == $this.key.Active ||
+      isnull($this.key.Active) )
+
+    ( $this.instance.GlobalLimit &gt;= $this.key.GlobalLimitLower ||
+      isnull($this.key.GlobalLimitLower) )
+
+    ( $this.instance.GlobalLimit &lt;= $this.key.GlobalLimitUpper ||
+      isnull($this.key.GlobalLimitUpper) )
+
+  )
+</source>
+        <p>
+          The <code>Entity</code> field must again be declared in
+          a <code>foreign</code> clause and because of this need not take part in
+          the test for eligibility.
+        </p>
+      </section>
+      <section id="exmax">
+        <title>Capped Keys</title>
+        <p>
+          Where a key could return a very large number of items a cap
+          can be specified. This is an integer value that specifies
+          the maximum number of instances the key will return minus
+          one. Inq must exceed the specified value to determine that
+          there would be more instances returned on a given
+          application.
+        </p>
+        <p>
+          Here is an example:
+        </p>
+        <source>
+  .
+  .
+typedef date SysDate format="dd MMM yyyy";
+  .
+  .
+
+typedef Price
+{
+  fields
+  (
+    Instrument;
+    SysDate RowDate;
+
+    Price   BidPrice.
+    Price   MidPrice;
+    Price   AskPrice;
+  )
+
+  .
+  .
+
+  // Filter used by GUI frontend.
+  key Filter cached=false max=1000
+  (
+    fields(Instrument,
+           typedef SysDate FromDate,
+           typedef SysDate ToDate)
+
+    auxcfg(map(
+        "prepared", true,
+        "read-sql",
+            "
+            {select-stmt}
+            WHERE (XY.Instrument = ? OR ? IS NULL)
+            AND (XY.RowDate &gt;= ? OR ? IS NULL)
+            AND (XY.RowDate &lt;= ? OR ? IS NULL)
+            ",
+        "read-order",
+            array a = (
+                "Instrument",         "Instrument",
+                "FromDate",           "FromDate",
+                "ToDate",             "ToDate"
+            )
+    ))
+  )
+
+  .
+  .
+
+}
+</source>
+        <note>The typedef alias <em>SysDate</em> is being used
+        to define two key fields, <code>FromDate</code>
+        and <code>ToDate</code>. When using typedef aliases to
+        define key fields the keyword <code>typedef</code>
+        is required to resolve the ambiguity of referring to
+        the enclosing typedef field <code>SysDate</code>.</note>
+        <p>
+          The example represents a <code>Price</code> type
+          where an instance is held per <code>Instrument</code>
+          per <code>RowDate</code>. The key <code>Filter</code>
+          would return all available instances if the value
+          whose fields were all <code>null</code> were applied.
+          While it might be expected that validation of input
+          values would trap this situation it is safest to
+          cap such a key using
+          the <code>max = &lt;integer-literal&gt;</code>
+          qualification.
+        </p>
+        <p>
+          Capped keys cannot be cached. If a key would be cached by
+          default then caching must be explicitly disabled.
+          Usage of capped keys is covered when
+          discussing <a href="structures.html">building node
+          structures</a>.
+        </p>
+      </section>
+    </section>
+    <section id="cacheoptions">
+      <title>Choosing Caching Options</title>
+      <p>
+        If a key is not cached then
+        Inq will always apply the key value to the underlying i/o
+        mechanism. The preceeding examples have shown various configuration
+        options, all of which relate to maintaining the integrity of
+        a key's cache as the loaded instances move through their life-cycle.
+        Why does Inq place such an emphasis on caching?
+      </p>
+      <p>
+        A design goal is this regard has been to minimise the use of SQL
+        server resources. The SQL server may be distant from the Inq server
+        or perhaps is heavily loaded with a number of different applications.
+        Set against this, as may have become clear by now, is the fact that
+        Inq writes out modified instances one by one. In common with
+        many persistence mapping mechanisms, the ability to perform
+        a set-based update is compromised by the desire to use middleware
+        for the application logic, although Inq does support synchronising
+        with the external repository (see <a href="#resync">below</a>) to permit a
+        mixed implementation.
+      </p>
+      <p>
+        The following table summarises when Inq will default to use caching:
+      </p>
+      <table>
+        <caption>Cache Behaviour</caption>
+        <tr>
+          <th/>
+          <th/>
+          <th class="keys" colspan="4">Key Field Defined As</th>
+        </tr>
+        <tr>
+          <th/>
+          <th/>
+          <th>Native</th>
+          <th>Entity Ref</th>
+          <th>Alias Ref</th>
+          <th>Explicit Foreign</th>
+        </tr>
+        <tr>
+          <td class="centred" colspan="2">Cached By Default</td>
+          <td class="centred">YES</td>
+          <td class="centred">NO</td>
+          <td class="centred">NO</td>
+          <td class="centred">NO</td>
+        </tr>
+        <tr>
+          <td class="centred" rowspan="2">Cache Discarded When</td>
+          <td class="centred">Non-volatile</td>
+          <td class="centred">Never</td>
+          <td>On update of referred field in any referred typedef instance</td>
+          <td>Never - the key field does not exist anywhere else</td>
+          <td>On update of referring field in any referring typedef instance</td>
+        </tr>
+        <tr>
+          <td class="centred">Volatile</td>
+          <td class="centred" colspan="4">On update of any key or explicit foreign field</td>
+        </tr>
+      </table>
+      <p>
+        Maintaining a cache has overheads so when it is not enabled by default
+        there is a trade-off to be made, taking into account the following:
+      </p>
+      <ul>
+        <li>The volatility of the data, that is how frequently instances would be
+          modified such that the key would be affected and how often instances are
+          created and destroyed.</li>
+        <li>This table describes the events on which an eligibility expression
+          is run:
+          <table>
+            <caption>Eligibility Expression Execution</caption>
+            <tr>
+              <th/>
+              <th/>
+              <th class="keys" colspan="2">Eligibility Expression Executes For:</th>
+            </tr>
+            <tr>
+              <th/>
+              <th/>
+              <th>Every Cached Key Value</th>
+              <th>Key Value(s) Instance Cached Against</th>
+            </tr>
+            <tr>
+              <td class="centred" rowspan="2">Mutation of Key Field</td>
+              <td class="centred">Old</td>
+              <td class="centred"></td>
+              <td class="centred"><icon src="images/tick.png" alt="tick"/></td>
+            </tr>
+            <tr>
+              <td class="centred">New</td>
+              <td class="centred"><icon src="images/tick.png" alt="tick"/></td>
+              <td class="centred"></td>
+            </tr>
+            <tr>
+              <td class="centred" colspan="2">Create</td>
+              <td class="centred"><icon src="images/tick.png" alt="tick"/></td>
+              <td class="centred"></td>
+            </tr>
+            <tr>
+              <td class="centred" colspan="2">Destroy</td>
+              <td class="centred"></td>
+              <td class="centred"><icon src="images/tick.png" alt="tick"/></td>
+            </tr>
+          </table>
+          Consideration therefore needs to be given to how many instances there
+          could be loaded overall and how broad a range of key values an instance
+          is likely to be cached against.
+        </li>
+        <li>As an alternative to defining eligibility, consider
+          using <code>volatile</code> in cases where a high cache hit rate is
+          less of a concern.</li>
+      </ul>
+      <p>
+      Of course, it may not be clear which route to take until the system actually
+      runs for some period, but it is straightforward enough to modify the
+      configuration and use experimentation instead.
+      </p>
+    </section>
+    <section id="resync">
+      <title>Resynchronising Caches</title>
+      <p>
+        A common problem with systems that cache data is how to handle the
+        case when the data is changed in the external source. Any managed
+        instances currently loaded into one or more caches potentially become
+        stale and may corrupt their external storage if subsequently written
+        back. Inq offers a solution at two levels:
+      </p>
+      <ul>
+        <li>If the set of instances is known and their primary keys can be
+        determined, the <code>resync</code> function synchronises an
+        instance with its current state in external storage. This may result
+        in its creation, mutation or destruction. The <code>resync</code>
+        function uses the current <a href="txn.html">transaction</a> to place
+        the instance in its appropriate life-cycle state,
+        raising any necessary events as if the instance had been manipulated
+        inside the Inq environment.
+        </li>
+        <li>If the instance set cannot be determined or when it is known that
+        most or all instances will have changed (for example when a SQL table
+        has been reloaded) the <code>expire</code> function can be used
+        to clear all caches and place all loaded instances of a typedef into
+        the <em>unmanaged</em> state. The <a href="typedef.html">typedef</a>
+        and <a href="txn.html">transaction</a> sections cover instance states
+        further. When unmanaged, an instance no longer participates in a
+        transaction and cannot be written to external storage.
+        The <code>expire</code> function raises an <code>expire</code> event
+        on the specified typedef.
+        </li>
+      </ul>
+      <p>
+        The <code>resync</code> and <code>expire</code> functions are covered
+        further in the section on <a href="events.html">events</a>.
+      </p>
+    </section>
+    <section id="review">
+      <title>Review Your Keys</title>
+      <p>It is very important to review key configuration for consistency
+        and completeness. A key without an explicit foreign key declaration,
+        an eligibility expression or an eligibility expression that does
+        not match the SQL <code>where</code> clause will produce inconsistent
+        and undefined results.
+      </p>
+    </section>
+  </body>
+</document>

@@ -883,7 +883,6 @@ public class AnyChannel extends    AbstractAny
 						Throwable t = ce.throwable_;
 						if (t instanceof java.net.SocketException)
 						{
-              System.out.println(t.getMessage());
               // The network connection has been dropped. If the connection
               // should be kept open then:
               //   1) If we are a client we can reopen it;

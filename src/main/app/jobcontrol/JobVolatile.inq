@@ -1,0 +1,56 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * Inqwell Job Control Package
+ *
+ * Job typedef
+ *
+ * Private & Confidential Copyright � Inqwell Ltd 2007.
+ * All rights reserved.
+ */
+package inq.jobcontrol;
+
+#include <i18n.inq>
+
+/**
+ * The in-memory state maintained for a Job
+ */
+
+typedef JobVolatile
+{
+  fields
+	(
+	  // Job id: pk + fk from Job.Job
+    int           Job;
+
+    // Time job was last started, null if never run
+    JobTime       Started label={i18n}.jc.job.STARTED;
+
+    // Whether associated Job is running or idle.
+    JobState;
+    
+    // The id of the process running this job. Null
+    // if no process is currently running this job.
+    int           ProcId;
+  )
+
+  construct (
+  {
+  	// Assumes associated Job instance is on the stack
+    //$this.Job = Job.Job;  ... pk initialised by new() from existing Job instance
+
+    $this.JobState = enum(JobState, IDLE);
+  })
+
+	pkey
+	(
+		fields (Job)
+  )
+
+
+}

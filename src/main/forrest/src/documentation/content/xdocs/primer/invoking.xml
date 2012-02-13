@@ -1,0 +1,325 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright 2006 Inqwell Ltd.
+-->
+<!DOCTYPE document PUBLIC "-//APACHE//DTD Documentation V2.0//EN" "http://forrest.apache.org/dtd/document-v20.dtd">
+<document>
+  <header>
+    <title>Execution Modes</title>
+  </header>
+  <body>
+    <section id="inq-modes">
+      <title>Execution Modes</title>
+      <p>
+        Inq can be invoked as a graphical client, as a server (to which several
+        clients connect) or at the command line, reading an input stream to verify
+        scripts or run stand-alone applications. There is also a client to load scripts
+        into a server.
+      </p>
+      <p>
+        A generic launcher command, <code>inq</code>, takes the following arguments:
+      </p>
+      <source>
+inq [-server|-client|-load] &lt;args...&gt;</source>
+    </section>
+    <dl>
+      <dt><strong>-server</strong></dt>
+      <dd>
+        Starts an Inq server. By default, the server will listen on port 6556 for
+        connections from Inq clients made using the native <code>speakinq://</code>
+        protocol and 6557 for the secure equivalent <code>speakinqs://</code>.
+      </dd>
+      <dt><strong>-client</strong></dt>
+      <dd>
+        Starts the Inq GUI client. Server login parameters can be entered at the
+        login window or supplied on the command line.
+      </dd>
+      <dt><strong>-load</strong></dt>
+      <dd>
+        Runs the client utility to load scripts into the server. Server login
+        parameters are entered on the command line.
+      </dd>
+    </dl>
+    <p>
+      If none of <code>-server</code>, <code>-client</code> or <code>-load</code>
+      are specified then command-line mode is assumed. Any trailing arguments are
+      passed through to the invocation.
+    </p>
+    <p>
+      This section introduces each Inq mode. We will revisit them when describing
+      how to run the example applications.
+    </p>
+    <section id="server">
+      <title>Invoking The Server</title>
+      <p>The server is started as follows:</p>
+      <source>
+> inq -server
+Inq Server
+Copyright (c) InqWell Ltd 2002-2011
+Java Compiler Compiler Version 3.2 Copyright (c) 2003 Sun Microsystems, Inc. All  Rights Reserved.
+DeadlockScanner Started
+Server Started
+speakinq Socket Listener Started on port 6556
+</source>
+      <p>
+        The server requires the system property <code>inq.home</code>
+        to be set so that it can verify administrator login requests (see section
+        on server administration). The launcher establishes this as the
+        value of the INQHOME environment variable.
+      </p>
+      <p>
+        The Inq server starts a listener process and awaits connections from
+        clients. The speakinq protocol uses plain sockets and a listener is
+        always started. If the Java<sup>TM</sup> system properties
+        of <code>javax.net.ssl.keyStore</code>
+        (and if necessary <code>javax.net.ssl.keyStorePassword</code>) are set
+        the server starts a SSL listener on the default port of 6557. Clients
+        connect to this port using URLs of the form <code>speakinqs://</code>.
+      </p>
+      <p>
+        When launching the server, the following command line arguments are
+        available
+      </p>
+      <dl>
+        <dt><code>-speakinqport &lt;port-number&gt;</code></dt>
+        <dd>overrides the default plain socket port of 6556 to the
+          specified &lt;port-number&gt;</dd>
+        <dt><code>-speakinqsport &lt;port-number&gt;</code></dt>
+        <dd>overrides the default SSL socket port of 6557 to the
+          specified &lt;port-number&gt;</dd>
+      </dl>
+    </section>
+    <section id="clientGUI">
+      <title>Invoking The GUI Client</title>
+      <p>
+        The Inq GUI client connects to a server instance from which it downloads
+        the scripts that define it. The following invocation brings up the
+        login window:</p>
+        <source>
+>inq -client
+Inq Client
+Copyright (c) InqWell Ltd 2002-2011
+Java Compiler Compiler Version 3.2 Copyright (c) 2003 Sun Microsystems, Inc. All  Rights Reserved.
+JDateChooser Copyright (c) Kai Toedter 1999 - 2006
+TableLayout Copyright (c) 2001 Daniel Barbalace. All rights reserved.
+</source>
+      <figure src="images/login.png" alt="GUI Client Login Window"/>
+      <p>
+        When connecting to a server, as well as the URL of the server to connect
+        to, the client supplies a username, password and package. If these are
+        supplied as command line arguments then the login window is not shown.
+      </p>
+      <p>
+        As we will see later, functions and services written in Inq script are
+        organised into packages. A package is a sub-division of the global
+        name space and can be used to host several different applications in
+        the same Inq server.
+      </p>
+      <p>
+        As login attempts are made the client maintains a list of the usernames,
+        packages and server URLs used for easy selection. If an
+        incomplete set of command
+        line arguments are specified then these are loaded into the GUI before
+        the login window is shown, leaving the user to enter those that remain.
+        Use the following arguments as required:
+      </p>
+      <p class="code-indent">-u &lt;username&gt;</p>
+      <p class="code-indent">-p &lt;password&gt;</p>
+      <p class="code-indent">-package &lt;package specification&gt;</p>
+      <p class="code-indent">-server &lt;server url&gt;</p>
+      <!--<p class="code-indent">-url &lt;initial script url&gt;</p>-->
+      <!--<p class="code-indent">-hideUrl</p>-->
+      <!--
+      <p>
+        If the <code>hideUrl</code> argument hides the initial script url input
+        field. In many cases it is the responsibility of the server to specify
+        this script and if it chooses to do so (because it has been scripted that
+        way) anything specified by the client is ignored. This topic is covered
+        further in the example applications.
+      </p>
+      -->
+      <!--
+      <p>
+        The client maintains a permanent connection with the server for
+        asynchronous, bidirectional communication.
+        - This presents difficulties
+        when operating over connection oriented protocols like HTTP, however
+        there is some support for using HTTP proxies where necessary. This is
+        covered in a later section.
+      </p>
+      -->
+    </section>
+    <section id="loadserver">
+      <title>Loading Server Scripts</title>
+      <p>
+        An Inq environment, whether client or server, can do nothing until the
+        scripts that define its operation have been loaded. The GUI client
+        obtains its scripts from the server it is connected to. The server
+        must be loaded using a client utility provided for this purpose. This
+        is similar to loading a database server with tables and stored procedures.
+      </p>
+      <p>
+        Here is an example invocation of Inq to do this:
+      </p>
+      <source>
+inq -load \
+    -server speakinq://localhost \
+    -url file:app/examples/petstore/psBoot.inq \
+    -u admin \
+    -p inqwell</source>
+      <p>
+        This command instructs the server at <code>localhost</code> to run the
+        script at the
+        URL <code>file:app/examples/petstore/psBoot.inq</code>, which
+        is resolved by the server.
+      </p>
+      <section id="adminpwd">
+        <title>The Server Administrator Password</title>
+        <p>
+          To load scripts into the server the client utility must log in as the
+          server administrator. The default administrator password
+          is <code>inqwell</code>. This can be changed using
+          the <code>adminpwd.inq</code> utility as a command line script
+          on the server host itself. This is available in
+          the <code>$INQHOME/bin</code> directory. If invoked without arguments
+          a GUI is shown:
+        </p>
+        <figure src="images/adminpwd.png" alt="adminpwd"/>
+        <p>
+          If the environment is headless then the <code>-l</code> flag uses
+          the terminal:
+        </p>
+        <source>
+inq -in bin/adminpwd.inq -l
+Password was last set on Sun Apr 22 18:08:55 BST 2007
+Enter password (will echo!): 
+</source>
+        <p>
+          Entering no password aborts the process.
+        </p>
+      </section>
+    </section>
+    <section id="commandline">
+      <title>Running Command Line Scripts</title>
+      <p>
+        Stand-alone scripts are useful for writing utilities
+        or checking whether a file parses correctly.
+      </p>
+      <p>
+        Inq reads from standard input, or from the URL specified by
+        the <code>-in</code> argument. If you have downloaded the Inq
+        distribution and assuming you are in the <code>examples/gui</code>
+        directory, try the centigrade-to-fahrenheit example coded
+        in <a href="examples/C2F.inq">C2F.inq</a>.
+      </p>
+      <p>
+        The command <code>inq -in C2F.inq</code> will show the window below:
+      </p>
+      <figure src="images/c2f.png" alt="C2F Window"/>
+      <p>
+        Try moving the sliders and entering values into the text fields.
+      </p>
+      <p>
+        The <code>-in</code> argument requires a URL. If the URL is relative it
+        is resolved with respect to the current working directory. Absolute
+        file paths on the local host require a URL specifying
+        the <code>file://</code> protocol. For example, on a Windows system
+        the
+        path <code>C:\inqwell\doc\src\documentation\content\xdocs\primer\examples\array.inq</code>
+        will resolve correctly with the url
+        of <code>file:///C:/inqwell\doc\src\documentation\content\xdocs\primer\examples\array.inq</code>
+      </p>
+      <p>
+        Every Inq statement has a return value (although this can
+        be <code>null</code>). When running scripts at the command line,
+        the <code>-show</code> argument writes the value of each statement
+        to <code>stdout</code>. At a <code>tty</code> prompt, enter the following
+        text (the results are interspersed and shown in bold):
+      </p>
+      <source>
+>inq -show
+array a = (2.3, 1, 0.5, 6);
+<strong>[2.3, 1, 0.5, 6]</strong>
+sort(a, $loop);
+<strong>[0.5, 1, 2.3, 6]</strong>
+&lt;EOF&gt;
+<strong>Inq done</strong>
+</source>
+      <note><code>&lt;EOF&gt;</code> means the platform-specific end-of-file
+      character, <code>^D</code> on Unix and <code>^Z CR/LF</code> for Windows.
+      <br/>
+      <br/>
+        This small example also illustrates how, in general, Inq manipulates
+        data nodes without regard for what specific type they are. The literal
+        values 2.3 and 0.5 are of type <code>float</code> whereas 1 and 6
+        are <code>int</code>s, however the array can be sorted regardless of
+        this fact.
+      </note>
+      <section id="shebang">
+        <title>The shebang Flag</title>
+        <p>
+          On Linux/Unix systems and if you create a link of the
+          form <code>/bin/inq -> $INQHOME/bin/inq</code> you can
+          run command line scripts directly.
+        </p>
+        <p>
+          Inq recognises the <code>-shebang</code> argument for
+          this purpose. Scripts should begin with the line  
+        </p>
+        <source>
+#! /bin/inq -shebang
+</source>
+        <p>
+          and be executable.
+        </p>
+      </section>
+    </section>
+    <section id="cmdargs">
+      <title>Accessing Command Line Arguments</title>
+      <p>
+        Inq processes the command line arguments according to the following
+        rules:
+      </p>
+      <ul>
+        <li>
+          Named arguments, specified as <code>-name value</code>, are made
+          available at <code>$catalog.argsMap</code> in all modes, and
+          at <code>argsMap</code> when running from the command line. The
+          minus sign is removed, so the argument <code>-foo bar</code>
+          generates <code>argsMap.foo</code> whose value is the
+          string <code>bar</code>.
+        </li>
+        <li>
+          Arguments can be multi-valued. For example, if an application
+          expects the multi-valued argument <code>-foo bar1 bar2 bar3</code>
+          the array of strings is available at <code>argsMap.arrays.foo</code>.
+          The first value is at <code>argsMap.foo</code> and script may
+          check this path to see if the argument is present at all.
+        </li>
+        <li>
+          Boolean arguments, that is arguments whose presence implies
+          the value <code>true</code> are assumed when two argument names
+          appear in succession and for any trailing name. For
+          example <code>-foo -bar widgets</code> yields <code>argsMap.foo</code>
+          as boolean <code>true</code> and <code>argsMap.bar</code> as the
+          string <code>widgets</code>. The same result is given
+          by <code>-bar widgets -foo</code>.
+        </li>
+      </ul>
+      <p>
+        In command line mode, the following additional support is available:
+      </p>
+      <ul>
+        <li>
+          Tokens from the command line are placed
+          at <code>args</code> as an array. 
+          The absolute URL of the the script file is at <code>args[0]</code>.
+        </li>
+        <li>
+          The absolute URL of the the script file is available
+          at <code>argsMap.absin</code>. 
+        </li>
+      </ul>
+    </section>
+  </body>
+</document>

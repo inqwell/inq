@@ -198,6 +198,11 @@ public class NullTransaction extends    AbstractAny
     throw new UnsupportedOperationException();
   }
   
+  public boolean isModifying(Map m) throws AnyException
+  {
+    throw new UnsupportedOperationException();
+  }
+  
   public Map getCreateList(Descriptor d)
   {
     throw new UnsupportedOperationException();

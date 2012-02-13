@@ -1,0 +1,344 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright 2006 Inqwell Ltd.
+-->
+<!DOCTYPE document PUBLIC "-//APACHE//DTD Documentation V2.0//EN" "http://forrest.apache.org/dtd/document-v20.dtd">
+<document>
+  <header>
+    <title>Events</title>
+  </header>
+  <body>
+    <section id="intro">
+      <title>Introduction</title>
+      <p>
+        An event within an Inq environment originates from a node and propagates
+        through that node's containment
+        hierarchy. <a href="typedef.html#entities">Entity typedef</a>
+        instances are examples
+        of nodes that can be contained in multiple hierarchies and events raised
+        on them propagate to all their containers. The section
+        covering <a href="txn.html">transactions</a> discusses how such
+        nodes raise events when they are mutated or deleted.
+      </p>
+      <p>
+        Not all container types solicit events from their children. When
+        discussing <a href="types.html#maptypes">map types</a> we saw how
+        only the <code>hmap</code> does this. Only node spaces built with
+        containers of this type are <em>event-live</em>. The <code>hmap</code>
+        itself can originate events and it does so when placed into or
+        removed from a parent <code>hmap</code> using the <code>add</code>
+        or <code>remove</code> functions.
+      </p>
+      <p>
+        Inq processes each have a node space private to them. When a process
+        is started this node space comprises the single <code>hmap</code>
+        yielded by the path <code>$root</code>. The association of
+        a server-side <em>user process</em> with its corresponding
+        client-side <em>client process</em> is covered in the discussion
+        of Inq <a href="process.html">processes</a>. If an event originating
+        from a descendent reaches <code>$root</code> then, in a user process,
+        Inq propagates this event to the client. We discuss below how this
+        built-in handling often means that no explicit event listeners are
+        required.
+      </p>
+      <p>
+        The other node space relevant to the topic of events is the global
+        structure rooted at <code>$catalog</code>. Server-side processes must
+        explicitly listen to this node if they want to be alerted of newly
+        created typedef instances and other events occurring in their Inq
+        environment.
+      </p>
+    </section>
+    <section id="generate">
+      <title>Event Types and Generation</title>
+      <p>
+        A primary design aim of Inq is that application script should have the
+        least concern possible with infrastructural issues, allowing development
+        to focus to the greatest extent on its function. To this end, there is
+        no statement to raise an event. Instead, events are generated as a
+        result of executing various Inq functions. While Inq also processes
+        certain events, applications can arrange to dispatch them to script
+        functions. The following event types are available, together with
+        a summary of how they are raised:
+      </p>
+      <dl>
+        <dt><strong>update</strong></dt>
+        <dd>Raised on typedef instances when mutations being
+          managed in a transaction are successfully committed.</dd>
+        <dt><strong>create</strong></dt>
+        <dd>Raised on application <code>typedef</code>s when instance creations
+          being managed in a transaction are successfully committed.</dd>
+        <dt><strong>delete</strong></dt>
+        <dd>Raised on typedef instances when deletions being
+          managed in a transaction are successfully committed.</dd>
+        <dt><strong>add</strong></dt>
+        <dd>Raised on <code>hmap</code>s and typedef instances when added
+          to an event-live container with the <code>add</code> function.</dd>
+        <dt><strong>replace</strong></dt>
+        <dd>As for <code>add</code>, above, when there is already a node at
+          the given path within the node space.</dd>
+        <dt><strong>remove</strong></dt>
+        <dd>Raised on <code>hmap</code>s and typedef instances when removed
+          from an event-live container with the <code>remove</code> function.</dd>
+        <dt><strong>expire</strong></dt>
+        <dd>Raised on the current application <code>typedef</code> when a new
+          version replaces it after being successfully parsed.</dd>
+        <dt><strong>cataloged</strong></dt>
+        <dd>Raised on an application <code>typedef</code> when successfully
+          parsed and entered into the catalog.</dd>
+        <dt><strong>start</strong></dt>
+        <dd>May be raised on a <code>function</code> or <code>service</code> when it
+          starts executing.</dd>
+        <dt><strong>complete</strong></dt>
+        <dd>May be raised on a <code>function</code> or <code>service</code> when the
+          transaction in which it was executed successfully commits.</dd>
+      </dl>
+      <section id="evtypedef">
+        <title>Typedef Events</title>
+        <p>
+          The update, create and delete event types relate to stages of a typedef
+          instance's <a href="typedef.html#instancelifecycle">life-cycle</a> and
+          are refered to collectively as <em>typedef events</em>. Such events
+          are raised by a transaction's commit phase, so they are only emitted
+          when the transaction completes successfully. Update and delete events are
+          processed by Inq as part of its coverage of common infrastructure tasks,
+          discussed further later in this section. Create events have no internal
+          handling, however all typedef events are always raised and cannot be
+          switched off in any way.
+        </p>
+      </section>
+      <section id="evaddrepl">
+        <title>The add and replace Events</title>
+        <p>
+          These events are raised by the <code>add</code> function, which is used
+          to place a node structure at some node space path:
+        </p>
+        <source>
+"add" "("
+         &lt;node&gt;
+         ","
+         &lt;path&gt;
+         [ "," &lt;raiseEvent&gt; [ "," &lt;proto&gt; ] ]
+      ")"
+
+&lt;node&gt;       = &lt;expression&gt;
+&lt;path&gt;       = &lt;expression&gt;
+&lt;raiseEvent&gt; = &lt;expression&gt;
+&lt;proto&gt;      = &lt;expression&gt;
+</source>
+        <p>
+          The <code>&lt;node&gt;</code> argument, which must resolve, is
+          placed at <code>&lt;path&gt;</code>. Usually <code>&lt;node&gt;</code>
+          is the root of a structure created as described
+          in <a href="structures.html">Building Node Structures</a>, however
+          there is no restriction on what type <code>node</code> must resolve to.
+        </p>
+        <p>
+          The <code>&lt;path&gt;</code> argument is a node path yielded by
+          the <a href="nodes.html#pathfn"><code>path</code></a> function.
+          Like a <a href="types.html#containertypes">declaration</a>, any
+          containers within the path that are not already present will be
+          created using the map type of the deepest container found unless
+          the <code>&lt;proto&gt;</code> argument is used - see below.
+        </p>
+        <p>
+          In fact, <code>add</code> is very similar to a declaration and
+          only differs in that it may raise an event on <code>&lt;node&gt;</code>
+          after it has been placed at <code>&lt;path&gt;</code>.
+          The <code>&lt;raiseEvent&gt;</code> argument defaults
+          to <code>true</code> and if specified must resolve to
+          a <code>boolean</code>. In any case, it is only relevant
+          when <code>&lt;node&gt;</code> is an event generator, such as
+          an <code>hmap</code> or a typedef instance. Under these circumstances,
+          Inq raises an <code>add</code> or <code>replace</code> event,
+          depending on whether there was already a node at the given path.
+          For nodes that can exist in more than one containment hierarchy,
+          the event only propagates through the hierarchy the node is
+          being added to.
+        </p>
+        <p>
+          The <code>&lt;proto&gt;</code> argument, if used, must resolve to
+          a <code>map</code> and will be used as the seed type for any
+          containers that must be created in the path. Specifying
+          the <code>&lt;proto&gt;</code> argument is unusual as continued
+          use of the same map type when extending an existing structure is
+          generally what is desired.
+        </p>
+        <p>
+          The return value of <code>add</code> is the <code>&lt;node&gt;</code>
+          added. Here are some examples that have been taken from
+          the <code>petstore</code> blueprint
+        </p>
+        <ul>
+        <li><source>
+if (any Account = call getAccount())
+  add(Account, path($this.vars.Account));
+</source></li>
+        <li><source>
+service filterItems(any filter, any at)
+{
+  add(call filterItems(filter), at);
+}
+</source></li>
+        <li><source>
+local function newOrderCreated(any Order, any listenInfo)
+{
+  if (call isNewInstanceInDateRange(listenInfo.filter, Order))
+  {
+    // Make a node set child for the new Order
+    hmap m;
+    any m.Order = Order;
+
+    // Add it into the list, causing it to appear on the GUI screen.
+    any pKey = getprimarykey(Order);
+    add(m, path($this.{listenInfo.at}.{pKey}));
+  }
+}
+</source></li>
+        </ul>
+      </section>
+      <section id="evremove">
+        <title>The remove Event</title>
+        <p>
+          The <code>remove</code> function removes a node from the penultimate
+          path element used to reach it:
+        </p>
+        <source>
+"remove" "("
+            &lt;node&gt;
+            [ "," &lt;raiseEvent&gt; ]
+         ")"
+
+&lt;node&gt;       = &lt;expression&gt;
+&lt;raiseEvent&gt; = &lt;expression&gt;
+</source>
+        <p>
+          The <code>&lt;raiseEvent&gt;</code> argument defaults
+          to <code>true</code>. Unless overridden and
+          if <code>&lt;node&gt;</code> is an event generator
+          a <code>remove</code> event is raised and propagates through
+          the containment hierarchy the node is being removed from.
+        </p>
+        <p>
+          The return value of <code>remove</code> is the <code>&lt;node&gt;</code>
+          removed.
+        </p>
+        <section id="oneparent">
+          <title>Single Parent Nodes</title>
+          <p>
+            The <code>hmap</code> container type has the characteristic
+            that it can only be resident in one parent <code>hmap</code> at
+            a time (though it can reside in as
+            many <code>array</code>s, <code>set</code>s
+            and <code>smap</code>s as desired because these containers do not
+            listen to events from their children).
+            Typically, an application builds event-live structures on the stack
+            by <a href="structures.html#nsetseed">seeding the map type</a>.
+            The structure is then placed into the permanent node space (somewhere
+            beneath <code>$this</code>) to build long-lived application
+            state and so that subsequent events are processed by Inq.
+            The <code>remove</code> and <code>add</code> functions must then
+            be used together to ensure that the single-parent condition
+            of <code>hmap</code> is not violated. The following script
+            creates an event-live node set of <code>Cpty</code> instances,
+            assuming a suitable key <code>k</code>:
+          </p>
+          <source>
+// Create the seed map of the appropriate type
+hmap m;
+
+// Read the list and target it at $stack.m - it is then made from hmaps
+read(Cpty,
+     k,
+     target=m,
+     setname="someList");
+
+// Move the list into the context
+add(remove(m.someList),
+    path($this.vars.cptyList));
+</source>
+          <p>
+            The seed map is then discarded when the stack frame is unwound. The
+            diagram below depicts what is happening:
+          </p>
+          <table class="plain">
+            <tr><td class="centred">
+            <img src="images/addremove.png" alt="building event live structures"/>
+            </td></tr>
+          </table>
+        </section>
+      </section>
+      <section id="evexpire">
+        <title>The expire Event</title>
+        <p>
+          An <code>expire</code> event is raised on a <code>typedef</code>
+          when either
+        </p>
+        <ol>
+          <li>an existing <code>typedef</code> is reparsed from its source
+          file or</li>
+          <li>the <code>expire</code> function is called for the
+          given <code>typedef.</code></li>
+        </ol>
+        <p>
+          Expiring a typedef causes all its currently loaded instances to
+          become <a href="typedef.html#instancelifecycle">unmanaged</a>, meaning
+          that they will no longer participate in transactions, be written
+          to any external storage or emit typedef events.
+        </p>
+        <section id="expreparse">
+          <title>Reparsing a Typedef</title>
+          <p>
+            Inq applications are intended to continue running in the face of
+            reloading parts of their server-side environment, however such
+            occurrances mean that existing node structures containing instances
+            of those typedefs must be reconstructed if they are to remain
+            viable event-live ones.
+          </p>
+        </section>
+        <section id="expexpire">
+          <title>Expiring a Typedef</title>
+          <p>
+            A typedef can be expired using the <code>expire</code> function:
+          </p>
+          <source>
+"expire" "("
+          &lt;type-reference&gt;
+         ")"
+</source>
+          <p>
+            Ideally, all manipulation of typedef instances occurs within the
+            Inq server, including such tasks like bulk loading of externally
+            sourced data. In that case Inq maintains the integrity of the
+            loaded data set and informs all processes of application execution
+            through transaction management, instance locking and typedef events.
+            Often, however, Inq will be deployed in an environment where there
+            are legacy concerns, such as data feeds directly into database
+            tables or daily life-cycle jobs implemented in SQL servers.
+          </p>
+          <p>
+            Jobs running outside an Inq environment that undermine it at the
+            typedef level should arrange to signal their completion with the
+            appropriate <code>expire</code> statements using
+            the <code>inq -load</code> command, discussed
+            in <a href="invoking.html#loadserver">Invoking Inq</a>. Applications
+            that operate in this kind of environment must be written to
+            handle <code>expire</code> events, described in setting up event
+            listeners, below.
+          </p>
+        </section>
+      </section>
+      <section id="evcatalog">
+        <title>The catalog Event</title>
+        <p>
+        </p>
+      </section>
+    </section>
+    <section id="evlisten">
+      <title>Listening for Events</title>
+      <p>
+      </p>
+      <note>To Be Continued</note>
+    </section>
+  </body>
+</document>

@@ -75,7 +75,6 @@ typedef Package
   construct(
   {
     $this = .;
-    writeln($catalog.system.out, "*********************** " + $this);
   } )
 
 	pkey
@@ -444,12 +443,11 @@ service metaTree(boolean byPackage, any dataPath, func dataCallback)
     // Start from the package list and build the typedefs/fields below
     read(Package, ., keyname="All", target = m, setname="data");
     sort(m.data, $loop.Package.Package);
-    writeln($catalog.system.out, "M.DATA " + m.data);
 
     // Aggregate the typedefs in the packages
     aggregate(Typedef,
               m.data[first].Package,
-              foreach = cfunc f = {writeln($catalog.system.out, $loop); sort($loop.typedefs, $loop.Typedef.Typedef); },
+              foreach = cfunc f = { sort($loop.typedefs, $loop.Typedef.Typedef); },
               keyname="ByPackage",
               setname="typedefs");
 
@@ -462,12 +460,10 @@ service metaTree(boolean byPackage, any dataPath, func dataCallback)
     //aggregate(Field, m.data[first].typedefs[first].Typedef, keyname="ByFQName", setname="fields");
     foreach(m.data)
     {
-      //writeln($catalog.system.out, "TYPEDEF " + $loop.typedefs[first].Typedef.FQName);
       aggregate(Field, $loop.typedefs[first].Typedef, keyname="ByFQName", setname="fields");
     }
 
     send system.client:receiveData(dataItem = m.data, dataPath, dataCallback);
-    //writeln($catalog.system.out, "metaTree byPackage", m);
   }
   else
   {
@@ -477,7 +473,6 @@ service metaTree(boolean byPackage, any dataPath, func dataCallback)
     // Aggregate the fields in the typedefs
     aggregate(Field, m.data[0].Typedef, keyname="ByFQName", setname="fields");
     send system.client:receiveData(dataItem = m.data, dataPath, dataCallback);
-    //writeln($catalog.system.out, "metaTree typedef", m);
   }
 
 }

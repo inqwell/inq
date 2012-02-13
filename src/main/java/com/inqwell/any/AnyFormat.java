@@ -36,30 +36,7 @@ import com.inqwell.any.identity.AnyMapDecor;
  * to extend the standard formatting capabilities of the java.text package
  * to Any implementations.
  * <p>
- * The control of formatting through the use of patterns as documented in
- * the JDK for java.text.DecimalFormat and java.text.SimpleDateFormat
- * is supported with the addition of field widths and justification.
- * Any valid JDK format
- * pattern can be prefixed with one or more <code>&lt;</code>
- * or <code>&gt;</code> characters.  The
- * number of characters defines the field width.  <code>&lt;</code>
- * means left justify
- * and <code>&gt;</code> means right justify. Width control
- * works in this way by placing
- * the formatted value in a string padded as appropriate to the
- * chosen justification. This facility is suitable when
- * sending the formatted text to a fixed-width output medium.  It is
- * not generally appropriate to rendering data to a GUI component.
- * The padding character defaults to a space but can be specified and
- * is taken as the character prior to the <code>&lt;</code>
- * or <code>&gt;</code> justification/width characters. For example
- * <pre><code>
- *   0&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;#,###.00
- * </code></pre>
- * given the number <code>123.456</code> would generated the formatted
- * result <code>00123.46</code>
- * <p>
- * In addition to widths, formatting directives are supported. These
+ * Formatting directives are supported. These
  * directives apply some additional functionality to the formatting
  * operation. A formatting directive has the syntax <code>name=value</code>.
  * There may be any number of these, each separated with the <code>"@"</code>
@@ -98,30 +75,10 @@ public class AnyFormat extends    Format
                        implements Map,
 																	Cloneable
 {
-  /**
-   * Output will not be justified
-   */
-  public static final int NONE  = 0;
-
-  /**
-   * Output will be left justified
-   */
-  public static final int LEFT  = 1;
-
-  /**
-   * Output will be right justified
-   */
-  public static final int RIGHT = 2;
-
   protected Format     _formatter;
   private   FormatAny  _formatAny;
   private   CanFormat  _canFormat;
   private   ParseAny   _parseAny;
-  private   int        _fieldWidth;
-  private   int        _justification;
-  private   boolean    _doingJustification = true;
-  private   boolean    _constrain = false;
-  private   char       _padChar = ' ';
   private   boolean    _trailingZeros = true;
   private   Date       _date;
   
@@ -184,7 +141,7 @@ public class AnyFormat extends    Format
     if (pattern != null && pattern.length() == 0)
       pattern = null;
 
-		AnyFormat f = _makeFormat.makeFormat(a, pattern, cleanPattern);
+		AnyFormat f = _makeFormat.makeFormat(a, pattern);
     return f;
   }
 
@@ -215,44 +172,19 @@ public class AnyFormat extends    Format
   public AnyFormat (Format formatter)
   {
     _formatter     = formatter;
-    _fieldWidth    = 0;
-    _justification = AnyFormat.NONE;
-    _padChar       = ' ';
     init();
   }
 
-  public AnyFormat (Format formatter, int fieldWidth, int justification, char padChar)
+  public AnyFormat (Format formatter, Date date)
   {
     _formatter     = formatter;
-    _fieldWidth    = fieldWidth;
-    _justification = justification;
-    _padChar       = padChar;
+    _date          = date;
     init();
   }
-
-  public AnyFormat (Format formatter, int fieldWidth, int justification, char padChar, Date d)
-  {
-    _formatter     = formatter;
-    _fieldWidth    = fieldWidth;
-    _justification = justification;
-    _padChar       = padChar;
-    _date          = d;
-    init();
-  }
-
-  public AnyFormat (int fieldWidth, int justification, char padChar) // Only for Strings
-  {
-    _formatter     = null;
-    _fieldWidth    = fieldWidth;
-    _justification = justification;
-    _padChar       = padChar;
-    init();
-  }
-
+  
   AnyFormat ()
   {
     _formatter = null; // Only for strings
-    _padChar   = ' ';
     init();
   }
 
@@ -272,54 +204,18 @@ public class AnyFormat extends    Format
                              StringBuffer  toAppendTo,
                              FieldPosition pos)
   {
-    try
+    if (obj instanceof Any)
     {
-      if (_fieldWidth > 0 && _doingJustification)
-      {
-        _doingJustification = false;
-
-        String formatted = format (obj);
-
-        if (formatted.length() <= _fieldWidth)
-          formatted = pad (formatted,
-                           _fieldWidth - formatted.length());
-
-        if ((_constrain) &&
-            (_fieldWidth != 0) &&
-            (formatted.length() > _fieldWidth))
-        {
-          formatted = formatted.substring(0, _fieldWidth);
-        }
-
-        // Now honour original formatting arguments using MessageFormat
-        java.text.MessageFormat f = new java.text.MessageFormat("{0}");
-        Object[] objs = {formatted};
-        return f.format (objs, toAppendTo, pos);
-      }
-      else
-      {
-        if (obj instanceof Any)
-        {
-          return _formatAny.formatAny ((Any)obj, toAppendTo, pos);
-        }
-        else if (obj == null)
-        {
-          return new StringBuffer(""); 
-        }
-        else
-        {
-          // default to original behaviour
-          return _formatter.format (obj, toAppendTo, pos);
-        }
-      }
+      return _formatAny.formatAny ((Any)obj, toAppendTo, pos);
     }
-    catch (RuntimeException e)
+    else if (obj == null)
     {
-      throw e;
+      return new StringBuffer(""); 
     }
-    finally
+    else
     {
-      _doingJustification = true;
+      // default to original behaviour
+      return _formatter.format (obj, toAppendTo, pos);
     }
   }
 
@@ -369,23 +265,6 @@ public class AnyFormat extends    Format
 	{
 		parseAny (source, null, a, silent);
 	}
-
-  public boolean setConstrainToWidth (boolean constrain)
-  {
-    boolean old = _constrain;
-    _constrain  = constrain;
-    return old;
-  }
-  
-  public void setPadChar(char padChar)
-  {
-    _padChar = padChar;
-  }
-  
-  public void setFieldWidth(int fieldWidth)
-  {
-    _fieldWidth = (fieldWidth < 0) ? 0 : fieldWidth;
-  }
 
   public void setDirectives(Map directives)
   {
@@ -594,7 +473,7 @@ public class AnyFormat extends    Format
     _trailingZeros = trailingZeros;
   }
   
-  public AnyTimeZone getTimeZone()
+  public Any getTimeZone()
   {
     if (_formatter instanceof DateFormat)
     {
@@ -760,11 +639,11 @@ public class AnyFormat extends    Format
 	  _formatter.format(m, toAppendTo, pos);
 	}
 
-  protected void formatArray(Array         a,
-	                           StringBuffer  toAppendTo,
-	                           FieldPosition pos)
+  protected StringBuffer formatArray(Array         a,
+        	                           StringBuffer  toAppendTo,
+        	                           FieldPosition pos)
   {
-	  ((ArrayMessageFormat)_formatter).format(a, toAppendTo, pos);
+	  return ((ArrayMessageFormat)_formatter).format(a, toAppendTo, pos);
 	}
 
   protected void formatString (StringI       as,
@@ -845,24 +724,6 @@ public class AnyFormat extends    Format
     }
   }
   
-  private String pad (String s, int numChars)
-  {
-    StringBuffer b = new StringBuffer();
-
-    for (int i = 0; i < numChars; i++)
-      b.append(_padChar);
-
-    if (_justification == AnyFormat.RIGHT)
-    {
-      b.append(s);
-    }
-    else
-    {
-      b.insert(0, s);
-    }
-    return new String(b);
-  }
-
   private void init()
   {
     _formatAny   = new FormatAny ();
@@ -987,11 +848,6 @@ public class AnyFormat extends    Format
     return propertyMap_.getIfContains(key);
   }
 
-  public java.util.Map getMap()
-  {
-    throw new UnsupportedOperationException();
-  }
-
   public short getPrivilegeLevel(Any access, Any key)
   {
     if (propertyMap_ == null)
@@ -1053,16 +909,6 @@ public class AnyFormat extends    Format
     throw new UnsupportedOperationException();
   }
 
-  public void setAux(Any aux)
-  {
-    throw new UnsupportedOperationException();
-  }
-  
-  public Any getAux()
-  {
-    throw new UnsupportedOperationException();
-  }
-  
   public void setPrivilegeLevels(Map levels, Any key, boolean merge)
   {
     if (propertyMap_ == null)
@@ -1081,6 +927,11 @@ public class AnyFormat extends    Format
     throw new UnsupportedOperationException();
   }
 
+  public boolean valueEquals(Map m)
+  {
+    return this.equals(m);
+  }
+  
   public void setUniqueKey(Any keyVal)
   {
     if (propertyMap_ == null)
@@ -1224,56 +1075,11 @@ public class AnyFormat extends    Format
   {
     private AnyFormat _formatter;
     private String    _pattern;
-    private StringI   _cleanPattern;
-    private int       _fieldWidth;
-    private int       _justification;
-    private char      _padChar;
     
-    synchronized AnyFormat makeFormat (Any a, String pattern, StringI cleanPattern)
+    synchronized AnyFormat makeFormat (Any a, String pattern)
     {
-      _cleanPattern = cleanPattern;
-      
-      int patternIndex = -1;
-  
-      _justification = AnyFormat.NONE;
-      _padChar       = ' ';
-  
-      if (pattern != null)
-      {
-        if ((patternIndex = pattern.lastIndexOf('<')) >= 0)
-        {
-          _justification = AnyFormat.LEFT;
-        }
-        else if ((patternIndex = pattern.lastIndexOf('>')) >= 0)
-        {
-          _justification = AnyFormat.RIGHT;
-        }
-      }
-  
-      if (patternIndex < 0)
-      {
-        _pattern = pattern;
-        _fieldWidth = 0;   // means as is
-      }
-      else
-      {
-        _pattern = pattern.substring(patternIndex + 1);
-        
-        // Check if there is a specified padding character
-        char padChar = pattern.charAt(0);
-        if (padChar != '>' &&
-            padChar != '<')
-        {
-          // There is - decrement the pattern index to take account
-          patternIndex--;
-          _padChar = padChar;
-        }
-          
-        _fieldWidth = patternIndex + 1;
-      }
-  
+      _pattern = pattern;
       a.accept(this);
-      _cleanPattern = null;
       AnyFormat f = _formatter;
       _formatter = null;
       return f;
@@ -1323,22 +1129,14 @@ public class AnyFormat extends    Format
           _formatter = decimalFormat();
         else
           _formatter = new AnyFormat (new SimpleDateFormat (_pattern),
-                                      _fieldWidth,
-                                      _justification,
-                                      _padChar,
                                       new Date());
                                     
         _formatter.setDirectives(directives);
         _formatter.setMustResolveDirectives(mustResolve);
-        if (_cleanPattern != null)
-          _cleanPattern.setValue(_pattern);
       }
       else
         _formatter = new AnyFormat
                            (new SimpleDateFormat (AnyFormat.defaultDateFormat__),
-                            _fieldWidth,
-                            _justification,
-                            _padChar,
                             new Date());
     }
   
@@ -1379,17 +1177,11 @@ public class AnyFormat extends    Format
   
       if (index >= 0)
       {
-        _formatter = new AnyFormat(new java.text.MessageFormat(_pattern.replace(replace, '0')),
-                                   _fieldWidth,
-                                   _justification,
-                                   _padChar);
+        _formatter = new AnyFormat(new java.text.MessageFormat(_pattern.replace(replace, '0')));
       }
       else
       {
-        _formatter = new AnyFormat(new java.text.MessageFormat("{0}"),
-                                   _fieldWidth,
-                                   _justification,
-                                   _padChar);
+        _formatter = new AnyFormat(new java.text.MessageFormat("{0}"));
       }
     }
   
@@ -1408,20 +1200,14 @@ public class AnyFormat extends    Format
       // For maps use a com.inqwell.any.AnyMessageFormat
       // so we can support complex format aggregations
       String pattern = (_pattern != null) ? _pattern : "";
-      _formatter = new AnyFormat(new AnyMessageFormat(pattern),
-                                 _fieldWidth,
-                                 _justification,
-                                 _padChar);
+      _formatter = new AnyFormat(new AnyMessageFormat(pattern));
     }
   
     public void visitArray (Array a)
     {
       // For maps use a com.inqwell.any.ArrayMessageFormat
       // so we can support complex format aggregations
-      _formatter = new AnyFormat(new ArrayMessageFormat(_pattern),
-                                 _fieldWidth,
-                                 _justification,
-                                 _padChar);
+      _formatter = new AnyFormat(new ArrayMessageFormat(_pattern));
     }
   
     /**
@@ -1444,7 +1230,7 @@ public class AnyFormat extends    Format
   
   		df.setParseIntegerOnly(false);
   
-  		return new AnyFormat(df, _fieldWidth, _justification, _padChar);
+  		return new AnyFormat(df);
     }
     
     // Process any formatting directives and place them in a
@@ -1669,7 +1455,9 @@ public class AnyFormat extends    Format
 
     public void visitArray (Array a)
     {
-      AnyFormat.this.formatArray (a, _toAppendTo, _pos);
+      // Overwrite toAppendTo here. Caters for the case where
+      // a choice format is used and the format operation recurses.
+      _toAppendTo = AnyFormat.this.formatArray (a, _toAppendTo, _pos);
     }
   }
 

@@ -23,7 +23,7 @@ import com.inqwell.any.Any;
 import com.inqwell.any.AnyInt;
 import com.inqwell.any.IntI;
 
-public class AnyArrowButton extends AnyComponent
+public class AnyArrowButton extends AnySimpleComponent
 {
   private static final long serialVersionUID = 1L;
 

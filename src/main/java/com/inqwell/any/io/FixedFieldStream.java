@@ -586,7 +586,7 @@ public class FixedFieldStream extends    AbstractStream
     // justification was used) with the specified length.  Means that
     // the pattern does not have to be tediously set up with the
     // right number of >>>'s since we know the length explicitly.
-    f.setFieldWidth(getLength(m));
+    // f.setFieldWidth(getLength(m));
     
     m.replaceItem(pattern__, f);
   }

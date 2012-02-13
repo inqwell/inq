@@ -1,0 +1,893 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright 2006 Inqwell Ltd.
+-->
+<!DOCTYPE document PUBLIC "-//APACHE//DTD Documentation V2.0//EN" "http://forrest.apache.org/dtd/document-v20.dtd">
+<document>
+  <header>
+    <title>Defining Application Types With Typedef</title>
+  </header>
+  <body>
+    <section id="intro">
+      <title>Introduction</title>
+      <p>
+        Application types are defined using the <code>typedef</code>
+        construct. Inq is not an object oriented language and in its simplest
+        sense a typedef can be thought of as similar to a <code>struct</code>
+        in the <code>C</code> programming language. However, it is
+        much more than just a collection of attributes. As well as data fields
+        Inq maintains in a typedef the following information
+      </p>
+      <ul>
+        <li>A default value for each data field.</li>
+        <li>A width hint, a formatting pattern and a label string for each
+          data field.
+        </li>
+        <li>Specific code blocks executed when instances are created, mutated
+          and destroyed by the Inq transaction model.
+        </li>
+        <li>A primary key, to define an instance's identity and enforce uniqueness.
+        </li>
+        <li>Any number of additional keys, unique or otherwise, that specify
+          ways to request an instance or set of instances from the Inq i/o system.
+          All keys can have additional information that is used by the i/o
+          system and is specific to the physical storage medium the typedef is
+          bound to.
+        </li>
+        <li>
+          An optional binding to a physical storage medium, such as a relational
+          database. If a typedef is not bound to persistent storage then instances
+          are in-memory only.
+        </li>
+      </ul>
+      <p>
+        As well as entities, <code>typedef</code> can be used to provide
+        an alias name, width hint, formatting pattern, label string and default
+        value to the <a href="types.html#value-types">value types</a>.
+        Entity typedef fields can be
+        declared by reference to these or other typedef fields, making their
+        definition well insulated from the actual data types used.
+      </p>
+      <p>
+        Lastly, a entity field or typedef alias can define a set of values
+        that instances are intended to take on. This is similar to
+        an <code>enum</code> although the values are of the data type the
+        field (or typedef alias) is.
+      </p>
+    </section>
+    <section id="aliases">
+      <title>typedef Aliases</title>
+      <p>
+        In Inq, its a better than usual idea to alias fundamental types according
+        to application needs. This is because the typedef carries more than just
+        the data type. Here is an example:
+      </p>
+      <source>
+typedef decimal:15 FXRate = 0
+        width = 12
+        format="#,##0.00####"
+        label={i18n}.general.FX_RATE;
+</source>
+      <p>
+        and here is what is happening:
+      </p>
+      <ul>
+        <li>
+          The symbol <code>FXRate</code> is defined as a <code>decimal</code> to
+          a precision of 15 decimal places.
+        </li>
+        <li>
+          The default value for instances of <code>FXRate</code> is zero. If no
+          initialiser is specified then new instances would hold the
+          value <code>null</code>.
+        </li>
+        <li>
+          The width hint is used to dimension GUI components and table columns.
+          It is interpreted as a character width and takes into account the
+          font used when rendered.
+        </li>
+        <li>
+          The formatting pattern of <code>"#,##0.00####"</code> means that when
+          instances of FXRate are rendered to GUI components they will be displayed
+          to minimum of two and a maximum of six decimal places. Formatting patterns
+          are as described in the Java<sup>TM</sup> documentation
+          for <a class="fork" href="ext:j2seapi/apidocs/numberformat">numeric</a>
+          and <a class="fork" href="ext:j2seapi/apidocs/dateformat">date</a>
+          values.
+        </li>
+        <li>
+          A label string is specified as an expression. This is evaluated at
+          parse time and the
+          result can be applied when laying out GUI components. In this example
+          an indirection through the expression <code>{i18n}</code> is
+          being used. If this evaluated to <code>path($catalog.en)</code>
+          then <code>$catalog.en.general.FX_RATE</code> might be "FX Rate".
+        </li>
+      </ul>
+      <fixme author="Tom">
+        These are all defined in the server, so it doesn't make sense to evaluate
+        an internationalised label string until the typedefs are
+        downloaded to the client.
+      </fixme>
+      <p>
+        Once a typedef alias has been created it can be referenced when
+        defining fields in typedef entity definitions.
+      </p>
+      <section id="enum">
+        <title>Defining Enumerated Values</title>
+        <p>
+          Here is another example, this time including
+          a set of preferred values.
+        </p>
+        <source>
+  typedef string AccountType = "M"
+          width=6
+          label={i18n}.general.ACCOUNT_TYPE
+  (
+    // Interest bearing
+    M  : "M" : "Margin";
+
+    // No interest accrued.
+    P  : "P" : "Pending";
+  );
+
+  </source>
+        <p>
+          Each value has three parts to it:
+        </p>
+        <ol>
+          <li>A symbol by which the value can be referred to in scripts</li>
+          <li>The actual value that variables hold for the associated symbol</li>
+          <li>The external representation for this value</li>
+        </ol>
+        <p>
+          Having defined <code>AccountType</code> the following code is valid:
+        </p>
+        <source>
+  // Create a new variable of type AccountType. Its really a string
+  any accType1 = new(AccountType);
+
+  // Override default value
+  any accType2 = new(AccountType, enum(AccountType, P));
+
+  // Print out nicely
+  writeln($catalog.system.out, enumext(AccountType, .accType2));
+  </source>
+        <p>
+          This example is somewhat contrived to introduce the
+          functions <code>enum</code> and <code>enumext</code>. When creating
+          instances of <code>AccountType</code> we are doing nothing more
+          than creating a <code>string</code>. Although this is not completely
+          useless (we don't need to know its a string), there is no association
+          between the variables <code>accType1</code> and <code>accType2</code>
+          and the type information from which they were created. When
+          applying <code>enum</code> and <code>enumext</code> we have to specify
+          the type we want to use.
+        </p>
+        <p>
+          The <code>enumext</code> function can accept either a symbol or
+          a node reference as its second argument, depending on whether static
+          or runtime evaluation is required. For example, the following are
+          equivalent:
+        </p>
+        <source>
+enumext(AccountType, P);
+enumext(AccountType, .accType2);
+</source>
+        <p>
+          Note, however, that to distinguish between a symbol and a stack-assumed
+          variable the latter must be preceeded with
+          a period "<code>.</code>"
+        </p>
+        <p>
+          Inq does not mandate that any variable can only take on
+          one of the preferred values. Scripts must ensure this with consistent use
+          of <code>enum</code>.
+        </p>
+      </section>
+    </section>
+    <section id="entities">
+      <title>typedef Entities</title>
+      <p>
+        Typedef entities are used to define high-level application types.
+        Instead of simple variables, an entity is used to create
+        what Inq terms <em>managed instances</em>. They are
+        called <em>managed</em> because the Inq server defines their life-cycle,
+        supports specific code blocks that are executed at various life-cycle
+        stages and controls how references to them are made available.
+      </p>
+      <p>
+        An instance enters the managed state when it is either read from
+        persistent storage or created for the first time. In-memory
+        types can only become managed instances by creation.
+        When an instance is in the managed state, subsequent mutations or a
+        deletion of that instance take place under the control of a transaction.
+        Every Inq server process has its own transaction environment
+        that implicitly commits managed instance creation, mutation and
+        deletion, or aborts these operations should an exception occur. We
+        will return to these subjects in later sections.<!--XXX-->
+      </p>
+      <!--
+      <p>
+        Entity instances are maps. As we will see shortly, referencing fields
+        within an instance gives Inq the opportunity to determine the information
+        associated with the field's enclosing typedef.
+      </p>
+      -->
+      <section id="tybody">
+      <title>Typedef Body</title>
+      <p>
+        In the following sections we discuss the elements that make up the
+        body of a <code>typedef</code> by way of an example that defines
+        a <code>Currency</code> type. The definition relies on the following
+        aliases having been defined:
+      </p>
+      <source>
+typedef int    NumDays  = 0  label="No. of Days" width=3;
+typedef string LongName = "" width=25;
+typedef string Description = "" width=50;
+
+typedef string Active = "Y" label = "Active";
+(
+  Y  : "Y" : "Active";
+  N  : "N" : "Inactive";
+);
+
+typedef date LastUpdated width=20 format="dd MMM yyyy HH:mm:ss";
+
+// Part of a typedef for User
+typedef User
+{
+  fields
+  (
+    string        User width=10;
+    Description   Name;
+    Active;
+  )
+    .
+    .
+</source>
+      <p>
+        Unless otherwise stated, a typedef's body elements must appear in the
+        order they are documented here.
+      </p>
+      <section id="tyname">
+      <title>The typedef Name</title>
+      <p>
+        The following syntax defines the typedef name and opens the body
+      </p>
+      <source>
+typedef Currency
+{
+</source>
+      <p>
+        It is the convention that the typedef name starts with a capital letter.
+        Assuming the body parses correctly, the typedef called <code>Currency</code>
+        will reside in the current package and will be distinct from any typedef
+        called <code>Currency</code> in any other package.
+      </p>
+      </section>
+      <section id="fields">
+      <title>Fields Definition</title>
+      <p>
+        A typedef can contain any number of data fields. A field definition
+        can specify an explicit type or refer to either another typedef field or
+        alias. Here are the field definitions for <code>Currency</code>:
+      </p>
+      <source>
+  fields
+  (
+    string        Currency       label={i18n}.ccy.CURRENCY width=3;
+    LongName      CcyName;
+    NumDays       SettlementDays label={i18n}.ccy.SETTLEMENT_DAYS;
+    NumDays       AccrualDays    label={i18n}.ccy.ACCRUAL_DAYS;
+    NumDays       IntFixDays;
+    Active;
+    LastUpdated;
+    User;
+  )
+</source>
+      <p>
+        Again, it is convention to name fields starting with a capital letter.
+        Considering each field in turn:
+      </p>
+      <dl>
+        <dt><strong>Currency</strong></dt>
+        <dd>
+          As we discuss further below, this field is chosen as the primary key.
+          If there is a single or principal field that comprises the primary
+          key then a further convention is that this field has the same
+          name as the typedef.
+        </dd>
+        <dt><strong>CcyName</strong></dt>
+        <dd>
+          This field refers to the <code>LongName</code> type alias from which
+          it takes a width hint of 25 and a default value of <code>""</code>.
+        </dd>
+        <dt><strong>SettlementDays</strong>, <strong>AccrualDays</strong> and <strong>IntFixDays</strong></dt>
+        <dd>
+          These fields all refer to the <code>NumDays</code> alias
+          however <code>SettlementDays</code> and <code>AccrualDays</code>
+          override the label with their own.
+        </dd>
+        <dt><strong>Active</strong> and <strong>LastUpdated</strong></dt>
+        <dd>
+          When refering to an alias it is not necessary to provide a field name,
+          in which case the field takes the name of the alias itself.
+        </dd>
+        <dt><strong>User</strong></dt>
+        <dd>
+          It is also possible to refer to fields defined in other entity
+          typedefs. In this case we are implicitly referring
+          to <code>User.User</code> and defining the local field <code>User</code>.
+        </dd>
+      </dl>
+      <p>
+        If no default value is specified directly or derived from a referral then
+        a field will take the value <code>null</code>.
+      </p>
+      </section>
+
+      <section id="nodenameoverride">
+      <title>Overriding the Instance Name</title>
+      <p>
+        A typedef is always referenced symbolically by its name and the same name
+        is used by Inq when placing instances into node structures, discussed
+        further in the section <a href="structures.html">Building Node Structures</a>.
+        In our example, this would give rise to paths
+        like <code>Currency.AccrualDays</code>.
+      </p>
+      <p>
+        Inq allows the name used when building structures to be specified
+        separately when the typedef is defined. Consider the following typedef
+        fragments. Firstly a typedef called <code>Trade</code>:
+      </p>
+      <source>
+package foo;
+
+typedef Trade
+{
+  fields
+  (
+    int  Trade;
+    Price TradePrice;
+    Price MarketPrice;
+      .
+      .
+  )
+}
+</source>
+      <p>
+        Then suppose our application maintains previous versions
+        of <code>Trade</code> and we define another typedef accordingly:
+      </p>
+      <source>
+package foo;
+
+typedef TradeArchive
+{
+  alias Trade;
+  fields
+  (
+    int  Trade;
+    Price TradePrice;
+    Price MarketPrice;
+      .
+      .
+    int   VersionNumber;
+    date  VersionDate;
+  )
+}
+</source>
+      <p>
+        Script that refers to the <code>TradeArchive</code> type will always use
+        its symbolic name, for example when creating a new <code>TradeArchive</code>
+        instance with the <code>new</code> function, the type is specified thus:
+      </p>
+      <source>
+new(foo:TradeArchive);
+</source>
+        <p>
+          However when Inq builds a node structure it will do so using the
+          string <code>Trade</code>.
+        </p>
+      </section>
+      <section id="ctor">
+      <title>The Constructor</title>
+      <p>
+        A new instance of a typedef is created with the <code>new()</code>
+        function:
+      </p>
+      <source>
+any newCcy = new(Currency[, initialValue]);
+</source>
+      <p>
+        This statement creates a new map containing the fields of
+        the <code>Currency</code> typedef. Any default values will be assigned,
+        however at this stage the instance is not under transaction control
+        because it is not in the <em>managed</em> state. The <code>new</code>
+        function takes an optional second argument used to initialise
+        the newly created instance. For entity typedefs, this must be a map and
+        any matching field names will be copied to the new instance. Any other
+        contents will be ignored.
+      </p>
+      <p>
+        When the <code>create</code> statement is executed the typedef's
+        constructor is run and the new instance placed into the transaction.
+        If the transaction commits successfully the instance will become
+        a <em>managed</em> instance. The constructor is a statement (or code block)
+        where steps specific to the initialisation of candidate managed instances can
+        be carried out. This might include generation of a unique key or creation
+        of a mandatory dependent instance. The <code>create</code> statement is:
+      </p>
+      <source>
+create(newCcy [, eventData [, CREATE_ERROR | CREATE_REPLACE | CREATE_LEAVE ] ]);
+</source>
+      <note>
+          When a transaction containing instance creations commits an event is
+          raised for each created instance. If <code>eventData</code> is supplied
+          then this data will be carried in the event and may be used by listeners
+          to discriminate interest. This topic is covered in the section
+          on <a href="events.html">Events</a>.
+        <br/>
+        <br/>
+          The use of CREATE_ERROR, CREATE_REPLACE or CREATE_LEAVE tell Inq
+          what action to take if the primary key would be violated by the
+          creation of this instance. This is covered
+          in <a href="txn.html">Transactions</a>.
+      </note>
+      <p>
+        The constructor statement is optional and may be specified like this:
+      </p>
+      <source>
+construct
+({
+  // Force the Currency field to be upper-case
+  $this.Currency = toupper($this.Currency);
+
+  $this.LastUpdated = getdate();
+  $this.User        = $process.loginName;
+})
+</source>
+      <p>
+        When the constructor statement is executed the following environment
+        prevails:
+      </p>
+      <ul>
+      <li><code>$this</code> refers to the instance being created;</li>
+      <li>The current stack frame is unchanged and the constructor has access
+        to anything currently on the stack.</li>
+      </ul>
+      <p>
+        The constructor is simply a statement (a block statement in our example).
+        Any statements can appear within it, including <code>call</code>s
+        to functions.
+      </p>
+      <p>
+      When the constructor has completed, any further changes to the created
+      instance (<code>newCcy</code> in our example) will be ignored. In fact, this
+      instance can be re-used in further calls to <code>create</code>, since Inq
+      has taken a copy of the original in order to safeguard the state of the
+      instance in the transaction.
+      </p>
+      </section>
+      <section id="mtor">
+      <title>The Join and Mutator Statements</title>
+      <p>
+        When a typedef instance is in the managed state, changes to its field
+        values take place under transaction control. If a managed instance is not
+        currently within any process's transaction then the first process that
+        attempts to assign a field value will successfully acquire a lock on
+        that instance. Subsequent mutation attempts by other processes will cause
+        those processes to go into a wait condition until either the holding
+        process's transaction commits or aborts. The Inq run-time performs
+        these steps automatically - no source code is required to effect them.
+      </p>
+      <p>
+        While a process holds a write lock on an instance, other processes
+        can still read its fields. They do not see any of the modified values
+        while the locking process's transaction is still in progress.
+      </p>
+      <p>
+        When a process acquires the instance write lock the
+        optional <code>join</code> statement is executed. Because it is
+        executed early in the transaction sequence, the join statement
+        can be used to check any preconditions that must be in place.
+        Here is an example: 
+      </p>
+      <source>
+join
+({
+  // Jobs can be modified by the jobdispatcher or
+  // a user process provided it has set the tree
+  // state (to negotiate with the jobdispatcher).
+  // Using the join block catches this early (before
+  // the instance is first mutated) rather
+  // than late (in mutate, as the transaction is
+  // committing).
+   
+  if ($process.loginName != "jobdispatcher")
+    call isTreeState(requiredState = enum(JobTreeState, USER_START));
+})
+</source>
+      <p>
+        When the join statement is executed the following environment
+        prevails:
+      </p>
+      <ul>
+      <li><code>$this</code> refers to the instance, as yet unmodified,
+        being joined into the transaction.</li>
+      <li>A stack frame is available for general use.</li>
+      </ul>
+      <p>
+        As a process's transaction commits, the optional <code>mutate</code>
+        statement is
+        executed for each instance the process has modified. The mutator can be
+        used to verify that new field values are acceptable, perform any further
+        updates that are always required, for example modifying
+        a <code>LastUpdated</code> field or dependent instances. It is
+        also possible to veto changes to the instance. Here is an example mutator:
+      </p>
+      <source>
+mutate
+({
+  $this.new.LastUpdated = getdate();
+  $this.new.User = $process.loginName;
+})
+</source>
+      <p>
+        When the mutator statement is executed the following environment
+        prevails:
+      </p>
+      <ul>
+      <li><code>$this</code> refers to a node in which the new, that is
+        modified instance and original, unmodified instance are available
+        as <code>$this.new</code> and <code>$this.old</code>.</li>
+      <li>A stack frame is available for general use.</li>
+      </ul>
+      <p>
+        If the mutator executes the statement
+      </p>
+      <source>
+$this.new = $this.old;
+</source>
+      <p>
+        then all modifications to the instance are discarded. Of course, individual
+        fields can be reset in this way also. If the mutator modifies another
+        instance not yet contained within the transaction then this instance will
+        be locked, joined into the transaction and have any mutator defined for it
+        executed at a later time.
+      </p>
+      <fixme author="Tom">Not currently handled to modify an instance for which the
+      mutator has already been run.</fixme>
+      </section>
+      <section id="dtor">
+      <title>The Destroy Statement</title>
+      <p>
+        The <code>delete</code> function is used to delete instances in the managed
+        state. When called, the instance is entered into the transaction for
+        deletion and any <code>destroy</code> statement is run.
+      </p>
+      <p>
+        On successful commit, all the delete-marked instances within the process's
+        transaction become unmanaged and a deletion event is raised on each. Any
+        structures in which the instance is contained may also be manipulated to
+        reflect the deletion and this results in, for example, client table views
+        showing a row deletion. This subject is covered in greater detail in the
+        section on <a href="structures.html">building working data structures</a>.
+      </p>
+      <p>
+        The <code>destroy</code> statement can be used to delete dependent instances
+        or release related resources such as open streams. Its syntax is
+      </p>
+      <source>
+destroy(&lt;statement&gt;)
+</source>
+      <p>
+        The environment during execution of the <code>destroy</code> statement is as
+        follows:
+      </p>
+      <ul>
+      <li><code>$this</code> refers to the instance being deleted;</li>
+      <li>A stack frame is available for general use.</li>
+      </ul>
+      <p>
+        When a typedef instance has been successfully deleted, any process may
+        continue to hold a reference it obtained prior to deletion. Any mutation
+        of such an instance will not result in transaction handling or mutator
+        execution and it is an error to delete an instance twice.
+      </p>
+      </section>
+      <section id="expirestmt">
+      <title>The Expire Statement</title>
+      <p>
+        The Inq run-time allows entities to be reparsed and replaced in the
+        system while it is running and this applies to typedefs just as it does to
+        functions and services. When a typedef replaces one of the same name in
+        the same package any existing references to instances of that typedef
+        become benign, that is they do not take part in transactions
+        any more.
+      </p>
+      <p>
+        The Inq run-time places any instances of the replaced typedef into
+        the unmanaged state, executes any <code>expire</code> statement for
+        each instance and raises a single event to notify the expiry:
+      </p>
+      <source>
+expire(&lt;statement&gt;)
+</source>
+      <p>
+        The environment during execution of the <code>expire</code> statement is as
+        follows:
+      </p>
+      <ul>
+      <li><code>$this</code> refers to the instance being expired. Parsing
+        a typedef occurs when loading server-side scripts;</li>
+      <li>A stack frame is available for general use.</li>
+      </ul>
+      <fixme author="tom">
+        Further coverage of expiry to be written
+      <!--
+        Expiring a
+        Inq also offers an <code>expire</code> function, allowing applications
+        to resynchronise all loaded instances
+      -->
+      </fixme>
+      </section>
+      <section id="definingkeys">
+      <title>Defining Keys</title>
+      <p>
+        The process of defining keys establishes two facets of a typedef:
+      </p>
+      <ol>
+        <li>A mandatory primary key. This key allows the Inq run-time to
+          establish identity and enforce uniqueness of instances in (or
+          entering) the managed state. Inq ensures that only a single
+          reference to a given instance exists within the server environment.</li>
+        <li>Any number of unique or non-unique keys. These keys are defined
+          to suit the way that the application wishes to retrieve instances
+          and build working data structures.</li>
+      </ol>
+      <p>
+        A key comprises a collection of fields and any information that relates
+        to the chosen i/o binding for the typedef. In addition, Inq may cache key
+        values that have been applied to the i/o binding against the instances
+        returned to allow a server to
+        make more efficient use of i/o
+        resources. There are various options for configuring how a particular
+        key manages its cache or whether caching is turned off completely.
+        This is subject is explained in more detail in
+        the section discussing <a href="keys.html">I/O Keys</a>.
+      </p>
+      <p>
+        Apart from the primary, which can only be composed from fields of the
+        typedef, keys can comprise additional elements exclusive to them
+        by referencing fields of other entity typedefs or aliases.
+        More complex definitions are described in the I/O Keys section.
+        <!--and illustrated in the example applications.--> At this stage we cover
+        the simpler cases only.
+      </p>
+      <p>
+        Continuing our example, the <code>Currency</code> typedef has the
+        following primary key:
+      </p>
+      <source>
+pkey
+(
+  fields (Currency)
+
+  #include &lt;{db}/xyCurrency.pkey.sql&gt;
+)
+</source>
+      <p>
+        The <code>fields</code> section is a comma-separated list from the fields
+        that make up the typedef itself. In this case we specify only
+        the <code>Currency</code> field and in so doing we are saying that each
+        instance of the <code>Currency</code> typedef must have a unique value
+        for this field.
+      </p>
+      <p>
+        The <code>#include&lt;...&gt;</code> directive instructs the parser to
+        process input from the specified file. As we see below,
+        the <code>Currency</code> typedef is bound to a relational database
+        and the auxilliary information required by its key definitions is
+        SQL syntax. The primary key requires SQL to retrieve, update, create
+        and delete instances of <code>Currency</code>.
+      </p>
+      <p>
+        The content of the angle brackets is a URL, which if relative, is
+        resolved with respect to the current parse module. Arbitrary command
+        line arguments from the Inq environment can be substituted using
+        the <code>{}</code> construct.
+        In this example, the command line must include the <code>-db</code>
+        flag. If this was passed as <code>-db mysql</code> the result  
+        would be the relative URL of <code>mysql/xyCurrency.pkey.sql</code>.
+        Here's what
+        the <a class="fork" href="examples/mysql/xyCurrency.pkey.sql">MySql</a>
+        version looks like. Using this approach it is straightforward to
+        support multiple database vendors easily. Here, for example, is
+        an <a class="fork" href="examples/oracle/xyCurrency.pkey.sql">Oracle</a>
+        version.
+      </p>
+      <p>
+        You may notice that these two examples use different approaches to
+        formatting and parameterising the SQL statements. There are trade-offs
+        between the various features available and these are discussed in the
+        <a href="keys.html">I/O Keys</a> section.
+        Whichever approach is taken, some of what appears in skeletal SQL
+        files is messy, however once its done it can generally be forgotten
+        about and database independence is yours.
+      </p>
+      <p>
+        Further keys can be defined as follows
+      </p>
+      <source>
+key ByActive
+(
+  fields(Active)
+  auxcfg( map(
+  "read-sql",
+    "
+      {select-stmt}
+      where Active  = {Active}
+    "
+  ))
+)
+</source>
+      <p>
+        From the primary key's definition of it, we can refer
+        to the select statement symbolically so we only have to supply
+        the <code>where</code> clause. This key is used to retrieve
+        all instances of <code>Currency</code> with a given value of
+        the <code>Active</code> field.
+      </p>
+      <p>
+        Any number of keys can be defined with a <code>key()</code> clause.
+        By default, a key is non-unique unless specified otherwise. There
+        are many ways to set up keys, for example they can be used to
+        support complex filtering, specify inequalities and can be cached
+        or not where appropriate. These features are dealt with in
+        the <a href="keys.html">I/O Keys</a> section.
+      </p>
+      </section>
+      <section id="iobinding">
+      <title>I/O Binding</title>
+      <p>
+        The last component of a typdef body is any i/o binding it may have.
+        In the definition of the keys, above, we specified various data in
+        the <code>auxcfg</code> clause. This data is used by (and so related to)
+        the particular i/o mechanism the typedef is bound to.
+      </p>
+      <p>
+        Our example has used SQL statements and so must be bound to an SQL
+        server. A clause like this accomplishes that task:
+      </p>
+      <source>
+iobind (SimpleSqlIO, xy)
+</source>
+      <p>
+        The token <code>SimpleSqlIO</code> is a reserved word that tells the
+        Inq server that the i/o mechanism will be SQL. The second
+        token, in this case <code>xy</code> is an identifier of
+        a <em>resource</em> that must have already been defined in the Inq server.
+      </p>
+      <note>Its not necessary for a typedef to have an i/o binding. If it
+      does not then instances are in-memory only.</note>
+      <p>
+        An entire application will comprise many modules that will
+        be parsed into the server-side environment. These will typically
+        be <code>#include</code>d from a top-level boot file. Somewhere early
+        on in the list will be a resource definition of the form:
+      </p>
+      <source>
+resource xy ( sqlserver, 50,
+              map(  "user", "xy1",
+                    "password", "xy1",
+                    "url", "jdbc:mysql://localhost/xydev",
+                    "null", map(date.class, "NULL",
+                                string.class, "NULL",
+                                decimal.class, "NULL",
+                                double.class, "NULL",
+                                float.class, "NULL",
+                                int.class, "NULL"
+                                ),
+                    "delim", map(date.class, "'",
+                                 string.class, "'"),
+                    "cardinality", false
+              )
+            );
+</source>
+      <p>
+        Again, we'll cover the details elsewhere but the salient points here are
+        that we define an sqlserver called <code>xy</code> to which Inq will
+        hold at most 50 simultaneous open connections using the specified user
+        and password and connecting to the given JDBC URL.
+      </p>
+      </section>
+      <section id="close">
+      <title>Close Your Typedef</title>
+      <p>
+        Don't forget to close your typedef body:
+      </p>
+      <source>
+}
+</source>
+      </section>
+      </section>
+      <section id="resolvefields">
+        <title>Resolving Field References</title>
+        <p>
+          When defining typedef fields in entity typedefs using references
+          the following examples illustrate the alternatives:
+        </p>
+        <dl>
+          <dt><strong>User</strong></dt>
+          <dd>Defines a field called <code>User</code> by reference to the
+          field <code>User.User</code> if <code>User</code> is an entity typedef
+          or to the typedef alias <code>User</code> in that case.</dd>
+          <dt><strong>User Description</strong></dt>
+          <dd>As above but defines a field called <code>Description</code>.</dd>
+          <dt><strong>User.LongName</strong></dt>
+          <dd>Defines a field called <code>LongName</code> by reference to the
+          field <code>LongName</code> in the typedef <code>User</code>.</dd>
+          <dt><strong>User.LongName Description</strong></dt>
+          <dd>Defines a field called <code>Description</code> by reference to the
+          field <code>LongName</code> in the typedef <code>User</code>.</dd>
+          <dt><strong>refdata:User.LongName Description</strong></dt>
+          <dd>Defines a field called <code>Description</code> by reference to the
+          field <code>LongName</code> in the typedef <code>User</code> in the
+          package or import symbol <code>refdata</code>. Package qualification
+          is applicable in all of the above examples.</dd>
+        </dl>
+        <p>
+          Clearly, using references creates dependencies between typedef
+          declarations. There are no restrictions on the order in which
+          dependent typedefs are parsed and cyclic references, though
+          questionable from a design perspective, are allowed.
+        </p>
+        <p>
+          As a typedef is parsed, Inq attempts to resolve, in both directions,
+          references between it and those already loaded. This may result in one
+          or more typedefs having some or all of their remaining references
+          resolved. Note that this includes any references arising from the definition
+          of key fields, described in the section
+          on <a href="keys.html">I/O Keys</a>.
+        </p>
+        <p>
+          If <code>new</code> is called on a typedef that is not fully resolved
+          then an exception is thrown. When a typedef becomes fully resolved
+          a <code>cataloged</code> event is raised, discussed further in
+          the <a href="events.html">Events</a> section.
+        </p>
+        <!--
+        <note>
+          Reparsing a typedef resets any others that have dependencies on it.
+          If the typedef has changed in such a way that it no longer satisfies
+          all the references made on it then those typedefs may become
+          unresolves as a result and therefore unusable.
+        </note>
+        -->
+      </section>
+      <section id="instancelifecycle">
+      <title>The Typedef Instance Life-Cycle</title>
+      <p>
+        Earlier we mentioned that typedef instances had a defined life-cycle
+        and that specially declared statements are executed at certain
+        life-cycle stages. The diagram below summarises the Inq statements and
+        transaction outcomes that move a typedef instance between the
+        various states:
+      </p>
+      <figure src="images/lifecycle.png" alt="Life Cycle"/>
+      <p>
+        Notice that references to <em>managed</em> instances can only be
+        obtained by performing a <code>read()</code> statement. This
+        statement fetches instances from the memory cache or, if the
+        typedef is persistent, the i/o mechanism if the key is not
+        cached, never been used or flushed from the cache. We return
+        to this subject in the
+        section <a href="structures.html">Building Node Structures</a>.
+      </p>
+      </section>
+    </section>
+  </body>
+</document>

@@ -138,6 +138,11 @@ public final class AnyMapConstDecor implements Map,
     return false;
   }
 
+  public boolean valueEquals(Map m)
+  {
+    return instance_.valueEquals(m);
+  }
+  
   public int entries() { return instance_.entries(); }
 
   public boolean contains (Any key) {return instance_.contains(key); }
@@ -204,12 +209,6 @@ public final class AnyMapConstDecor implements Map,
       a = a.bestowConstness();
     
     return a;
-  }
-
-  public java.util.Map getMap ()
-  {
-    // Internal use only (i.e. not from script) so OK, sort of!
-    return instance_.getMap();
   }
 
   public Any remove (Any key)
@@ -324,16 +323,6 @@ public final class AnyMapConstDecor implements Map,
     instance_.setContext(context);
   }
   
-  public void setAux(Any aux)
-  {
-    instance_.setAux(aux);
-  }
-  
-  public Any getAux()
-  {
-    return instance_.getAux();
-  }
-
   public void removeInParent()
   {
     // TODO is this OK (and other decorators)?

@@ -149,9 +149,7 @@ public class LoadServer extends    AbstractFunc
 										 
 		sr_ = new SendRequest (new ConstString("system.services.RunInq"),
 													 null,  // context set before exec() called
-													 null,  // no save-at
 													 null,  // args set before exec() called
-													 new LocateNode (ServerConstants.ROCHANNEL),
-													 null);
+													 new LocateNode (ServerConstants.ROCHANNEL));
 	}
 }

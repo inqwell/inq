@@ -16,15 +16,14 @@ package com.inqwell.any;
 
 /**
  * An exception class whose purpose is to act as a control flow
- * interruption to a loop operation.
+ * interruption to a function execution.
  * <p>
- * Prematurely terminates a <code>ForEach</code> loop optionally
- * defining the result of the <code>ForEach</code> function.
+ * Prematurely terminates a function execution optionally
+ * defining the result of the referring <code>call</code> function.
  * @author $Author: sanderst $
- * @version $Revision: 1.2 $
  * @see com.inqwell.any.Any
  */ 
-public class ReturnException extends AnyException
+public class ReturnException extends FlowControlException
 {
 	private Any result_ = null;
 	

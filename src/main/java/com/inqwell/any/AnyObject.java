@@ -104,7 +104,6 @@ public class AnyObject extends    AbstractAny
 				{
           // Just take it whatever
           setValue(a);
-					//throw new IllegalArgumentException(a.getClass().toString() + " not an AnyObject");
 				}
 			}
 		}

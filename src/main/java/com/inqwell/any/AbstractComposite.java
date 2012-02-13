@@ -16,6 +16,9 @@ import java.util.Collections;
  */
 public abstract class AbstractComposite implements Composite
 {
+  static private final Any reorder__ = new ConstString("internal://reorder");
+  static private final Any findPos__ = new ConstString("<findInsertionPosition>");
+
   private Any     nodeSet_         = null;
 
   public boolean equals(Object o)
@@ -196,6 +199,26 @@ public abstract class AbstractComposite implements Composite
 	  if (upperBound < 0)
 	    return 0;
 	  
+	  // If we need look for an insertion position then
+	  // make a stack entry so we don't lose our way should
+	  // an exception be thrown
+	  Transaction t = null;
+    int curLine = -1;
+	  if (lowerBound != upperBound)
+	  {
+	    t = Globals.getProcessForCurrentThread().getTransaction();
+	    if (!t.getCallStack().isEmpty())
+	    {
+  	    curLine = t.getLineNumber();
+        Call.CallStackEntry se = (Call.CallStackEntry)t.getCallStack().peek();
+        se.setLineNumber(curLine);
+  	    t.getCallStack().push(new Call.CallStackEntry(reorder__,
+  	                                                  findPos__));
+	    }
+	    else
+	      t = null;
+	  }
+	  
 	  while (lowerBound != upperBound)
 	  {
       int mid = lowerBound + (upperBound - lowerBound) / 2;
@@ -210,8 +233,15 @@ public abstract class AbstractComposite implements Composite
         lowerBound = mid;
         upperBound = mid;
       }
-    }
-    return lowerBound;
+	  }
+	  
+	  if (t != null)
+	  {
+      t.getCallStack().pop();
+      t.setLineNumber(curLine);
+	  }
+	  
+	  return lowerBound;
   }
 	
   public Any getNodeSet()

@@ -22,6 +22,7 @@ import com.inqwell.any.beans.Facade;
  * <p>
  * @author $Author: sanderst $
  * @version $Revision: 1.2 $
+ * @deprecated (pending fixing of Xylinq server scripts that use service listeners) 
  */
 public class Listen extends    AbstractFunc
 										implements Cloneable
@@ -83,7 +84,6 @@ public class Listen extends    AbstractFunc
 			Facade f = (Facade)listenTo;
       if (f.getContext() != null)
       {
-        System.out.println("Listen: ********* " + f.getContext());
 				sr.setContext(f.getContext());
       }
       else

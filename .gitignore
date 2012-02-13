@@ -1,3 +1,8 @@
 target/
 .classpath
 .project
+.externalToolBuilders/
+.settings/
+src/main/forrest/build/
+src/main/forrest/src/documentation/content/xdocs/build/
+src/main/forrest/src/documentation/content/xdocs/samples/

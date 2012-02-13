@@ -14,15 +14,14 @@
 
 package com.inqwell.any.server;
 
+import java.io.IOException;
+import java.net.ServerSocket;
+
 import com.inqwell.any.AnyException;
 import com.inqwell.any.EventDispatcher;
 import com.inqwell.any.StartProcessEvent;
-import com.inqwell.any.channel.ChannelDriver;
 import com.inqwell.any.channel.ContentCipher;
 import com.inqwell.any.channel.Socket;
-
-import java.net.ServerSocket;
-import java.io.IOException;
 
 public abstract class AbstractProtocolHandler implements ProtocolHandler
 {
@@ -32,7 +31,6 @@ public abstract class AbstractProtocolHandler implements ProtocolHandler
 	{
 		ed_ = new EventDispatcher();
 		ed_.addEventListener(new StartUserProcess());
-		ed_.addEventListener(new StartRouterProcess());
 		//ed_.addEventListener(SessionManager.instance());
 	}	
 

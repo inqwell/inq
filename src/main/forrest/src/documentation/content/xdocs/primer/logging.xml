@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright 2006 Inqwell Ltd.
+-->
+<!DOCTYPE document PUBLIC "-//APACHE//DTD Documentation V2.0//EN" "http://forrest.apache.org/dtd/document-v20.dtd">
+<document>
+  <header>
+  <title>Logging in Inq</title>
+  </header>
+  <body>
+    <section id="intro">
+      <title>General</title>
+      <p>
+        Logging is an important aspect of enterprise systems. Inq provides
+        access to and
+        extends <a class="fork" href="ext:javase/logging">Java Logging</a>.
+        For the rationale behind this and how to configure and use logging in Inq,
+        please see the <a href="logging.pdf">Logging Mini Guide</a>.
+      </p>
+    </section>
+    <section id="usage">
+      <title>Example Usage</title>
+      <p>
+        The <em>petstore</em> blueprint application and Inq's
+        bundled <em>file transfer</em> package contain examples
+        of logging usage. Code can be found
+        in <code>app/examples/petstore</code>
+        and <code>app/filexfer</code> respectively.
+      </p>
+    </section>
+  </body>
+</document>
+

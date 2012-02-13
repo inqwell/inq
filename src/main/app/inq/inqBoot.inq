@@ -1,0 +1,17 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * Inqwell Boot file
+ *
+ * Load code for useful bundled services into the inq Server.
+ */
+#include <{db}/inqIo.inq>
+
+#include <inqCommon.inq>
+#include <Unique.inq>
+#include <inqUniqueSrv.inq>

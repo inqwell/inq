@@ -1,0 +1,297 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright 2006 Inqwell Ltd.
+-->
+<!DOCTYPE document PUBLIC "-//APACHE//DTD Documentation V2.0//EN" "http://forrest.apache.org/dtd/document-v20.dtd">
+<document>
+  <header>
+    <title>The Petstore Blueprint</title>
+  </header>
+  <body>
+    <section id="intro">
+      <title>Introduction</title>
+      <p>
+        Petstore is an implementation of the well-known application,
+        now brought to the Inq platform. Apart from its familiarity,
+        petstore's function not so important. Rather, it demonstrates much
+        of what is possible with Inq when developing enterprise
+        applications.
+      </p>
+      <p>
+        As well as a graphical client for account maintenance, composing
+        and submitting an order and browsing orders and items, petstore
+        includes a <a href="../../primer/process.html#detached">detached
+        process</a> to act as an order processor and an example of
+        cooperation via a <a href="../../primer/jms.html">message broker</a>.
+        This context diagram depicts its components:
+      </p>
+      <figure src="images/dataflow.png" alt="dataflow"/>
+      <section id="reqs">
+        <title>Requirements</title>
+        <p>
+          To run petstore you will need the following:
+        </p>
+        <section id="mysql">
+          <title>MySQL</title>
+          <p>
+            The implementation comes with typedefs bound to MySQL so to run it as-is
+            requires access to a MySQL server. If running under Ubuntu, use the
+            Synaptic Package Manager or install
+            with <code>apt-get install mysql-server-5.1</code>. Otherwise
+            download a version suitable for your
+            platform <a href="ext:mysql/downloads/mysql51">here</a>.
+          </p>
+          <p>
+            The runtime JDBC driver can be
+            downloaded <a class="fork" href="ext:mysqljdbc">here</a>. See below for
+            where to place all third party jars so that the Inq server picks
+            them up. 
+          </p>
+          <p>
+            To run petstore against another SQL server implementation is a
+            straightforward process. The following directories are relevant
+          </p>
+          <dl>
+            <dt>
+            <code>app/examples/petstore/db/mysql</code>
+            </dt>
+            <dd>
+            schema creation and data load.
+            </dd>
+            <dt>
+            <code>app/examples/petstore/mysql</code>
+            </dt>
+            <dd>
+            SQL for the various typedef keys and SQL server resource declaration.
+            </dd>
+          </dl>
+          <p>
+            Modifying the files therein should be self-explanatory. You
+            can create <code>...petstore/&lt;your-sql-server&gt;/...</code>
+            and modify the server launch, changing the <strong><code>-db</code></strong>
+            argument. Make sure there is a suitable JDBC driver jar file
+            in the classpath - you may need to modify <code>INQJDBCARGS</code>
+            in <code>./bin/inq</code>
+          </p>
+          <p>
+            If you do run against a different SQL server then please contribute
+            your efforts to the <a class="fork" href="ext:forums/home">forums</a>.
+          </p>
+        </section>
+        <section id="glassfish">
+          <title>GlassFish &gt;&gt; Open Message Queue</title>
+          <p>
+            Petstore reports completed orders to an "exchange" which in turn
+            broadcasts "market prices" that "other petstores" can subscribe to.
+            If there is no message broker available then this part of petstore
+            will not run. You have the following alternatives:
+          </p>
+          <ul>
+            <li>
+              Download and install <a class="fork" href="ext:openmq/home">Open Message Queue</a>.
+              Petstore (or more accurately Inq's JMS functionality) has been
+              tested against this. More details are available in
+              the <a href="../../primer/jms.pdf">JMS Mini Guide</a>.
+            </li>
+            <li>
+              Modify the distribution to use the message broker you are using.
+            </li>
+            <li>
+              Don't bother with price reporting. The application will run
+              without it but orders will never move to the <code>shipped</code>
+              state and the Items Browser GUI will not show price movements.
+            </li>
+          </ul>
+        </section>
+        <section id="apachefop">
+          <title>Apache FOP</title>
+          <p>
+            Petstore includes a demonstration of report production in Inq. We'll
+            examine this aspect further in other sections but for now the
+            process is broadly
+          </p>
+          <ol>
+          <li>Gather the report content by building an appropriate node structure</li>
+          <li>Convert this structure to an XML form that marries the content
+          to the report layout by being sympathetic to the XSL templates (contained
+          in <code>$INQHOME/app/examples/petstore/reports</code>)</li>
+          <li>Submit the XML and XSL templates to Apache FOP to generate <code>pdf</code>
+          output</li>
+          <li>Transfer the pdf file to the client for view/print.</li>
+          </ol>
+          <p>
+            Note that report production takes place on the server, so the only
+            support needed in the client is a pdf viewer set up as the desktop
+            application for pdf files.
+          </p>
+          <p>
+            Setting up Apache FOP is optional - without it the reports (in the
+            petstore My Orders screen) will not run. You can download
+            it <a class="fork" href="ext:fop/download">here</a> or if you
+            are running under Ubuntu, install it
+            with <code>sudo apt-get install fop</code>.
+          </p>
+          <note>Inq/petstore has been tested on Windows and Linux against
+            versions 0.95 and 1.0 of
+            Apache FOP, downloaded directly from the Apache Foundation. We have
+            experienced stack overflow exceptions using the Ubuntu packaged version.</note>
+        </section>
+      </section>
+      <section id="online">
+        <title>Running Petstore Online</title>
+        <p>
+          If you just want to try out the demonstration without installing Inq,
+          the required third-party components above and starting the server you
+          can run the client via Java Webstart<sup>tm</sup> by clicking below.
+        </p>
+        <p>
+        Launch the petstore
+        client (requires Java 1.6): <a href="ext:inqlaunch/petstore"><icon src="images/jws-launch-button.png" alt="launch"/></a>
+        </p>
+        <p>
+        The login screen should appear.
+        </p>
+        <ul>
+        <li>The valid user name is ACID.</li>
+        <li>Any password will do</li>
+        <li>If you are behind a firewall then it must allow outbound
+        connections on port 8003.<!-- Copy and paste <code>speakinqs://inqwell.com:8003?keepAlivePeriod=30000</code>-->
+        </li>
+        </ul>
+        <figure src="images/pslogin.png" alt="login"/>
+        <p>
+           Fill it in as shown and click OK.
+        </p>
+        <p>
+           There is a limit of 50 users logged in at any one time (remember that
+           the Inq client maintains a long-lived two-way connection with the
+           server) and an idle timeout of 10 minutes, after which the session
+           will be terminated. The good thing about the online demo is that
+           assuming other people are logged in at the same time, you can see
+           new orders being added in the My Orders window and price changes
+           in Browse Items. Just click the <em>Filter</em> button in both cases.
+        </p>
+        <p>
+          We will endeavour to keep the server running at all times, resetting the
+          database every so often.
+        </p>
+      </section>
+    </section>
+    <section id="setup">
+      <title>Setting Up</title>
+      <p>
+         Unpack the distribution in a convenient directory - in the instructions
+         that follow we refer to this as <code>$INQHOME</code>.
+      </p>
+      <section id="jars">
+        <title>Third Party Jars</title>
+        <p>
+          Place the required third-party
+          Jar files into the <code>$INQHOME/lib/endorsed</code> directory.
+          Assuming you are using MySql and Open Message Queue your directory
+          will look something like this:
+        </p>
+        <figure src="images/endorsed.png" alt="endorseddir"/>
+      </section>
+      <section id="dbsetup">
+        <title>Create and Load the Database</title>
+        <p>
+          Perform the following:
+        </p>
+        <source>
+cd $INQHOME/app/examples/petstore/db/mysql
+mysql -uroot -p<em>your-password</em> &lt; jpetstore-mysql-schema.sql
+mysql -uroot -p<em>your-password</em> &lt; jpetstore-mysql-dataload.sql
+</source>
+      </section>
+      <section id="startbrk">
+        <title>Start the Message Broker</title>
+        <p>
+          If you are using GlassFish Open Message Queue then in a terminal
+          window enter
+        </p>
+        <source>
+./imqbrokerd -tty -loglevel DEBUGHIGH
+</source>
+        <p>
+          where it is assumed the current directory is something
+          like <code>.../MessageQueue44/mq/bin</code>
+        </p>
+      </section>
+      <section id="startsrv">
+        <title>Start and Load the Server</title>
+        <p>
+          Perform the following (expected output shown in bold):
+        </p>
+        <source>
+cd $INQHOME
+bin/inq -server -db mysql &amp;
+<strong>Inq Server
+Copyright (c) InqWell Ltd 2002-2011
+Java Compiler Compiler Version 3.2 Copyright (c) 2003 Sun Microsystems, Inc. All  Rights Reserved.
+DeadlockScanner Started
+Server Started
+speakinq Socket Listener Started on port 6556</strong>
+</source>
+        <p>
+          To load the server do:
+        </p>
+        <source>
+inq -load -u admin -p inqwell -server speakinq://localhost -url file:app/examples/petstore/psBoot.inq
+</source>
+        <note><code>-url file:app/examples/petstore/psBoot.inq</code> is a relative
+        URL resolved with respect to the current directory of the server, so
+        this assumes you started the server in <code>$INQHOME</code>.</note>
+      </section>
+      <section id="startexch">
+        <title>Starting the Pets International Exchange</title>
+        <p>
+          If you are running the message broker then you should start the "exchange"
+          mentioned above. This has been written as a command-line script - start
+          it like this:
+        </p>
+        <source>
+cd $INQHOME/app/examples/petstore
+inq -in exchangeSimulator.inq -fill FILL.PIE -feed FEED.PIE
+</source>
+        <p>
+          The exchange waits at the queue <code>FILL.PIE</code> for completed
+          orders sent by petstore. It then simulates price movements on the
+          order items and publishes them on the topic <code>FEED.PIE</code>.
+          More on this later.
+        </p>
+      </section>
+      <section id="startclient">
+        <title>Starting the Client</title>
+        <p>
+          Starting the Inq graphical client brings up the login screen
+          as shown above.
+        </p>
+        <source>
+inq -client
+<strong>Inq Client
+Copyright (c) InqWell Ltd 2002-2011
+Java Compiler Compiler Version 3.2 Copyright (c) 2003 Sun Microsystems, Inc. All  Rights Reserved.
+JDateChooser Copyright (c) Kai Toedter 1999 - 2006
+TableLayout Copyright (c) 2001 Daniel Barbalace. All rights reserved.</strong>
+</source>
+        <p>
+          When running locally (as opposed to logging
+          into the server hosted at inqwell.com) your login screen
+          should look like this:
+        </p>
+        <figure src="images/psloginlocal.png" alt="loginlocal"/>
+        <note>By default the server is not started with SSL enabled, so
+        the URL to connect to locally is <code>speakinq://...</code>
+        and not <code>speakinqs://...</code></note>
+        <p>
+          After logging in petstore displays its dashboard window:
+        </p>
+        <figure src="images/psdash.png" alt="dashboard"/>
+      </section>
+      <p>
+        <a href="anatomy.html"><icon src="../images/nextpage.gif" alt="nextpage"/></a>
+      </p>
+    </section>
+  </body>
+</document>

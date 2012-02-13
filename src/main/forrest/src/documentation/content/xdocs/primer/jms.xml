@@ -1,0 +1,72 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright 2006 Inqwell Ltd.
+-->
+<!DOCTYPE document PUBLIC "-//APACHE//DTD Documentation V2.0//EN" "http://forrest.apache.org/dtd/document-v20.dtd">
+<document>
+  <header>
+  <title>Using JMS With Inq</title>
+  </header>
+  <body>
+    <section id="intro">
+      <title>General</title>
+      <p>
+        The <a class="fork" href="ext:java/jms">Java Message Service</a>
+        can be used to allow Inq servers to cooperate with
+      </p>
+      <ul><li>one another</li>
+      <li>existing parts of an enterprise system via a message broker
+      that has a JMS implementation.</li>
+      </ul>
+      <p>
+        Inq supports all the functionality of
+        the <a class="fork" href="ext:javaee/apidocs/jms">JMS Api</a>.
+        Please see the <a href="jms.pdf">JMS Mini Guide</a>, which
+        describes how JMS messaging integrates with the Inq process
+        and transaction environment.
+      </p>
+      <p>
+        Inq's JMS functionality has been tested
+        against <a class="fork" href="ext:openmq/home">GlassFish Open Message Queue</a>.
+        All the example Java programs that Open Message Queue
+        comes with have been implemented in Inq:
+      </p>
+      <p>
+        Code can be found in <code>examples/jms</code>:
+      </p>
+      <source>
+AckEquivExample.inq
+AsynchQueueExample.inq
+AsynchTopicExample.inq
+DurableSubscriberExample.inq
+MessageFormats.inq
+MessageHeadersTopic.inq
+ObjectMessages.inq
+QueueBrowser.inq
+SampleUtilities.inq
+SenderToQueue.inq
+SynchQueueExample.inq
+SynchTopicExample.inq
+TopicSelectors.inq
+TransactedExample.inq
+XMLTopicExample.inq
+</source>
+      <p>
+        The <em>petstore</em>
+        blueprint application combines queue and topic usage
+        with XML handling. Code can be found in <code>app/examples/petstore</code>.
+      </p>
+    </section>
+    <section id="envs">
+      <title>Inq Execution Modes</title>
+      <p>
+        JMS functionality is available in all Inq <a href="invoking.html">modes of execution</a>,
+        however for client/server the most common case is that the server
+        manages interaction with the JMS environment and Inq's own
+        client/server <a href="process.html#eventflows">event flows</a> maintain
+        client state.
+
+      </p>
+    </section>
+  </body>
+</document>

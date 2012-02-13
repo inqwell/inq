@@ -192,6 +192,9 @@ public class AnyTreeTableModelAdapter extends    TreeTableModelAdapter
             // yet be selected.
             
             AnyTreeNode n = (AnyTreeNode)nodeForRow(i);
+            if (n == null)  // This is possible but TODO investigate why
+              continue;
+            
             Any a = null;
             if (!n.isExpansion())  // Expansions TBD in this context
               a = n.getAny();

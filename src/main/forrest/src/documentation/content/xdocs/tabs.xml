@@ -1,0 +1,40 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright 2006 Inqwell Ltd,
+-->
+<!DOCTYPE tabs PUBLIC "-//APACHE//DTD Cocoon Documentation Tab V1.1//EN" "http://forrest.apache.org/dtd/tab-cocoon-v11.dtd">
+
+<tabs software="Inqwell"
+  title="Inqwell"
+  copyright="Inqwell Ltd"
+  xmlns:xlink="http://www.w3.org/1999/xlink">
+
+  <!-- The rules for tabs are:
+    @dir will always have '/@indexfile' added.
+    @indexfile gets appended to @dir if the tab is selected. Defaults to 'index.html'
+    @href is not modified unless it is root-relative and obviously specifies a
+    directory (ends in '/'), in which case /index.html will be added
+    If @id's are present, site.xml entries with a matching @tab will be in that tab.
+
+   Tabs can be embedded to a depth of two. The second level of tabs will only
+    be displayed when their parent tab is selected.
+  -->
+
+  <tab id="home"     label="Home"     dir=""         indexfile="index.html"/>
+  <tab id="learn"    label="Learn Inq" dir="primer"   indexfile="nodes.html"/>
+  <tab id="examples" label="Example Applications" dir="examples" indexfile="index.html"/>
+  <!--
+  <tab id="examples" label="Example Applications" dir="examples" indexfile="index.html">
+    <tab id="exchat" label="Chat" dir="examples/chat" indexfile="index.html"/>
+  </tab>
+  -->
+  <tab id="support" label="Support" dir="support" indexfile="index.html"/>
+  <tab id="download" label="Download" dir="download" indexfile="index.html"/>
+  <tab id="about" label="About Us" dir="" indexfile="about.html"/>
+  <!-- Add new tabs here, eg:
+  <tab id="download" label="Download" dir="download" indexfile="index.html"/>
+  <tab label="How-Tos" dir="community/howto/"/>
+  <tab label="XML Site" dir="xml-site/"/>
+  -->
+
+</tabs>

@@ -19,6 +19,7 @@ import java.awt.Container;
 import javax.swing.AbstractButton;
 
 import com.inqwell.any.AbstractComposite;
+import com.inqwell.any.AbstractValue;
 import com.inqwell.any.Any;
 import com.inqwell.any.AnyBoolean;
 import com.inqwell.any.AnyException;
@@ -32,7 +33,7 @@ import com.inqwell.any.Set;
 import com.inqwell.any.Transaction;
 import com.inqwell.any.client.swing.SwingInvoker;
 
-public class AnyCheck extends AnyToggleButton
+public class AnyCheck extends AnySimpleComponent
 {
   private AbstractButton b_;
 
@@ -40,10 +41,8 @@ public class AnyCheck extends AnyToggleButton
   private Any            uncheckedValue_ = AnyBoolean.FALSE;
   
 	private static Set   checkBoxProperties__;
-  private static Any   checkedValue__   = new ConstString("checkedValue");
-  private static Any   uncheckedValue__ = new ConstString("uncheckedValue");
 
-  static
+	static
   {
     checkBoxProperties__ = AbstractComposite.set();
     checkBoxProperties__.add(checkedValue__);

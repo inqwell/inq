@@ -1,0 +1,239 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * Inqwell Job Control Package
+ *
+ * Job typedef
+ *
+ * Private & Confidential Copyright � Inqwell Ltd 2007.
+ * All rights reserved.
+ */
+package inq.jobcontrol;
+
+#include <i18n.inq>
+
+// Import other packages: this creates symbols Uniq, BOOT as synonyms
+// for inq.util and inq.boot and offers protection against functions,
+// typedefs and so on.
+import inq.util as Uniq;
+import inq.boot as BOOT;
+
+
+/**
+ * A Job instance defines a schedulable task or group of tasks.
+ * A group of tasks, known as a box, contains individual tasks or
+ * further boxes. A box serves to enforce job execution order other
+ * than just by schedule time alone and can be set to abort its job
+ * sequence should a constituent job fail. In the remainder of this
+ * discussion, a job with children is referred to as a box and one
+ * without (a "real" job) as a task.
+ *
+ * A task defines a Function Expression. This expression is stored as
+ * source text which is parsed and then executed to perform the task's
+ * function. A box does not define a function expression and this is what
+ * defines the Job as a box. Instead, the jobcontrol package script
+ * executes its child jobs in sequence, possibly terminating
+ * early if a child job reports an error.
+ *
+ * Jobs in a box will never overlap. A box is configured to either run
+ * its child jobs in immediate sequence or according to their preferred start
+ * time, but if an earlier job exceeds the start time of later ones, those jobs
+ * are delayed.
+ *
+ * A box may define its start time. If it does not and at least one
+ * child job does so the earliest start time of the child jobs
+ * is assumed by the box, otherwise the box start time will be used.
+ * This definition is recursive to the top-level box of a job tree.
+ *
+ * Jobs have an ordinal number, which is used to define their
+ * sequence in a box when one or more jobs do not specify a start time.
+ * The ordinal number is established as the next in sequence when a job
+ * is added to a box.
+ *
+ * Jobs return an exit status of zero (OK) or non-zero (error). A box may be
+ * set to abort a sequence of jobs should a child return an error.
+ *
+ * A job's start time, when it defines one, is specified by the result of
+ * its timer expression, which must be of data type "timer".
+ * Using an expression to define the schedule means that there is no
+ * file format (similar to, say, cron) or discrete data values to define
+ * repeat intervals, absolute schedule times and so forth. Instead, this
+ * information and behaviour is managed by the timer expression and the Inq timer
+ * it returns (see Inq documentation on the timer data type and its use for
+ * further details). If a job does not define a start time but is contained
+ * within a box that does (either implicitly or explicitly as above) then
+ * it is run in sequence, unless it is inactive.
+ *
+ * Like the function expression, the timer expression is held as text and passed
+ * to the parser to yield an executable function. Failure to compile a script
+ * is one source of error that a job can incur.
+ */
+typedef Job
+{
+  fields
+	(
+	  // Job id - internally generated
+    int           Job;
+
+    string        ShortName  label={i18n}.jc.job.NAME width=12;
+
+  	Description;
+
+  	// An expression that yields a timer for this job or null if the job
+  	// does not define a timer. When a job does not define a timer it
+  	// is relying on that of some parent box to cause it to run.
+	  blob:ioPrint  TimerExpr label={i18n}.jc.job.TIMER_EXPR;
+
+	  // The expression called to run the job or null if the Job is a box.
+	  blob:ioPrint  FunctionExpr label={i18n}.jc.job.FUNC_EXPR;
+
+	  // The order of this job in its parent box.
+	  int           JobOrder;
+
+	  // Whether this job is active.
+	  Active;
+
+	  // For a box, whether first error terminates.
+	  // At top-level, whether the timer is restarted
+	  ContinueOnError;
+
+	  // For a Box only, whether a box will run its child jobs
+	  // according to their scheduled start time (when specified)
+	  // or consecutively.
+	  BoxType;
+
+	  // The last exit status of this job.
+    int           ExitStatus label={i18n}.jc.job.EXIT_STATUS;
+
+    // Time of last execution, null if never run. Only set when job
+    // completes.
+    JobTime       LastRan label={i18n}.jc.job.LAST_RAN;
+
+    // Time of next execution, when last evaluated
+    JobTime       NextRuns label={i18n}.jc.job.NEXT_RUNS;
+
+    // Duration of last execution, null if never run
+    JobDuration   LastDuration label={i18n}.jc.job.LAST_DURATN;
+
+    // The box this job is in, null if top-level.
+    Job           ParentJob;
+
+    // Audit info
+	  BOOT:LastUpdated;
+	  BOOT:UserName      User;
+  )
+
+  construct (
+  {
+    // Validate the tree state to ensure the integrity of jobDispatcher
+    call isTreeState(requiredState = enum(JobTreeState, USER_START));
+    
+  	// Validate the fields we are expecting to be initialised already
+  	if (isnull($this.ShortName))
+      throw ($catalog.{$root.i18n}.jc.errortype.JOB_CREATE,
+             $catalog.{$root.i18n}.jc.errormsg.NULL_SHORTNAME);
+
+
+    /*
+    No function expression implies a box.
+    */
+
+  	$this.Job           = call Uniq:getUniqueId(Name="JC");
+  	$this.ShortName    += " " + $this.Job;
+  	$this.ExitStatus    = 0;
+
+  	$this.LastUpdated   = getdate();
+  	$this.User          = $process.loginName;
+
+  	// Create associated JobVolatile
+    create(new(JobVolatile, $this));
+
+  })
+
+  join (
+  {
+	  // Jobs can be modified by the jobdispatcher or
+	  // a user process provided it has set the tree
+	  // state (to negotiate with the jobdispatcher).
+	  // Using the join block catches this early (when
+	  // before the instance is first mutated) rather
+	  // than late (in mutate, as the transaction is
+	  // committing).
+	   
+	  if ($process.loginName != "jobdispatcher")
+      call isTreeState(requiredState = enum(JobTreeState, USER_START));
+  })
+  
+	mutate (
+	{
+    // A Job that is currently box cannot become a task and
+    // vice-versa, but its ok to change the FunctionExpr field, of
+    // course
+    if ($this.old.FunctionExpr != $this.new.FunctionExpr &&
+        ((isnull($this.old.FunctionExpr) && !isnull($this.new.FunctionExpr)) ||
+         (!isnull($this.old.FunctionExpr) && isnull($this.new.FunctionExpr))))
+      throw ($catalog.{$root.i18n}.jc.errortype.JOB,
+             $catalog.{$root.i18n}.jc.errormsg.TASK_NOT_BOX);
+        
+  	$this.new.LastUpdated   = getdate();
+  	$this.new.User          = $process.loginName;
+  })
+
+	destroy (
+	{
+	  // See comment in <join> above. Plus the jobdispatcher
+	  // never deletes Jobs.
+    call isTreeState(requiredState = enum(JobTreeState, USER_START));
+
+	  // Delete associated JobVolatile
+	  any jv = read(JobVolatile, $this);
+	  delete(JobVolatile);
+	})
+
+	pkey
+	(
+		fields (Job)
+
+		#include <{db}/Job.pkey.sql>
+  )
+
+	key ByParent
+	(
+		fields(ParentJob)
+
+		#include <{db}/Job.ByParent.sql>
+	)
+
+  key ByShortName unique
+  (
+    fields(ShortName)
+
+    auxcfg( map(
+    "prepared", true,
+    "read-sql",
+      "
+        {select-stmt}
+        where J.ShortName = ? 
+      "
+    ))
+  )
+
+	key All
+	(
+		fields()
+    auxcfg( map(
+		"read-sql",
+			"
+			  {select-stmt}
+			"
+		))
+	)
+
+	iobind (SimpleSqlIO, BOOT:inq)
+
+}

@@ -17,12 +17,23 @@ import com.inqwell.any.Any;
 import com.inqwell.any.AnyException;
 import com.inqwell.any.Event;
 import com.inqwell.any.client.AnyView;
+import com.inqwell.any.client.Layout;
 import com.inqwell.any.client.RenderInfo;
 
-
-public class AnyRootActionContainer extends AnyView
+/**
+ * Simply acts as a way to contain dock actions. Being an AnyView, it is
+ * suitable as an argument to the {@link Layout} function
+ * @author tom
+ *
+ */
+class AnyRootActionContainer extends AnyView
 {
   private RootActionContainer actions_;
+  
+  AnyRootActionContainer(RootActionContainer actions)
+  {
+    actions_ = actions;
+  }
   
   @Override
   protected void componentProcessEvent(Event e) throws AnyException
@@ -43,7 +54,7 @@ public class AnyRootActionContainer extends AnyView
   }
 
   @Override
-  protected RenderInfo getRenderInfo()
+  public RenderInfo getRenderInfo()
   {
     throw new UnsupportedOperationException();
   }

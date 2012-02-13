@@ -44,19 +44,29 @@ public class UnListen extends    AbstractFunc
     // listeningTo cannot be null
     if (listeningTo == null)
       nullOperand(listeningTo_);
-
-    // dispatchingTo can be null just so we can write script like
-    //    listen(unlisten(listeningTo, dispatchingTo), ...)
-    // when initially there is no dispatcher
-		EventListener dispatchingTo = (EventListener)EvalExpr.evalFunc
-																					(getTransaction(),
-																					 a,
-																					 dispatchingTo_,
-																					 EventListener.class);
-
-		if (dispatchingTo != null && listeningTo != null)
-      listeningTo.removeEventListener(dispatchingTo);
-      
+    
+    // Check if the single argument version is being used
+    if (dispatchingTo_ == null)
+    {
+      ListenTo.EventDispatcherListeningTo d = (ListenTo.EventDispatcherListeningTo)listeningTo;
+      listeningTo = d.unlisten();
+    }
+    else
+    {
+      // dispatchingTo can still resolve to null just so we can write
+      // script like
+      //    listen(unlisten(listeningTo, dispatchingTo), ...)
+      // when initially there is no dispatcher
+  		EventListener dispatchingTo = (EventListener)EvalExpr.evalFunc
+  																					(getTransaction(),
+  																					 a,
+  																					 dispatchingTo_,
+  																					 EventListener.class);
+  
+  		if (dispatchingTo != null && listeningTo != null)
+        listeningTo.removeEventListener(dispatchingTo);
+    }
+    
 		return listeningTo;
 	}
 	
@@ -65,7 +75,7 @@ public class UnListen extends    AbstractFunc
     UnListen u = (UnListen)super.clone();
     
     u.listeningTo_   = listeningTo_.cloneAny();
-    u.dispatchingTo_ = dispatchingTo_.cloneAny();
+    u.dispatchingTo_ = AbstractAny.cloneOrNull(dispatchingTo_);
     
     return u;
   }

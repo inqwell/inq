@@ -1,0 +1,105 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * Inqwell Unique Functions
+ *
+ * Generate Unique Ids.
+ */
+
+package inq.util;
+
+/**
+ * Generate a new Unique Id for the set given by Name.  If the
+ * specified set does not exist and <code>onDemand</code>
+ * is <code>true</code> the set will be created with the
+ * given <code>initValue</code>.
+ * @param Name The set of ids from which the new value
+ * will be generated.
+ * @param onDemand If <code>true</code>creates a set if one
+ * by the given <code>Name</code>
+ * does not currently exist.  Throws otherwise
+ * @param initValue Initial value for sequence if it does not
+ * currently exist. Defaults to 1
+ * @param localTxn If true then new Id will be allocated within a
+ * local transaction.  If false then allocation happens in the caller's
+ * transaction.  localTxn=true is the default and is preferred if
+ * the caller's transaction is long-lived. If the caller's transaction is
+ * short-lived then using that instead offers the benefit of the id not
+ * actually being allocated if the transaction fails.
+ * @throws If the set does not exist and onDemand is <code>false</code>;
+ * if <code>Name</code> is null.
+ */
+function getUniqueId(string  Name,
+                     boolean onDemand = true,
+                     int     initValue=1,
+                     boolean localTxn=true)
+{
+  if (length(Name) == 0 || isnull(Name))
+    throw("Unique ID Name cannot be null or zero length");
+
+  if (localTxn)
+  {
+	  transaction
+	  {
+	  	any ret = call allocateId(Name, onDemand, initValue);
+	  }
+	}
+	else
+  	any ret = call allocateId(Name, onDemand, initValue);
+
+  ret;
+}
+
+local function allocateId(string Name, boolean onDemand, int initValue)
+{
+  // Lock the code block.  We do this because we don't want
+  // one process to incur an exception because of unique key
+  // violation if there is a collision creating a Name.
+  lock("__unique" + Name);
+  if (read(Unique, .))
+  {
+    int ret = ++Unique.Value;
+  }
+  else
+  {
+    if (!onDemand)
+      throw("Unique Id requested for non-existent set " + Name);
+
+    any Unique = new(Unique);
+    Unique.Name = Name;
+
+    // We must assign the value before we create the object in the
+    // transaction, since subsequent mutations are ignored.
+    // This would be a problem in that there is a (small) window
+    // in which two processes could create the new sequence.  However,
+    // be have an explicit lock protecting this region of code, so
+    // everything's OK!
+    int ret = Unique.Value = initValue;
+    create(Unique);
+  }
+  ret;
+}
+
+/**
+ * Read the current Id for the set given by Name.
+ */
+function readUniqueId(string  Name)
+{
+  if (length(Name) == 0 || isnull(Name))
+    throw("Unique ID Name cannot be null or zero length");
+
+  int ret = -1;
+
+  if (read(Unique, .))
+  {
+    ret = Unique.Value;
+  }
+
+  ret;
+}
+

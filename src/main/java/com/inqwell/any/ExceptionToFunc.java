@@ -221,8 +221,9 @@ public class ExceptionToFunc extends    AbstractExceptionHandler
     // request to be invoked.
     //args.add(handlerArg__, handler);
 
-
+	  boolean killed = ((UserProcess)getProcess()).resetKilled(false);
     ret = handler.doFunc(t, args, getProcess().getRoot());
+	  ((UserProcess)getProcess()).resetKilled(killed);
 
     return ret;
   }

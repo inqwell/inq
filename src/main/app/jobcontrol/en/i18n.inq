@@ -1,0 +1,50 @@
+/*
+ * i18n.inq
+ *
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * Job Control Internationalised Constants - English
+ */
+ 
+package inq.jobcontrol;
+
+any at = path($catalog.en);
+
+// By using the form
+//   any <path> = "String Literal";
+// we are aliasing the string literal, which is a constant.
+
+any {at}.jc.button.OK = "OK";
+
+
+any {at}.jc.errortype.JOB_CREATE  = "Job Creation Error";
+any {at}.jc.errortype.JOB         = "Job Error";
+
+// Error messages
+any {at}.jc.errormsg.NULL_SHORTNAME = "Short Name cannot be null";
+any {at}.jc.errormsg.NOT_A_TIMER    = "Expression did not return a timer";
+any {at}.jc.errormsg.TASK_NOT_BOX   = "Box/Task cannot become Task/Box";
+
+// Labels
+any {at}.jc.job.ACTIVE        = "Active";
+any {at}.jc.job.JOB_STATE     = "Job State";
+any {at}.jc.job.ON_BOX_ERROR  = "On Child Error";
+any {at}.jc.job.BOX_TYPE      = "Box Type";
+any {at}.jc.job.STARTED       = "Started";
+any {at}.jc.job.LAST_RAN      = "Last Ran";
+any {at}.jc.job.NEXT_RUNS     = "Next Runs";
+any {at}.jc.job.EXIT_STATUS   = "Exit Status";
+any {at}.jc.job.NAME          = "Name";
+any {at}.jc.job.TIMER_EXPR    = "Timer Expr";
+any {at}.jc.job.FUNC_EXPR     = "Func Expr";
+any {at}.jc.job.LAST_DURATN   = "Duration";
+any {at}.jc.job.HOME_DIR      = "Home Dir";
+any {at}.jc.job.LOG_DIR       = "Log Dir";
+
+// Initial Values
+any {at}.jc.job.NEW   = "New Job";

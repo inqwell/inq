@@ -293,10 +293,14 @@ public class InvokeService extends    AbstractAny
     {
       // Place the process id arg into our exception handler.
       // Croaks if the exception handler does not support this
-      // function
-      Any procId = callArgs.get(NodeSpecification.atException__);
+      // function.
+      // Remove the argument - otherwise any throw() statement at this
+      // level will assume there is a nested exception
+      Any procId = callArgs.remove(NodeSpecification.atException__);
       if (procId != null)
+      {
         getTransaction().getProcess().getExceptionHandler().setHandlerProcess(procId);
+      }
     }
     
     // If we are a client then there is an option to run the

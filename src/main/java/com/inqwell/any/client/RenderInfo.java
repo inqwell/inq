@@ -149,9 +149,8 @@ public interface RenderInfo extends Any
   /**
    * Request the data to be rendered.  An expression may be evaluated
    * from the given root.  Caching the result is supported via
-   * the <code>force</code> parameter.  May return composite value
-   * with components that specify different aspects of rendering
-   * such as fore/background colours, icons etc.
+   * the <code>force</code> parameter.
+   * TODO: build arg is no longer used - to be removed
    */
 	public Any resolveDataNode(Any root, boolean force, boolean build) throws AnyException;
 

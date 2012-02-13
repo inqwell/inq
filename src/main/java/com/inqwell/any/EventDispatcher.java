@@ -244,12 +244,9 @@ public class EventDispatcher extends    AbstractAny
   
   private void doFire(Event e) throws AnyException
   {
-		//System.out.println ("-----EventDispatcher.fireEvent " + e);
-		//System.out.println ("-----EventDispatcher is dispatching " + listeners_.keys());
     EventListener eventListener = null;
 		if ((eventListener = (EventListener)listeners_.getIfContains(e.getId())) != null)
 		{
-			//System.out.println ("-----EventDispatcher has fired! ");
 			if (params_.contains(e.getId()))
 			  e.setParameter(params_.get(e.getId()));
 			  

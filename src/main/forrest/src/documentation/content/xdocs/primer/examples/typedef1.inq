@@ -1,0 +1,20 @@
+typedef	string AccountType = "M"
+        width=6
+        label="Account Type"
+(
+  //Interest bearing
+  M  : "M" : "Margin";
+
+  //No interest accrued.
+  P  : "P" : "Pending";
+);
+
+// Create a new variable of type AccountType. Its really a string
+any accType1 = new(AccountType);
+
+// Override default value
+any accType2 = new(AccountType, enum(AccountType, P));
+
+// Print out nicely
+writeln($catalog.system.out, $stack);
+writeln($catalog.system.out, enumext(AccountType, .accType2));

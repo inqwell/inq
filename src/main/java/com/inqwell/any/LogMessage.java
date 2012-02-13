@@ -121,15 +121,23 @@ public class LogMessage extends    AbstractFunc
   {
     int j = params.entries();
     
+    Object ret[] = new Object[j];
+    
     for (int i = 0; i < j; i++)
     {
+      Any param = params.get(i);
+      
       Any p = EvalExpr.evalFunc(t,
                                 a,
-                                params.get(i));
+                                param);
       
-      params.replaceItem(i, p);
+      // Allow log msg args to be null
+//      if (p == null)
+//        nullOperand(param);
+      
+      ret[i] = p;
     }
     
-    return params.toArray();
+    return ret;
   }
 }

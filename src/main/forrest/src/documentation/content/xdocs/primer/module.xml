@@ -1,0 +1,552 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright 2006 Inqwell Ltd.
+-->
+<!DOCTYPE document PUBLIC "-//APACHE//DTD Documentation V2.0//EN" "http://forrest.apache.org/dtd/document-v20.dtd">
+<document>
+  <header>
+    <title>Modules, Functions and Services</title>
+  </header>
+  <body>
+    <section id="structure">
+      <title>Module Structure</title>
+      <p>
+        Inq applications comprise a number of parsing units, or modules, each
+        of which is reached by a URL. An Inq module has the following high-level
+        structure:
+      </p>
+      <source>
+  &lt;module&gt; =
+  [ package &lt;package-specification&gt;; ]
+  [ import &lt;package&gt; as &lt;identifier&gt; ; ]
+
+  ( ( [&lt;function-definition&gt;]
+    | [&lt;service-definition&gt;]
+    | [&lt;typedef-definition&gt;]
+    | [&lt;expression&gt; ...]
+    | #include &lt;url&gt;
+    )
+   ...
+  )
+
+  &lt;package-specification&gt; = &lt;identifier&gt;[.&lt;identifier&gt; ...];
+
+  &lt;function-definition&gt; =
+  [local] function &lt;identifier&gt; ( [&lt;argument-declaration&gt;[, &lt;argument-declaration&gt; ...] )
+    &lt;statement&gt;
+
+  &lt;service-definition&gt; =
+  [syncgui] service &lt;identifier&gt; ( [&lt;argument-declaration&gt;[, &lt;argument-declaration&gt; ...] )
+    &lt;statement&gt;
+
+  &lt;typedef-definition&gt; =
+  typedef { &lt;typedef body&gt; }
+<!--
+  &lt;identifier&gt; =
+  &lt;alpha&gt; [&lt;alpha-numeric&gt; ...] -->
+</source>
+        <section id="referencing">
+          <title>Referencing Defined Entities</title>
+          <p>
+            A <code>function</code>, <code>service</code>
+            or <code>typedef</code> is referenced by its name, optionally
+            qualified by a package specification. For example, a parse
+            module that resides in package <code>bar</code> may contain
+            the following function references:
+          </p>
+          <source>
+call funcA();     // Calls funcA defined in package "bar"
+  .
+  .
+call foo:funcB()  // Calls funcB defined in package "foo"
+</source>
+        </section>
+      </section>
+      <section id="exprscope">
+        <title>Inq Expressions and Scope</title>
+        <p>
+          Every executable statement in Inq returns a value, even such things as
+          variable declarations and block statements. Constructs such as the
+          following are legal:
+        </p>
+        <source>
+string someCcy = "GBP";
+any var = {
+            if (someCcy == "GBP")
+              100;
+            else
+              1;
+          };
+</source>
+        <p>
+          The value of a block statement (contained within <code>{ ... }</code>
+          braces) is the last expression that was actually executed and this
+          trivial example always returns 100. Inq uses the
+          term <code>expression</code> to mean any executable element,
+          including all its built-in functions.
+        </p>
+        <p>
+          The term "scope" when applied to a node path either means the current
+          stack frame or one of the permanent node spaces of
+        </p>
+        <table>
+          <tr>
+            <td><code>$root</code></td>
+            <td>the root of this process's node space</td>
+          </tr>
+          <tr>
+            <td><code>$this</code></td>
+            <td>the current context node (a descendent of <code>$root</code>)</td>
+          </tr>
+          <tr>
+            <td><code>$process</code></td>
+            <td>the running process (used by Inq but can also be used by script)</td>
+          </tr>
+          <tr>
+            <td><code>$catalog</code></td>
+            <td>a global node space (used by Inq but can also be used by script)</td>
+          </tr>
+        </table>
+        <p>
+          Local variables are those passed to services and functions as arguments
+          or declared on the stack. Local declarations are placed on the
+          stack and remain there regardless of changes in the block nesting level:
+        </p>
+        <source>
+>inq -show
+string s = "outside";
+<strong>outside</strong>
+// enter nested block
+{
+  string s = "inside";
+  int i = 3;
+}
+<strong>3</strong>
+// The original s was replaced and i is still visible
+s;
+<strong>inside</strong>
+i;
+<strong>3</strong>
+^Z
+Inq done
+</source>
+        <p>
+          The node space at <code>$this</code> represents the next level of
+          visibility. Nodes below $this remain indefinitely but the exact node
+          that <code>$this</code> is may be different on each service invocation.
+          Put another way, an application may set up a number of
+          sub-structures, each representing a separate section of the
+          application. The node <code>$this</code> is
+          therefore the definition of the current working set of long lived
+          data (whether similar or different to other sub-structures). This is
+          not so much to do with module (i.e. source code) structure as it
+          is run-time structures, however Inq is a run-time language, so it
+          is worth stating here. <!-- Return/link later-->
+        </p>
+        <p>
+          The node space at <code>$catalog</code> is global to all processes
+          in a server and available in the client. It is typically used to
+          hold global, read-only data such as an internationalised set of
+          string constants.
+        </p>
+      </section>
+      <section id="svcfuncdecls">
+        <title>Service and Function Definitions</title>
+        <p>
+          We have seen in earlier examples that Inq executes expressions as it
+          parses them. A service or function definition declares arguments and
+          parses the function body so that script can be pre-parsed into the
+          Inq run-time. A service can only be invoked by one Inq process on
+          another. This may be between:
+        </p>
+        <ul>
+        <li>a Client process and its peer User process;</li>
+        <li>a User process and its peer Client process;</li>
+        <li>any two server-side processes.</li>
+        </ul>
+        <p>
+           A function can be called only within an Inq process, or run as a
+           handler for a dispatched event.
+        </p>
+        <section id="funcdecls">
+        <title>Function Definitions</title>
+        <p>
+          A function definition takes the form
+        </p>
+      <source>
+[local] function &lt;identifier&gt; ([&lt;argument-declaration&gt;[, &lt;argument-declaration&gt; ...])
+  &lt;statement&gt;
+
+&lt;argument-declaration&gt; = ( &lt;data-type&gt; &lt;identifier&gt; [ = &lt;expression&gt; ]
+                         | any &lt;identifier&gt;
+                         | &lt;type-reference&gt; [&lt;identifier&gt;]
+                         )
+
+&lt;type-reference&gt; = [&lt;package specification&gt;:]&lt;identifier&gt;[.&lt;identifier&gt;]
+</source>
+        </section>
+        <section id="funcargs">
+        <title>Function Arguments</title>
+        <p>
+          Function arguments can either be of known data types or based on a
+          reference to an application type definition. The use of a type
+          reference protects the function definition from the direct use of
+          data types. We look at this in detail in the section
+          on the <code>typedef</code> construct.
+        </p>
+        <p>
+          Inq function arguments are named. When a <code>call</code> statement
+          passes values to a function it identifies the argument by its name.
+          The order the arguments appear in the <code>call</code> statement is
+          not significant. The
+          example <a href="examples/function.inq">function.inq</a> illustrates
+          this. Note, we drop the <code>-show</code> argument:
+        </p>
+        <source>
+>inq -in examples/function.inq
+William Blake wrote On Another's Sorrow
+Carl Barât and Peter Doherty wrote Seven Deadly Sins
+William Blake wrote Jerusalem
+Inq done
+</source>
+      <p>
+        It is common for applications to define an informal naming convention
+        for their variables leading to their repeated use in source code. If
+        a stack variable has the same name as a function argument then the
+        argument's name can be omitted in <code>call</code> statements:
+      </p>
+      <source>
+string work = "Thick as Thieves";
+string writer = "Paul Weller";
+call whoWroteWhat(work, writer);
+</source>
+      </section>
+      <section id="callstack">
+        <title>The Call Stack</title>
+        <p>
+          A new stack frame is established each time a function is called and
+          any arguments or defaults initialised there. The previous
+          stack frame cannot be accessed within the called function
+          although it can, if desired, be passed as an explicit argument.
+        </p>
+        <p>
+          If a function incurs an error while executing, the resulting exception
+          carries the Inq stack trace.  Each entry identifies the URL from which
+          the source was originally parsed, the function name and line number at
+          which the exception occurred. When running the parser interactively
+          the bottom-most stack frame shows the string <code>&lt;parser&gt;</code>.
+          An example is shown in the next section.
+        </p>
+      </section>
+      <section id="funcretval">
+        <title>A Function's Return Value</title>
+        <p>
+          Inq functions always return a value, so this is not part of the
+          definition. The return value of a function is the value of the last
+          expression within the function body actually executed. Here is an
+          example in <a href="examples/returnvalue.inq">returnvalue.inq</a>
+          that illustrates this:
+        </p>
+        <source>
+>inq -in examples/returnvalue.inq
+There are 30 days in January
+February (most often) has 28
+file:/C:/inqwell/doc/src/documentation/content/xdocs/primer/examples/returnvalue.inq
+com.inqwell.any.AnyException: Bad month number 13
+        at com.inqwell.any.Throw.exec(Throw.java:92)
+        at com.inqwell.any.EvalExpr.evalFunc(EvalExpr.java:109)
+        at com.inqwell.any.EvalExpr.evalFunc(EvalExpr.java:140)
+        at com.inqwell.any.Choose.exec(Choose.java:68)
+        at com.inqwell.any.EvalExpr.evalFunc(EvalExpr.java:109)
+        at com.inqwell.any.EvalExpr.evalFunc(EvalExpr.java:140)
+        at com.inqwell.any.Sequence.exec(Sequence.java:46)
+        at com.inqwell.any.Exec.exec(Exec.java:32)
+        at com.inqwell.any.Call.call(Call.java:92)
+        at com.inqwell.any.Call.exec(Call.java:179)
+        at com.inqwell.any.OperatorVisitor$RankVisitor.visitFunc(OperatorVisitor.java:380)
+        at com.inqwell.any.AbstractFunc.accept(AbstractFunc.java:82)
+        at com.inqwell.any.OperatorVisitor.rank(OperatorVisitor.java:104)
+        at com.inqwell.any.OperatorVisitor.samePrecision(OperatorVisitor.java:153)
+        at com.inqwell.any.OperatorVisitor.doOperation(OperatorVisitor.java:39)
+        at com.inqwell.any.EvalExpr.exec(EvalExpr.java:215)
+        at com.inqwell.any.EvalExpr.evalFunc(EvalExpr.java:109)
+        at com.inqwell.any.EvalExpr.evalFunc(EvalExpr.java:140)
+        at com.inqwell.any.WriteStream.exec(WriteStream.java:50)
+        at com.inqwell.any.EvalExpr.evalFunc(EvalExpr.java:109)
+        at com.inqwell.any.EvalExpr.evalFunc(EvalExpr.java:140)
+        at com.inqwell.any.parser.Inq.main(Inq.java:512)
+file:/C:/inqwell/doc/src/documentation/content/xdocs/primer/examples/returnvalue.inq &lt;parser&gt;(22)
+file:/C:/inqwell/doc/src/documentation/content/xdocs/primer/examples/returnvalue.inq :daysInMonth(9)
+
+Inq done
+</source>
+        <note>
+          We have declared a function and called it from the parser at the
+          point the exception is thrown. We now have two entries on the
+          Inq stack trace, which reads the other way up to the Java one
+        </note>
+        <p>
+          The Inq language does have a <code>return</code> statement, however
+          the preferred coding style is not to use it for normal code flow. It
+          should be viewed as an abortive and exceptional way to leave a function.
+          The syntax of the return statement is
+        </p>
+        <source>
+return([&lt;expression&gt;]);
+</source>
+        <p>
+          If no expression is present the return value is <code>null</code>.
+        </p>
+        <p>
+          We could have written <code>daysInMonth</code> like this:
+        </p>
+        <source>
+function daysInMonth(int month)
+{
+  if (month &lt; 1 || month &gt; 12)
+    return("Oh dear");
+
+  switch
+  {
+    when (contains(set s = (4, 6, 9, 11), month)) 30;
+    when (month == 2) 28;
+    when (contains(set s = (1, 3, 5, 7, 8, 10, 12), month)) 30;
+  }
+}
+</source>
+        <p>
+          As with previous examples, it doesn't matter that the return type
+          is not the same for all paths of execution (or <code>return</code>
+          expression). A <code>call</code> statement is just another expression
+          and its value (the function's return) can be anything that is
+          acceptable to the context in which it is used.
+        </p>
+      </section>
+      <section id="funcscope">
+        <title>Function Scope</title>
+        <p>
+          A function has global or module scope. If a function definition
+          uses the <code>local</code> specifier then that function is only
+          callable from within the same source module. Otherwise the function
+          occupies the global name space.
+        </p>
+        <p>
+          If there is a local and global function of the same name then this
+          ambiguity can be resolved by using the explicit <code>global</code>
+          qualifier in the call:
+        </p>
+        <source>
+call global:foo(bar = a.b.c);
+</source>
+      </section>
+      <section id="svcdecl">
+        <title>Service Definitions</title>
+        <p>
+          A <code>service</code> definition takes the same form as
+          a <code>function</code> apart from the <code>service</code>
+          keyword. A service is invoked when a process receives a service request
+          at its input channel, sent by another (possibly remote) process.
+          Commonly, the client process sends service requests to its associated
+          user process in the connected server, however its also possible to
+          invoke services in detached or child processes within the server.
+        </p>
+        <note>
+          Services and functions do not occupy the same name space, so it is
+          possible to have a global function and a service with the same name
+        </note>
+        <section id="svcsend">
+          <title>The send Function</title>
+          <p>
+            The <code>send</code> function is used to make service requests. Here
+            are some examples:
+          </p>
+          <source>
+send filterAccounts(filter, listPath);
+
+send calcEntry(@channel=someProcess.ichannel,
+               entry,
+               invoker,
+               fwd,
+               nfm,
+               accountEntry,
+               forceReval);
+  </source>
+          <p>
+            Both these examples use the short-hand form of argument naming and, as
+            with functions, the order in which the arguments appear is not important.
+            By default <code>send</code> posts the service request to the executing
+            process's output channel. In the case of client/server, this means the
+            invocation appears at the user process's input channel.
+          </p>
+          <p>
+            If the sending process has a reference to the desired target then that
+            process's input channel can be specified by the named
+            argument <code>@channel</code> as in the second example, above.
+          </p>
+        </section>
+        <section id="modsyncgui">
+        <title>The syncgui Modifier</title>
+        <p>
+          In the client, service invocations are received from the server
+          and executed on the client process
+          thread. Occasionally, this can cause problems with the point at which
+          graphics events generated during the invocation are processed.
+        </p>
+        <p>
+          The process and graphics threads do not run together. While a service
+          invocation is running, any graphics events are queued until the
+          request has completed and the process thread returns to wait at its
+          input channel. On the other hand, graphics events occuring on
+          the graphics thread will be processed at the time they occur.
+        </p>
+        <p>
+          This will be an issue if the code flow assumes that a GUI event
+          handler is fired synchronously with the occurrance of the event.
+          Script written to rely on this property can be run successfully
+          within an invocation of a service declared with the <code>syncgui</code>
+          modifier. In this case, the service will be dispatched on the
+          graphics thread.
+        </p>
+        </section>
+      </section>
+      <section id="byrefvalue">
+        <title>Value and Reference Arguments</title>
+        <p>
+          If a function argument is declared as either a direct value type or
+          a field reference then argument passing is by value, that is the
+          argument is a new value instance. If the argument is passed by
+          a <code>call</code> statement the new value is initialised
+          from it, performing implicit type conversion if required.
+          Changes the function makes to the argument are not reflected
+          in that specified in the <code>call</code>.
+        </p>
+        <p>
+          Arguments declared with the anonymous type <code>any</code> are
+          passed by reference. Such arguments are typically maps (or other
+          containers) into which the function will place nodes as another
+          way to return data to the caller. However, any type of argument
+          can be passed by reference using this kind of declaration. Values
+          passed in this way will show any changes made by the function
+          to the caller. Here is an example showing both value and reference
+          arguments:
+        </p>
+        <source>
+function f(string byValue, any byReference)
+{
+  .
+  .
+</source>
+        <p>
+          You can see the effect this has by running the example
+          in <a href="examples/byrefbyvalue.inq">byrefbyvalue.inq</a>
+        </p>
+        <p>
+          Arguments to a service are always effectively by value, because they have
+          been received in a message from another Inq environment (though see
+          section on event services<!--XXX link-->) and there is no caller
+          in the normal sense.
+        </p>
+      </section>
+      <section id="inqfuncs">
+        <title>Inq Built-in Functions</title>
+        <p>
+          Calling an Inq built-in function does not require the use of
+          the <code>call</code> keyword and, in the majority of cases,
+          arguments are unnamed and resolved by their position.
+          Here is an example showing the <code>datediff</code> function,
+          where <code>d1</code> and <code>d2</code> are of value
+          type <code>date</code>:
+        </p>
+        <source>
+any dayCount = datediff(DAY, d1, d2);
+</source>
+        <p>
+          The <code>datediff</code> function returns a new <code>int</code>
+          variable whose value is the difference between the two dates in the
+          specified units.
+        </p>
+        <p>
+          Some functions have optional arguments. The <code>startswith</code>
+          function, for example, tests whether the first string argument
+          starts with the second, assuming a starting offset of zero unless
+          stated otherwise:
+        </p>
+        <source>
+startswith("hello world", "hello");
+<strong>true</strong>
+startswith("hello world", "world", 6);
+<strong>true</strong>
+</source>
+        <p>
+          In a minority of cases, functions can accept varied combinations
+          of optional arguments. These functions name their optional
+          arguments and their order is independent. We will look at
+          the <code>read</code> function in detail when we discuss
+          building structures. Here is its syntax:
+        </p>
+        <source>
+"read" "(" &lt;type_reference&gt; ","
+           &lt;expression&gt;    // the key value
+           ( ","
+             ( "keyname" "=" &lt;expression&gt;
+             | "target"  "=" &lt;expression&gt;
+             | "setname" "=" &lt;expression&gt;
+             | "rowname" "=" &lt;expression&gt;
+             | "alias"   "=" &lt;expression&gt;
+             | "merge"   "=" &lt;expression&gt;
+             | "max"     "=" &lt;expression&gt;
+             )
+           )*
+       ")"
+</source>
+        <p>
+          The <code>read</code> function has two mandatory parameters:
+        </p>
+        <ol>
+          <li>a type reference (either a literal type or the result
+            of the <code>typeof</code> function when an instance
+            is available);
+          </li>
+          <li>
+            a key value to be applied.
+          </li>
+        </ol>
+        <p>
+          The remainder are all optional with the parser enforcing any mutual
+          exclusion required for valid combinations of operands.
+        </p>
+      </section>
+      </section>
+      <section id="pkgimport">
+        <title>The <code>package</code> and <code>import</code> Directives</title>
+        <p>
+          The optional package specification at the head of a parse module
+          specifies a name space for the global functions and
+          services (and typedefs)
+          defined within it. References to these entities when not qualified
+          by an explicit package name imply the current package.
+        </p>
+        <p>
+          An entity's containing package is qualified by preceding the entity
+          name with the package name. For example, the function <code>bar</code>
+          declared within package <code>foo</code> can be called as:
+        </p>
+        <source>
+call foo:bar(arg, ...);
+</source>
+        <p>
+          To protect package references from changes to the package name,
+          the <code>import</code> directive can be used to create a local
+          alias for a package within the module:
+        </p>
+        <source>
+package com.somewhere.mypackage;
+
+import foo as F;
+   .
+   .
+call F:bar();
+</source>
+    </section>
+  </body>
+</document>

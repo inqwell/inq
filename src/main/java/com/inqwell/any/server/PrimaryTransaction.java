@@ -459,9 +459,6 @@ public class PrimaryTransaction  extends    LocalTransaction
                          Map    cachedObject,
                          Map    readObject) throws AnyException
 	{
-//    if (readObject == null)
-//      throw new TransactionException("resync on non-existent object");
-    
     // readObject == null implies external object deletion
     
     if (alreadyLocked(keyVal))

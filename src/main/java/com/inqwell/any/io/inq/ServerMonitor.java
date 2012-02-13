@@ -172,7 +172,7 @@ public class ServerMonitor extends UserProcess
     {
       inNodeSpace(root, results);
     }
-    Globals.lockManager__.notifyVia(processName, this);
+    Globals.lockManager__.notifyVia(processName, this, false);
   }
 
   private void cacheRemoval(Any item) throws AnyException
@@ -220,7 +220,7 @@ public class ServerMonitor extends UserProcess
       ed_.addEventListener(new BotListener(botEventTypes));
       ed_.addEventListener(new CreateListener(createEventTypes));
     }
-    Globals.lockManager__.notifyVia(processName, this);
+    Globals.lockManager__.notifyVia(processName, this, false);
   }
 
   private void inNodeSpace(Map root, Any a)

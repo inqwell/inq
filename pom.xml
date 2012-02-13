@@ -4,7 +4,7 @@
   <groupId>com.inqwell</groupId>
   <artifactId>inq</artifactId>
   <packaging>jar</packaging>
-  <version>1.1.1-SNAPSHOT</version>
+  <version>1.2</version>
   <name>inq</name>
   <url>http://www.inqwell.com</url>
 
@@ -174,13 +174,13 @@
     <dependency>
       <groupId>org.dockingframes</groupId>
       <artifactId>docking-frames</artifactId>
-      <version>1.1.1p5a</version>
+      <version>1.1.1p5c</version>
       <classifier>common</classifier>
     </dependency>
     <dependency>
       <groupId>org.dockingframes</groupId>
       <artifactId>docking-frames</artifactId>
-      <version>1.1.1p5a</version>
+      <version>1.1.1p5c</version>
       <classifier>core</classifier>
     </dependency>
   </dependencies>

@@ -83,10 +83,11 @@ public class Equals extends RelationalOperator
   
   public void visitMap (Map m)
   {
-    // Hmmm... we know that some maps implement identity equals
-    // and some value equals at the Java level.  At the Inq level
-    // we want to be independent of this so we check for it
-    // and pierce the wrapper if necessary: In a server environment
+    // Some maps implement identity equals
+    // and some value equals at the Java level.
+    // At the Inq level we want to be independent of this so
+    // we check for it.
+    // In a server environment
     // objects that are managed have identity semantics unless they
     // have been joined into a transaction, therefore two identity
     // objects are considered equal if they are the same object. If
@@ -101,7 +102,7 @@ public class Equals extends RelationalOperator
 		if (Globals.isServer() && m.hasIdentity() && m2.hasIdentity())
       result_ = getBooleanResult(m == m2);
     else
-      result_ = getBooleanResult(m.getMap().equals(m2.getMap()));
+      result_ = getBooleanResult(m.valueEquals(m2));
   }
   
   public void visitArray (Array a)

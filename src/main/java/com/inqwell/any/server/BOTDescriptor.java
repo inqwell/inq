@@ -121,6 +121,7 @@ public final class BOTDescriptor extends    AbstractDescriptor
 	private transient NodeEventPropagator ourListeners_;
 
   private Func constructor_;
+  private Func join_;
   private Func mutator_;
   private Func destroyer_;
   private Func expirer_;
@@ -815,34 +816,6 @@ public final class BOTDescriptor extends    AbstractDescriptor
       predicateBadDescriptor(this, m.getDescriptor());
       if (constructor_ != null)
       {
-        /*
-        Func f = (Func)constructor_.cloneAny();
-        //int curLine = se.getLineNumber();
-        f.setTransaction(t);
-        Call.CallStackEntry se = (Call.CallStackEntry)t.getCallStack().peek();
-        int curLine = se.getLineNumber();
-        se.setLineNumber(t.getLineNumber());
-			  t.getCallStack().push(new Call.CallStackEntry(this.getBaseURL(), this.construct__));
-        f.execFunc(m);
-        t.getCallStack().pop();
-        //se.setLineNumber(curLine);
-        se.setLineNumber(curLine);
-        */
-        
-        /*
-        Func f = (Func)constructor_.cloneAny();
-        //int curLine = se.getLineNumber();
-        int curLine = t.getLineNumber();
-        f.setTransaction(t);
-        Call.CallStackEntry se = (Call.CallStackEntry)t.getCallStack().peek();
-        se.setLineNumber(t.getLineNumber());
-			  t.getCallStack().push(new Call.CallStackEntry(this.getBaseURL(), this.construct__));
-        f.execFunc(m);
-        t.getCallStack().pop();
-        //se.setLineNumber(curLine);
-        t.setLineNumber(curLine);
-        */
-        
         Func f = (Func)constructor_.cloneAny();
         int curLine = t.getLineNumber();
         f.setTransaction(t);
@@ -856,13 +829,38 @@ public final class BOTDescriptor extends    AbstractDescriptor
       boolean exists = primary_.checkExists(m, t);
       if (!exists)
         throw new AnyException("Your newly constructed instance does not exist!");
-      //System.out.println ("BOTDescriptor.construct " + m);
     }
     finally
     {
       endUse();
     }
 	}
+
+  public void join(Map m, Transaction t) throws AnyException
+  {
+    startUse();
+      
+    try
+    {
+      predicateBadDescriptor(this, m.getDescriptor());
+      if (join_ != null)
+      {
+        Func f = (Func)join_.cloneAny();
+        int curLine = t.getLineNumber();
+        f.setTransaction(t);
+        Call.CallStackEntry se = (Call.CallStackEntry)t.getCallStack().peek();
+        se.setLineNumber(curLine);
+        t.getCallStack().push(new Call.CallStackEntry(this.getBaseURL(), this.join__));
+        f.execFunc(m);
+        t.getCallStack().pop();
+        t.setLineNumber(curLine);
+      }
+    }
+    finally
+    {
+      endUse();
+    }
+  }
 
 	public void mutate(Map newVal,
                      Map oldVal,
@@ -1274,11 +1272,16 @@ public final class BOTDescriptor extends    AbstractDescriptor
 		addKey((KeyDef)k);
 	}
 
-	public void setConstructor(Func f)
-	{
-		constructor_ = f;
-	}
-	
+  public void setConstructor(Func f)
+  {
+    constructor_ = f;
+  }
+  
+  public void setJoin(Func f)
+  {
+    join_ = f;
+  }
+  
 	public void setMutator(Func f)
 	{
 		mutator_ = f;

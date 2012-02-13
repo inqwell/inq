@@ -30,9 +30,12 @@ public interface Process extends Map
   public static final short MINIMUM_PRIVILEGE = 255;
   public static final short MAXIMUM_PRIVILEGE = 0;
   public static final short DEFAULT_PRIVILEGE = 128;
+  
+  public static final ShortI A_MAXIMUM_PRIVILEGE = (ShortI)AbstractValue.flyweightConst(new ConstShort(MAXIMUM_PRIVILEGE));
+  
   public static Any sync__ = AbstractValue.flyweightString("sync__");
   
-  public  static Any processName__ = new ConstString("processName");
+  public static final Any processName__ = new ConstString("processName");
 
 
   /**
@@ -60,6 +63,11 @@ public interface Process extends Map
 	 * Called by another process <code>p</code> (say, the LockManager) to kill it.
 	 */
 	public void kill(Process p) throws AnyException;
+  
+  /**
+   * Whether this process has been killed.
+   */
+  public boolean killed();
   
   /**
    * Interrupt the current transaction or lock-wait.

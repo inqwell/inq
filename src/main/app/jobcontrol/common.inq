@@ -1,0 +1,31 @@
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * Inqwell Job Control Package
+ *
+ * Code common to client and server
+ *
+ */
+
+package inq.jobcontrol;
+
+function isBox(any Job)
+{
+  isnull(Job.FunctionExpr);
+}
+
+function isTopLevel(any Job)
+{
+  isnull(Job.ParentJob);
+}
+
+function isTask(any Job)
+{
+  !isnull(Job.FunctionExpr);
+}
+ 

@@ -180,13 +180,13 @@ public class ConstDate extends    AbstractValue
 
   public int compareTo(DateI other)
   {
-    // For thread safety
-    DateI otherD = (DateI)other.cloneAny();
-    
-    synchronized(this)
-    {
-      return this.value_.compareTo(otherD.getValue());
-    }
+    // Coded like this for thread safety within Date itself, though
+    // not across the operation as a whole.
+    long anotherTime = other.getTime();
+    long thisTime = this.getTime();
+    return (thisTime < anotherTime ? -1
+                                   : (thisTime == anotherTime ? 0
+                                   : 1));
   }
   
   protected void setToTime(long t)

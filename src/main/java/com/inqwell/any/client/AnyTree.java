@@ -165,6 +165,11 @@ public class AnyTree extends AnyComponent
     }
 	}
 
+	public RenderInfo getRenderInfo()
+	{
+	  return model_.getRenderInfo();
+	}
+	
 	public Container getComponent()
 	{
     /*

@@ -121,9 +121,6 @@ public class AddTo extends    AbstractFunc
 		bn_.setTransaction(getTransaction());
 
 		bn_.setMapProto(proto);
-//		System.out.println ("AddTo.exec targetNode is " + targetNode);
-//		System.out.println ("AddTo.exec targetNode of class " + targetNode.getClass().getName());
-//		System.out.println ("AddTo.exec adding  " + node + " as " + path);
     bn_.build(ns, node, a);
 
     Any eventId      = bn_.getRaisedEventId();
@@ -156,7 +153,6 @@ public class AddTo extends    AbstractFunc
           Map m = (Map)e.getId();
           m.replaceItem(EventConstants.EVENT_VECTOR, vector);
         }
-	//			System.out.println ("AddTo.exec() firing " + e + " *** on *** " + node.getClass());
         getTransaction().addEvent(e);
 				eg.fireEvent(e);
 			}

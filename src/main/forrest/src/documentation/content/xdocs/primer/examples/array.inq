@@ -1,0 +1,24 @@
+// Declare an integer
+int i = 3;
+
+// Declare an array and initialise it with some integers, amongst them i
+array a = (2, i, 1, 4);
+
+// We can add to the end of the array with the + operator
+a += 3;
+
+// We can remove the first occurrance of a given item with the - operator
+a -= i;
+
+// We can add at specific positions using a declaration
+// or the "add" function
+int a[3] = 12;
+add(5, path(a[1]));
+a;
+
+// We can remove items at specific locations too
+remove(a[3]);
+a;
+
+// Finally, sort the array
+sort(a, $this);

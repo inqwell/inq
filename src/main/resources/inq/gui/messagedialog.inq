@@ -12,7 +12,9 @@
 
 package inq.gui.util;
 
-// Older - to be removed when apps like xylinq have been modified. Do not use.
+/**
+ * @deprecated Older - to be removed when apps like xylinq have been modified. Do not use.
+ */
 function createMessageDialog(string dialogName = "messageDialog", any parent)
 {
   if ($this.{dialogName})
@@ -27,20 +29,32 @@ function createMessageDialog(string dialogName = "messageDialog", any parent)
   dialog;
 }
 
-// Use this one, as it allows the dialog to be placed anywhere rather than
-// assuming it will be placed at $this.
+/**
+ * Create (if not already existing) a utility message dialog
+ * and place it at the given path.
+ * @param dialogPath an optional path() expression where to
+ * place the dialog. If not provided then path($root.messageDialog)
+ * is assumed
+ * @parent the dialog's parent
+ * @return the dialog
+ */
 function createMessageDialogAt(any dialogPath, any parent)
 {
   if (!dialogPath)
     any dialogPath = path($root.messageDialog);
 
-	gDialog(parent) dialog;
-
-  call createDialog(dialog);
-
-  add(dialog, dialogPath);
-
-  dialog;
+  if (!{dialogPath})
+  {
+  	gDialog(parent) dialog;
+  
+    call createDialog(dialog);
+  
+    add(dialog, dialogPath);
+  
+    dialog;
+  }
+  else
+    {dialogPath};
 }
 
 /**

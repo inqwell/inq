@@ -1,0 +1,195 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright 2006 Inqwell Ltd.
+-->
+<!DOCTYPE document PUBLIC "-//APACHE//DTD Documentation V2.0//EN" "http://forrest.apache.org/dtd/document-v20.dtd">
+<document>
+  <header>
+    <title>Example Applications</title>
+  </header>
+  <body>
+    <section id="exapps">
+      <title>Example Applications</title>
+      <p>
+        A number of examples are included in the Inq
+        distribution as illustrations of how to write client-server
+        applications.
+      </p>
+      <section id="helloworld">
+        <title>Hello World!</title>
+        <p>
+          Start <a href="helloworld/index.html">here</a> to learn about Inq
+          client-server applications with the
+          simplest one possible.
+        </p>
+      </section>
+      <section id="Chat">
+        <title>Chat</title>
+        <p>
+          The <code>Chat</code> example is an instant messaging utility that
+          supports one-to-one chat sessions, private conferences and public
+          chat rooms. It has been written without
+          using <a href="../primer/typedef.html#iobinding">I/O Bindings</a> so
+          it runs entirely in memory. It is a good example to try first because
+          it does not require you to set up a database server to support it. It
+          demonstrates the following features common to Inq applications:
+        </p>
+        <ul>
+          <li>
+            The exchange of service requests between client and server;
+          </li>
+          <li>
+            Building event-live structures in the server for automatic propagation
+            and maintenance in the client;
+          </li>
+          <li>
+            <code>Login</code> and <code>Logout</code> services in the server;
+          </li>
+          <li>
+            GUI construction and the managing of context nodes in the client.
+          </li>
+        </ul>
+        <p>
+          Many Inq applications require no further server-side cooperation than that
+          supported by the Inq <a href="../primer/txn.html">transaction
+          model</a>. <code>Chat</code> covers the interaction
+          of <a href="../primer/process.html">User Processes</a> to implement
+          sending messages and managing invitations.
+        </p>
+        <figure src="images/chatinq.png" alt="Chatinq"/>
+        <p>
+          In the client we see how tab panes and styled text are handled.
+        </p>
+        <p>
+          The server is implemented in less than 1000 lines of script overall,
+          including comments, using four <code>typedef</code>s. The client
+          is a similar size. You can read more
+          about <code>Chat</code> <a href="chat/index.html">here</a>.
+        </p>
+      </section>
+      <section id="petstore">
+        <title>Petstore</title>
+        <p>
+          Petstore is the blueprint application for Inq client/server. It
+          goes much further than Chat, covering
+        </p>
+        <dl>
+          <dt><strong>Advanced typedef usage</strong></dt>
+          <dd>
+            <ul>
+              <li>use of construct, mutate and destroy for referential integrity and validation</li>
+            </ul>
+          </dd>
+          <dt><strong>Working with databases</strong></dt>
+          <dd>
+            <ul>
+              <li>primary keys</li>
+              <li>unique, non-unique and filter lookup keys</li>
+              <li>eligibility expressions</li>
+              <li>capped keys</li>
+            </ul>
+          </dd>
+          <dt><strong>Integrating with the environment</strong></dt>
+          <dd>
+            <ul>
+              <li>JMS queue and topic usage</li>
+              <li>Generation and parsing of XML message payloads</li>
+            </ul>
+          </dd>
+          <dt><strong>Detached processes, timers and events</strong></dt>
+          <dd>
+            <ul>
+              <li>A detached process, driven by a timer, acts as a spoof order processor,
+              allocating inventory and shipping orders</li>
+              <li>Solicitation of events in both client and server
+              for advanced rendering and full GUI liveness</li>
+            </ul>
+          </dd>
+          <dt><strong>GUI and reporting</strong></dt>
+          <dd>
+            <ul>
+              <li>Advanced GUI construction including complex table rendering</li>
+              <li>Use of Inq's built-in reusable GUI tools - the item chooser and attribute editor</li>
+              <li>Report generation and presentation on the client</li>
+            </ul>
+          </dd>
+        </dl>
+        <p>
+          Learn about how Inq achieves all this, run it yourself
+          or try the online version <a href="petstore/index.html">here</a>.
+        </p>
+      </section>
+      <section id="jobcontrol">
+        <title>Job Control</title>
+        <p>
+          The <code>Job Control</code> application is a scheduler for periodic tasks.
+          It can be loaded into a server hosting any Inq application that
+          requires automatic task scheduling and execution
+        </p>
+        <p>
+          Boxes of jobs are supported so related tasks can be grouped into
+          hierarchies, controlled together and run in a defined sequence.
+          Each top-level job or box is run in
+          a <a href="../primer/process.html#detached">detached process</a>
+          and the scheduler itself runs in the same way. Thus, this application
+          illustrates the Inq process control features of
+        </p>
+        <ul>
+          <li>
+            Spawning detached processes;
+          </li>
+          <li>
+            Executing script fragments on process startup and termination
+            and picking up the exit status of terminating processes.
+          </li>
+        </ul>
+        <p>
+          <a href="jobcontrol/index.html"><img src="images/jobcontrol.png" alt="JobControl"/></a>
+        </p>
+        <p>
+          Inq supports <code>timer</code>s as a data type
+          with <code>properties</code> to
+          determine period or absolute execution time. Timers and the task
+          associated with a job are expressed as Inq script and parsed
+          by the application itself.
+          Other aspects covered by <code>Job Control</code> include:
+        </p>
+        <ul>
+          <li>
+            The use of a tree-table display in the client;
+          </li>
+          <li>
+            Complex table cell rendering including font styles and images
+          </li>
+          <li>
+            Use of conditional lock-wait constructs to ensure mutual exclusion
+            and stability of the job tree between the job dispatcher, spawned task
+            and User processes in the server;
+          </li>
+          <li>
+            Database <code>blob</code> support used to persist timer and job
+            scripts;
+          </li>
+          <li>
+            Inq's support for i/o streams using its URL syntax to associate a
+            source/sink with a given stream format.
+          </li>
+        </ul>
+        <p>
+          The <code>Job Control</code> server is scripted in some 60 services and
+          functions totalling around 2500 lines including comments. The
+          client is about 1200 lines. Find out about Job
+          Control <a href="jobcontrol/index.html">here</a>.
+        </p>
+      </section>
+      <section id="userauth">
+        <title>User Authentication and Application Permissioning</title>
+        <p>
+          A forthcoming application that can be used to establish authorised
+          users of an Inq system, areas within it they may access and settings for
+          limiting parameter values. To be added.
+        </p>
+      </section>
+    </section>
+  </body>
+</document>

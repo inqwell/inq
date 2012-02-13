@@ -23,6 +23,7 @@ import com.inqwell.any.Array;
 import com.inqwell.any.BooleanI;
 import com.inqwell.any.Event;
 import com.inqwell.any.IntI;
+import com.inqwell.any.RuntimeContainedException;
 import com.inqwell.any.Set;
 import com.inqwell.any.client.AnyComponent;
 import com.inqwell.any.client.AnyView;
@@ -31,6 +32,8 @@ import com.inqwell.any.client.RenderInfo;
 public class AnyCAction extends AnyView
 {
   private CAction a_;
+  
+  private boolean visible_;
   
   private static Set properties__;
   private static Any mnemonic__ = AbstractValue.flyweightString("mnemonic");
@@ -66,9 +69,8 @@ public class AnyCAction extends AnyView
   }
 
   @Override
-  protected RenderInfo getRenderInfo()
+  public RenderInfo getRenderInfo()
   {
-    // TODO Auto-generated method stub
     return null;
   }
 
@@ -87,21 +89,18 @@ public class AnyCAction extends AnyView
   @Override
   public JComponent getBorderee()
   {
-    // TODO Auto-generated method stub
     return null;
   }
 
   @Override
   public String getLabel()
   {
-    // TODO Auto-generated method stub
     return null;
   }
 
   @Override
   public void requestFocus()
   {
-    // TODO Auto-generated method stub
 
   }
 
@@ -119,8 +118,7 @@ public class AnyCAction extends AnyView
   @Override
   public void setRenderInfo(RenderInfo r)
   {
-    // TODO Auto-generated method stub
-
+    throw new UnsupportedOperationException("This action does not render things");
   }
 
   public void setAccelerator(Array accelerator)
@@ -142,19 +140,22 @@ public class AnyCAction extends AnyView
   
   public void setMenmonic(Any mnemonic)
   {
-    // No op for compatibility with menu items. No
+    // No op for compatibility with menu items from script. No
     // mnemonic for dock actions.
   }
   
-  public void setVisible(Any visible)
+  public void setVisible(boolean visible)
   {
-    // No op for compatibility with menu items. No
-    // visibility for dock actions.
+    visible_ = visible;
+    
+    // TODO: use this property to affect whether the underlying
+    // CAction is actually installed in the Dockable's actions
+    // as a way of implementing visibility.
   }
   
-  public Any getVisible()
+  public boolean getVisible()
   {
-    return new AnyBoolean(true);
+    return visible_;
   }
   
   @Override
@@ -168,6 +169,15 @@ public class AnyCAction extends AnyView
     return a_;
   }
 
+  protected void setActionText(String text)
+  {
+    if (getCAction() instanceof CDecorateableAction)
+    {
+      CDecorateableAction a = (CDecorateableAction)getCAction();
+      a.setText(text);
+    }
+  }
+  
   @Override
   public void setObject(Object o)
   {
@@ -177,6 +187,30 @@ public class AnyCAction extends AnyView
     a_ = (CAction)o;
     
     setupEventSet(o);
+  }
+
+  public Any getRenderedValue()
+  {
+    RenderInfo r = getRenderInfo();
+    Any a = null;
+    if (r != null)
+    {
+      try
+      {
+        a = r.resolveResponsibleData(getContextNode());
+        
+      }
+      catch(AnyException e)
+      {
+        throw new RuntimeContainedException(e);
+      }
+    }
+    return a;
+  }
+
+  protected void setValueToComponent(Any v)
+  {
+    throw new UnsupportedOperationException();
   }
 
   // A marker interface that also brings together the methods
@@ -190,5 +224,7 @@ public class AnyCAction extends AnyView
     public void insertSeparator(int index);
     public void remove( int index );
     public void remove(CAction action);
+    
+    public void afterLayout();
   }
 }

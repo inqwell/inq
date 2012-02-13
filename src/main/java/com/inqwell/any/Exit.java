@@ -102,6 +102,7 @@ public class Exit extends    AbstractFunc
   {
     // Server. Terminate the calling process gracefully by closing its
     // input channel, setting any status at $process.status.
+  	
     InputChannel inputChannel = (InputChannel)EvalExpr.evalFunc
                                     (getTransaction(),
                                      a,

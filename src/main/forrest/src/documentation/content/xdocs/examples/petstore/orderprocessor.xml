@@ -1,0 +1,741 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright 2006 Inqwell Ltd.
+-->
+<!DOCTYPE document PUBLIC "-//APACHE//DTD Documentation V2.0//EN" "http://forrest.apache.org/dtd/document-v20.dtd">
+<document>
+  <header>
+    <title>Order Processor</title>
+  </header>
+  <body>
+    <section id="intro">
+      <title>Order Processor</title>
+      <p>
+        Booting the petstore server is achieved by asking the server
+        to parse the file <code>psBoot.inq</code>. The command to do
+        this was shown in the <a href="index.html#startsrv">blueprint summary</a>.
+        There is not much to say about <code>psBoot.inq</code> other than the
+        fact that it acts as a single script to load all of petstore. One of
+        those files however is <code>psProcessOrders.inq</code> and this
+        is interesting because it starts a process in the server, run by a
+        timer, to process new orders.
+      </p>
+      <p>
+        An Order has a number of associated OrderStatus instances that record
+        the status of each Item in the Order. This status starts as <code>Open</code>,
+        progresses to <code>Allocated</code> and ends up as <code>Shipped</code>.
+        The process wakes every so often and
+        does the following:
+      </p>
+      <ul><li>alternately look for OrderStatus instances that
+      are <code>Open</code> or <code>Allocated</code></li>
+      <li>selects one item from each the order and moves it to the next
+      state</li>
+      <li>if all OrderStatus within a given Order are <code>Allocated</code>
+      then move them and the Order to <code>Shipped</code>.</li>
+      <li>when an Order reaches the <code>Shipped</code> state report it
+        to the <em>Pet International Exchange</em></li>
+      </ul>
+      <p>
+        The processing involved demonstrates the following Inq language and
+        envionment features
+      </p>
+      <ul>
+      <li>starting a <a href="../../primer/process.html#detached">detached process</a>
+      and using lock/wait/notify to coordinate its initialisation</li>
+      <li>timers, showing how a timer carries a piece
+      of <em>user information</em> acting as a parameter to the timer
+      event</li>
+      <li>the use of <code>groupby</code> as a means of processing
+      the OrderStatus instances according to the Order they belong to</li>
+      <li>placing script in
+      a <a href="../../primer/typedef.html#mtor">mutator</a> so that
+      specific actions can be taken
+      when <a href="../../primer/typedef.html#entities">managed instances</a>
+      are updated in a certain way</li>
+      <li>using <a href="../../primer/jms.html">JMS</a> to integrate with
+      external processes via a message broker</li>
+      <li>creating XML as the broker message payload</li>
+      <li>generating random numbers</li>
+      <li>dealing with exceptions</li>
+      </ul>
+      <p>
+        The Order Processor simulates events likely to originate external to
+        petstore, so we call it the <em>spoof processor</em>.
+      </p>
+      <!--
+      <note>If coverage in this section of certain aspects seems brief
+      it is because full information is better placed not in the context
+      of an example, but is yet to be written up</note>
+      --> 
+    </section>
+    <section id="startup">
+      <title>Startup</title>
+      <p>
+        The spoof processor is started by the following script at the end
+        of <code>psProcessOrders.inq</code>:
+      </p>
+      <source>
+// Start the spoof processor.
+// Notes:
+//   1. Wait for the new process to start - it will notify on the
+//      monitor "spoof". We give it 5 seconds to start before logging
+//      a severe message. 
+lock("spoof");
+if (!$catalog.ps.spoofProcessor)
+{
+  any spoofProcessor = spawn("SpoofProcessor",
+                             type  = PROCESS_DETACHED,
+                             start = call spoofStart(),
+                             syncext = true);
+  
+  if (wait("spoof", 5000))  // If all ok - lodge process id in $catalog
+    any $catalog.ps.spoofProcessor = spoofProcessor.id;
+  else
+    logsevere($catalog.ps.logger, "Spoof order processor not started after 5 seconds, may be");
+  
+}
+</source>
+      <p>
+        This code appears outside of a <code>function</code>
+        or <code>service</code> definition, so runs as it
+        is parsed.
+      </p>
+      <ol>
+        <li><a href="../../primer/txn.html#uniqlocks">Lock</a> the
+        string <code>"spoof"</code> to act as a guard. Locks are released
+        when the enclosing transaction terminates, so while possible, it
+        is often not necessary to unlock such a monitor.</li>
+        <li>Start the detached process, called <code>"SpoofProcessor"</code>.
+        The function <code>spoofStart()</code> runs immediately in the current
+        process but with <code>$this</code> as the root of the new process's
+        node space. Any initialisation required before the new process begins
+        can be performed in the <code>start</code> function.
+        </li>
+        <li>The <code>syncext</code> argument is set to <code>true</code>
+        because as well as its timer, the new process will also be processing
+        price feed messages from the <em>exchange simulator</em>. For
+        more about this see the <a href="../../primer/jms.pdf">JMS Mini Guide</a>.</li>
+        <li>Use the <code>wait</code> function to await a
+        corresponding <code>notify</code> from the new
+        process - returns <code>true</code> if a notification arrives in
+        the specified time or <code>false</code> otherwise.</li>
+        <li>Put the new process's <code>id</code> at a well known location.</li>
+      </ol>
+      <p>
+        The <code>spoofStart()</code> function does not need to do anything
+        to initialise the new process before it runs, so it just sends it
+        a service request:
+      </p>
+      <source>
+local function spoofStart(any process)
+{
+  // Just send the service request to the new process.
+  send doSpoof(@channel = process.ichannel);
+}
+</source>
+      <p>
+        For its part, the <code>doSpoof()</code> service (running in the new
+        process, not the one that started it) is shown below and does the following
+      </p>
+      <ol>
+      <li>Establish an exception handler for the process. Anything uncaught
+      will be logged.</li>
+      <li>Initialise the messaging environment to send completed
+      orders and receive prices (see <code>psRegulatory.inq</code>
+      for <code>initRegulatoryReporting()</code>
+      and <code>initSendPrices()</code>)</li>
+      <li>Initialise the timer</li>
+      <li>Notify the starting process we are done.</li>
+      </ol>
+      <source>
+service doSpoof()
+{
+  // Log uncaught exceptions
+  setexceptionhandler(cfunc f = {
+                                  // Just log the whole stack
+                                  logsevere($catalog.ps.logger, "{0}", .);
+                                }
+                     );
+
+  // Set up $root.i18n in case anyone references it. Assume en
+  any $root.i18n = "en";
+  
+  // Initialise the Regulatory Reporting system. See psRegulatory.inq
+  try
+  {
+    call initRegulatoryReporting();
+    call initSendPrices();
+  }
+  catch
+  {
+    logsevere($catalog.ps.logger, @exception);
+    logsevere($catalog.ps.logger, @stackTrace);
+  }
+  
+  // Create the timer.
+  // Notes:
+  //   1. The function processOrders() will be called after 10 seconds.
+  //   2. This timer does not specify a period so it will not restart automatically.
+  //      It is restarted in the handler function.
+  //   3. The optional 'start' argument defaults to true. We don't want to start the
+  //      timer before we have set its userInfo property, which is used to pass
+  //      the state of the items to be processed and their desired new state.
+  //   4. Start the timer - it will fire after a 10 second delay 
+  any $this.timer = createtimer(cfunc f = call processOrders(fromTimer), 10000, start=false);
+  any userInfo.oldState = new(OStatus, enum(OStatus, O));
+  any userInfo.newState = new(OStatus, enum(OStatus, A));
+  $this.timer.properties.userInfo = userInfo;
+  starttimer($this.timer, 10000);
+
+  // Tell the invoking process we are up and running. 
+  notify("spoof");
+  
+  loginfo($catalog.ps.logger, "Spoof order processor started");
+}
+</source>
+      <p>
+        Notice that <code>initRegulatoryReporting()</code>
+        and <code>initSendPrices()</code> are protected with
+        a <code>try...catch</code> block, because it is important that
+        the starting process is always notified.
+      </p>
+    </section>
+    <section id="timer">
+      <title>The Timer</title>
+      <p>
+        The timer runs after an initial delay of 10 seconds. Its handler function (which
+        does not have to be a <code>call</code> statement)
+        sees <code>$stack.fromTimer</code>, which is the timer that has fired. 
+      </p>
+      <p>
+        The timer has a <code>userInfo</code> property which can be initialised
+        to any data item. In the handler function it can then be accessed
+        at <code>fromTimer.properties.userInfo</code>.
+      </p>
+      <section id="handler">
+        <title>Handler Function</title>
+        <p>
+          The timer's handler function is to
+          call <code>processOrders(any fromTimer)</code>.
+          When a timer fires it places itself on the stack as <code>fromTimer</code>.
+          The job of a handler function is obviously to perform the desired
+          tasks for the timer and, if the timer is <em>one shot</em>, restart
+          it if required. 
+        </p>
+        <p>
+          The timer's <code>userInfo</code> property is a map containing
+          the current and new state to move the OrderStatus instances to.
+          The key <code>OrderStatus.ByStatus</code> is used to
+          retrieve the instances as
+          a <a href="../../primer/structures.html#nodeset">node set</a>. If
+          the set is not empty it is processed
+          by <code>progressOrders(any items, any newState)</code>. 
+        </p>
+      </section>
+    </section>
+    <section id="groupby">
+      <title>Grouping the OrderStatus Instances</title>
+      <p>
+        Because we want to process one OrderStatus instance per Order,
+        having read all those with the required status <code>progressOrders()</code>
+        uses <a href="../../primer/structures.html#groupby">groupby</a>
+        to transform the structure as depicted here:
+      </p>
+      <figure src="images/groupby.png" alt="groupby"/>
+      <p>
+        Here is the usage of <code>groupby</code> that achieves this:
+      </p>
+      <source>
+smap grouped;
+groupby(items,
+        cfunc distinctF = {
+                            // Return the value that defines the grouping
+                            // criteria. This is available as @name in startF
+                            // and foreachF. In this example this is the Order
+                            // field.
+                            $loop.OrderStatus.Order;
+                          },
+        cfunc startF    = {
+                            // Create a child container for the items that will
+                            // reside in this group, defined by @name. Later, when
+                            // accessing an individual item we require vector access
+                            // so use an omap.
+                            omap grouped.{@name};
+                          },
+        foreach = cfunc foreachF  =
+                          {
+                            // Place the current child in the group. Managed
+                            // typedef instances carry their primary key, which
+                            // is used as a path element in the grouped structure.
+                            // For any iteration, if the Order field is 12345 then
+                            // the result is a structure like
+                            //     grouped.12345.{k}.OrderStatus
+                            any k = getprimarykey($loop.OrderStatus);
+                            any grouped.{@name}.{k} = $loop;
+                          }
+       );
+</source>
+      <p>
+        The output structure (called <code>grouped</code>
+        in <code>psProcessOrders.inq</code>) is a two-level structure where
+        the second level contains only OrderStatius instances relating
+        to the same Order. 
+      </p>
+    </section>
+    <section id="random">
+      <title>Random Number Generation</title>
+      <p>
+        When moving from <code>Open</code>
+        to <code>Allocated</code>, <code>progressOrders()</code>
+        calls <code>allocateOne()</code> for each Order:
+      </p>
+      <source>
+  switch
+  {
+    when(newState == enum(OStatus, A))
+    {
+      foreach(grouped)
+        call allocateOne(items = $loop);
+    }
+    .
+    .
+</source>
+      <p>
+        This function uses Inq's <code>random</code> function to
+        pick one of the OrderStatus instances from the current list being
+        processed: 
+      </p>
+      <source>
+random(int i, count(items));
+
+any OrderStatus = items[i].OrderStatus;
+</source>
+      <p>
+        In turn, this function calls the support
+        function <code>psOrders.inq:modOrderStatus()</code>.
+      </p>
+    </section>
+    <section id="mutator">
+      <title>Mutators</title>
+      <section id="osmutator">
+        <title>OrderStatus.&lt;mutate&gt;</title>
+        <p>
+          The function <code>psOrders.inq:modOrderStatus()</code>
+          is a state machine to manage the allowable transitions
+          of <code>OrderStatus.Status</code>. It takes out
+          a lock on the instance so that it can safely test and then
+          possibly modify the field.
+        </p>
+        <p>
+          In <code>OrderStatus.inq</code> the typedef's <code>mutate</code>
+          statement is:
+        </p>
+        <source>
+  if ($this.new.Status == enum(OStatus, A))
+  {
+    if (!call takeFromInventory(OrderStatus = $this.new))
+      $this.new.Status = $this.old.Status;
+  }
+  else if ($this.old.Status == enum(OStatus, A) &amp;&amp; $this.new.Status != enum(OStatus, S))
+    call returnToInventory(OrderStatus = $this.new);
+
+  $this.new.Timestamp = getdate();
+</source>
+        <p>
+          It looks at the instance's new state in order to manage petstore's
+          item inventory.
+        </p>
+        <p>
+          Conventional script and the mutator statement are alternatives when
+          coding application logic. What are the reasons for choosing one
+          over the other?
+        </p>
+        <ul>
+          <li>
+            The mutate statement is
+            executed <a href="../../primer/txn.html#mutator">during a transaction's
+            commit phase</a>. While it can throw an exception, the only place
+            such an exception can be handled is in the process's default
+            exception handler. In any practical sense the transaction can
+            only be aborted.
+          </li>
+          <li>
+            A function offers more flexibility and can deal with any problems
+            specifically and earlier on in the transaction.
+          </li>
+          <li>
+            The mutate statement is more suited to adding further processing
+            to the transaction, such as inventory processing in this example,
+            or vetoing the change. Exceptions should be considered terminal. 
+          </li>
+          <li>
+            When the mutate statement runs the instance is locked within
+            the committing transaction, unlike functions that must manage
+            any required lock themselves.
+          </li>
+        </ul> 
+      </section>
+      <section id="omutator">
+        <title>Order.&lt;mutate&gt;</title>
+        <p>
+          The spoof order processor sets an Order's status to <code>Shipped</code>
+          when all items have been allocated. When this happens the Order type's
+          mutate statement runs. It is a convenient place
+          to report the order to the exchange, calling <code>reportOrder()</code>:
+        </p>
+        <source>
+  // We can't change certain fields. If we try to, throw
+  if ($this.new.Account != $this.old.Account ||
+      $this.new.OrderDate != $this.old.OrderDate)
+    throw("Illegal Order mutation\nOld: " + $this.old + "\nNew: " + $this.new);
+
+  // If the Status of the order is changed to Shipped then
+  // we need to report it to the Pets International Exchange
+  if ($this.old.Status != $this.new.Status &amp;&amp;
+      $this.new.Status == enum(OStatus, S))
+    call reportOrder(Order = $this.new); 
+</source>
+        <p>
+          Looking at <code>reportOrder()</code> (see <code>psRegulatory.inq</code>),
+          this has no exception handling of its own, so if the reporting fails
+          the Order will not be shipped. 
+        </p>
+      </section>
+    </section>
+    <section id="reporting">
+      <title>Order Reporting</title>
+      <p>
+        Part of order processing is to report shipped orders to an exchange.
+        The <em>Pet International Exchange</em> is simulated in petstore
+        and scripted in <code>exchangeSimulator.inq</code>. This runs
+        separately from the petstore server and instuctions for starting
+        it are given in the <a href="index.html#startexch">blueprint summary</a>.
+      </p>
+      <p>
+        The spoof order processor is also responsible for receiving item
+        prices made by the exchange. Orders are reported by sending a
+        broker message (whose payload is XML text) to
+        the <em>queue</em> <code>FILL.PIE</code> and prices received
+        by subscribing to the <em>topic</em> <code>FEED.PIE</code>,
+        where they are posted by the exchange. Price messages are also
+        XML so the order processor has to parse these in order to
+        handle them.
+      </p>
+      <figure src="reports/pie.png" alt="exchange"/>
+      <p>
+        Inq's support for operating with message brokers is covered in the
+        the <a href="../../primer/jms.pdf">JMS Mini Guide</a> and fully
+        exercised with the examples included in the distribution. In this
+        section we focus on the production and consumption of the message's
+        XML payload. This further illustrates XML handling, in a different
+        way to that shown when <a href="myorders.html#reports">generating
+        printed reports</a>.   
+      </p>
+      <section id="report">
+        <title>Generating an Order Report</title>
+        <p>
+          Here is an example report sent to PIE:
+        </p>
+        <figure src="reports/orderreport1.png" alt="orderreport"/>
+        <p>
+          It contains limited fields from the <code>Order</code>
+          and <code>LineItem</code> instances comprising the order,
+          anonymised, if you will. It can be seen from the expanded
+          XML that the Inq structure is
+          a <a href="../../primer/structures.html#aggsinglenonuniq">one-to-many
+          aggregation</a> from Order to LineItem:
+        </p>
+        <source>
+function reportOrder(any Order)
+{
+  // Create the Inq structure that will make the XML message
+  any xml.Order = Order;
+  
+  // Aggregate this Order's LineItem instances and double-check
+  // there are some.
+  aggregate(LineItem, xml.Order, setname="items", keyname="ByOrder");
+</source>
+        <p>
+          The <a href="myorders.html#ioxmlx"><code>ioXMLX</code></a> Inq stream
+          type is covered in the discussion of printed reports
+          in My Orders. For exchange reporting our XML production is quite
+          a lot simpler. We start by setting up the Inq structure to look
+          like the desired XML production by creating <code>root.reportorder</code>
+          and using ioXMLX's <code>includes</code> property to prune the output:
+        </p>
+        <source>
+  if (count(xml.items) > 0)
+  {
+    // Prepend root element. Rename root child
+    any root.reportorder = xml;
+    
+    // Prepare the stream to create the XML.
+    
+    // Set up those paths we wish to be included in the XML production.
+    // Other paths that would have been generated in the traversal to
+    // produce the XML structure will not be output.
+    set includes = (path($this*Order.Order),
+                    path($this*LineItem.Item),
+                    path($this*LineItem.Qty),
+                    path($this*LineItem.UnitPrice));
+    
+    // Declare the stream
+    ioXMLX xmlStrm;
+    
+    // Apply the includes created above
+    xmlStrm.properties.includes = includes;
+</source>
+        <p>
+          Using the lazy evaluation paths
+          like <code>$this*LineItem.Qty</code> means that the path
+          will match with anything that ends
+          with <code>LineItem.Qty</code> at the current node. 
+          In this way all LineItem instances in the structure will
+          be subject to the required pruning.
+        </p>
+        <p>
+          The XML produced is going to a foreign system, so all
+          metadata generation is switched off (in fact this the
+          default so just for emphasis): 
+        </p>
+        <source>
+    // Other properties
+    xmlStrm.properties.writeMeta     = false;
+    xmlStrm.properties.inqAttributes = false;
+    xmlStrm.properties.childName     = "item";
+</source>
+        <p>
+          Lastly the tag name used for node set children is set
+          to <code>item</code>. Since there is only one node set in
+          the structure this is a suitable way to get what we want.
+          If the structure was more complex then the names of
+          generated tags can be <a href="myorders.html#ioxmlxconfig">controlled</a>
+          using either the <code>tagNames</code> or <code>tagFuncs</code>
+          properties. 
+        </p>
+        <p>
+          To generate the XML as a broker message payload the stream is
+          opened for write access, specifying its sink as a <code>string</code>
+          variable. Inq's <code>string://</code> URL protocol takes the
+          trailing characters as a node path, defalting to the <code>$stack</code>
+          node space, as for normal references:
+        </p>
+        <source>
+    string msg;
+    open(xmlStrm, "string://msg", OPEN_WRITE);
+    writestream(xmlStrm, root);
+    close(xmlStrm);
+    
+    // Send to the Exchange
+    $process.ps.txtMsg.properties.text= msg;
+    mqsend($process.ps.toExchange, $process.ps.txtMsg);
+    
+    loginfo($catalog.ps.logger, "Reporting Order as {0}", msg);
+  }
+</source>
+        <p>
+          It is then simply a matter of assigning the variable, now containing
+          the produced XML, to the broker message's <code>text</code>
+          property and sending it. The destination and reused message were
+          created in <code>initSendPrices()</code>. 
+        </p>
+      </section>
+      <section id="reportproc">
+        <title>Processing a Reported Order</title>
+        <p>
+          The exchange simulator is coded in <code>exchangeSimulator.inq</code>.
+          It establishes a message listener on the queue <code>FILL.PIE</code>
+          to await filled orders from petstores.
+        </p>
+        <p>
+          As we have seen, an order report contains one or more items. For
+          each item, Exchange Simulator makes a new price (by randomly adjusting
+          it +/- 10%) and publishes that price to the topic <code>FEED.PIE</code>.
+          We look at this is a little detail, again not worrying too much
+          about the message broker aspects.
+        </p>
+        <section id="cfgioxml">
+          <title>Configuring ioXMLX</title>
+          <p>
+            The <code>tagNames</code>
+            and <code>tagFuncs</code> <a href="myorders.html#ioxmlxconfig">properties</a>
+            are honoured by ioXMLX when it reads XML text. Indeed, when considering
+            how <a href="myorders.html#compare">XML and DOM differ</a>, ioXMLX's
+            default action when encountering repeated elements at a given level
+            is to ignore second and subsequent ones. Given that an order report
+            message may contain several <code>&lt;item&gt;</code> tags we need
+            to intervene during parsing to handle this.
+          </p>
+          <p>
+            During initialisation (see
+            the <code>exchangeSimulator.inq:doSimulator()</code> service) Exchange
+            Simulator sets up the stream it uses to parse the payload like this:
+          </p>
+          <source>
+// Set up a stream for parsing received orders
+ioXMLX $this.xmlStrm;
+object p = path($this*items.item);
+any tagFuncs.{p} = cfunc f = call itemTag();
+$this.xmlStrm.properties.tagFuncs = tagFuncs;
+</source>
+          <p>
+            The path match is on <code>*items.item</code>. While
+            it might appear that <code>*item</code> would also
+            be suitable, the stream is reused to produce the
+            price feed message. This has the
+            form <code>itemsold.item</code> which would also
+            match the path, calling the tag function unexpectedly.
+          </p>
+          <p>
+            In this example
+            the tag function (whose arguments are the same as those
+            for <a href="myorders.html#useioxmlx">XML production</a>)
+            simply has to make the element name unique to satisfy Inq's
+            structure requirements. It does this by suffixing the ordinal
+            value to the given name ("item") and returning the resulting
+            string: 
+          </p>
+          <source>
+local function itemTag(any node,
+                       any parent,
+                       any nodeName,
+                       any ordinal,
+                       any content,
+                       any last,    // always false - SAX parser does not know
+                       any descend,
+                       any attributes)
+{
+  nodeName + ordinal;
+}
+</source>
+        </section>
+        <section id="xmlparse">
+          <title>Parsing the XML</title>
+          <p>
+            Exchange Simulator sets up the function <code>fillReceived()</code>
+            as its message listener. The first task in processing an order
+            report is to parse the XML payload using the pre-configured ioXMLX
+            stream:
+          </p>
+          <source>
+local function fillReceived(any message)
+{
+  if (any xmlMsg = message.properties.text)
+  {
+    // writeln($catalog.system.out, "Reading message: " + message.properties.text);
+    
+    // Parse the message
+    open($this.xmlStrm, "string://xmlMsg", OPEN_READ);
+    any fill = readstream($this.xmlStrm);
+    close($this.xmlStrm);
+</source>
+           <note>
+             Only broker messages that are <em>text messages</em> support
+             the <code>text</code> property, so we can use this fact to
+             ignore messages of any other type sent to the queue.  
+           </note>
+           <p>
+             When parsing XML text, ioXMLX builds a structure for the entire
+             document in a single call to <code>readstream()</code>. Note that,
+             at present, properties such
+             as <code>includes</code> and <code>excludesBelow</code> are
+             ignored during reading.
+           </p>
+         </section>
+         <section id="pricemsg">
+           <title>Generating a Price Feed Message</title>
+           <p>
+             The exchange produces one message for every item it receives,
+             so it loops over the batch within the order:
+           </p>
+           <source>
+    foreach(fill.reportorder.items)
+    {
+      // Spoof a new price
+      decimal:2 price = $loop.LineItem.UnitPrice;
+      call adjustment(price);
+      
+      // Replace the UnitPrice in the parsed XML (which is a string)
+      // with the new price (which is decimal:2)
+      any $loop.LineItem.UnitPrice = price;
+      
+      // Create the XML content
+      any root.itemsold.item = $loop.LineItem;
+      open($this.xmlStrm, "string://xmlMsg", OPEN_WRITE);
+      writestream($this.xmlStrm, root);
+      close($this.xmlStrm);
+      
+      // Reuse the received message and publish
+      mqclearmessage(message);
+      message.properties.text = xmlMsg;
+      mqsend($this.priceFeed, message);
+    }
+  }
+}
+</source>
+           <p>
+             Here is what the resulting message looks like:
+           </p>
+           <figure src="reports/pricefeed.png" alt="pricefeed"/>
+         </section>
+      </section>
+    </section>
+    <section id="pricefeed">
+      <title>Handling Price Feed Messages</title>
+      <p>
+        In <code>psRegulatory.inq:initSendPrices()</code> petstore sets
+        up a message listener of its own, in this case attached to the
+        topic <code>FEED.PIE</code>. The function established
+        is <code>priceReceived()</code>. It parses the message, retrieves
+        the Item and updates its <code>LastPrice</code>
+        and <code>LastPriceMove</code> fields:
+      </p>
+      <source>
+local function priceReceived(any message)
+{
+  // Extract the xml text
+  any xmlMsg = message.properties.text;
+  
+  // Parse it
+  ioXMLX xmlStrm;
+  open(xmlStrm, "string://xmlMsg", OPEN_READ);
+  any priceMsg = readstream(xmlStrm);
+  close(xmlStrm);
+  
+  loginfo($catalog.ps.logger, "PriceFeed {0}", priceMsg);
+  
+  // Update the LastPrice of the given Item
+  // Read the server's instance
+  read(Item, priceMsg.itemsold.item);
+  
+  // The received price in the XML is a string so convert it
+  $process.ps.price = priceMsg.itemsold.item.UnitPrice;
+  
+  // Check the price change and update the LastPriceMove field too.
+  // We cannot do this in Item.&lt;mutate&gt; because the mutator is
+  // not run if no fields have actually changed.
+  if (isnull(Item.LastPrice))
+  {
+    Item.LastPriceMove = enum(LastPriceMove, SAME);
+    Item.LastPrice = $process.ps.price;
+  }
+  else
+  {
+    if (Item.LastPrice != $process.ps.price)
+    {
+      if (Item.LastPrice > $process.ps.price)
+        Item.LastPriceMove = enum(LastPriceMove, DOWN);
+      else
+        Item.LastPriceMove = enum(LastPriceMove, UP);
+
+      Item.LastPrice = $process.ps.price;
+    }
+    else
+      Item.LastPriceMove = enum(LastPriceMove, SAME);
+  }
+}
+</source>
+    </section>
+  </body>
+</document>

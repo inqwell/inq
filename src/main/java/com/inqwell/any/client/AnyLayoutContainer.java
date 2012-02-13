@@ -39,10 +39,17 @@ public class AnyLayoutContainer extends AnyComponent
   
   /**
    * For captions
+   * TODO: Check if this is, in fact, used
    */
   public void setRenderInfo(RenderInfo r)
   {
     super.setRenderInfo(r);
+  }
+  
+  public String getLabel()
+  {
+    //return null; // TODO if this is actually used
+    return super.getLabel();
   }
   
   /**
@@ -64,10 +71,12 @@ public class AnyLayoutContainer extends AnyComponent
     processChildren(c, f);
   }
   
+// TODO: if required
   protected void setValueToComponent(Any v)
   {
-    // No-op for layout container but renderInfo property is supported to
-    // allow a label
+    super.setValueToComponent(v);
+//     No-op for layout container but renderInfo property is supported to
+//     allow a label
   }
 
   protected Object getPropertyOwner(Any property)

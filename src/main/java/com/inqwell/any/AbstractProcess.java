@@ -76,6 +76,11 @@ public abstract class AbstractProcess extends    InstanceHierarchyMap
     throw new UnsupportedOperationException();
   }
   
+  public boolean killed()
+  {
+    throw new UnsupportedOperationException();
+  }
+  
   public void join()
   {
     join(0);

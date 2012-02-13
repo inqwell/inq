@@ -73,8 +73,6 @@ public class ExceptionToClient extends    AbstractExceptionHandler
 	  if (f_ != null)
 	    e.setHandler(f_);
 	  
-		System.err.println ("transmitException(AnyException): " + e);
-		e.printStackTrace();
 		try
 		{
 			oc_.write (e);
@@ -82,7 +80,6 @@ public class ExceptionToClient extends    AbstractExceptionHandler
 		}
 		catch (Exception ex)
 		{
-			System.err.println (ex.getMessage());
 			ex.printStackTrace();
 			// Oh dear, we caught an exception but we couldn't send it to our
 			// output channel!  Alternatives are (a) ignore; (b) thread dies!
@@ -95,8 +92,6 @@ public class ExceptionToClient extends    AbstractExceptionHandler
     if (f_ != null)
       e.setHandler(f_);
     
-		System.err.println ("transmitException(AnyRuntimeException): " + e);
-		e.printStackTrace();
 		try
 		{
 			oc_.write (e);

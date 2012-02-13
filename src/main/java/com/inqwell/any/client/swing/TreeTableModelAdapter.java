@@ -125,10 +125,10 @@ public abstract class TreeTableModelAdapter extends CommonTableModel
 
   protected Object nodeForRow(int row)
   {
-    //System.out.println("TreeTableModelAdapter.nodeForRow " + row);
     TreePath treePath = tree.getPathForRow(row);
-    //System.out.println("TreeTableModelAdapter.nodeForRow " + treePath);
-    return treePath.getLastPathComponent();         
+    
+    // Can be null if row is not visible
+    return (treePath == null) ? null : treePath.getLastPathComponent();         
   }
   
   protected int rowForPath(TreePath path)

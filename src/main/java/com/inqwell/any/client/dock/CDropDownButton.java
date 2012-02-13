@@ -12,4 +12,5 @@ import com.inqwell.any.client.dock.AnyCAction.ActionContainer;
 public class CDropDownButton extends    bibliothek.gui.dock.common.action.CDropDownButton
                              implements ActionContainer
 {
+  public void afterLayout() {}
 }

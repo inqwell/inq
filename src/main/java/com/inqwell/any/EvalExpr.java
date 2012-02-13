@@ -114,10 +114,8 @@ public class EvalExpr extends    AbstractFunc
 			{
         nonFunc = false;
 				f = (Func)a;
-				//System.out.println ("evalFunc: executing " + f);
 				f.setTransaction(t);
 				a = f.execFunc(root);
-				//System.out.println ("evalFunc: found " + a);
 			}
 			
 			if (a != null && a.isTransactional())

@@ -72,16 +72,22 @@ import com.inqwell.any.client.swing.SwingInvoker;
 /**
  * A view of data in the node space.  This class provides base
  * functionality for picking up events from the process node
- * space and allowing them to be dispatched for processing
+ * space and dispatching them for processing
  * defined in sub-classes.
- * <p>
  * Typically, sub-classes will wrap a delegate object, for
  * example a GUI component, and act as an interface between
- * the Inq event system and that object. This relationship
- * also works in reverse in that delegate objects can raise
- * events and have data properties (defined by the Java
- * Beans specification). This class provides support for
- * attaching event listeners and accessing object properties.
+ * the Inq event system and that object.
+ * <p/>
+ * This class also provides this functionality on a general
+ * basis to bind node events to a Java Beans property.
+ * A relevant node event will cause the property to be set with the
+ * new data value. Unlike specific view functionality, Java Beans
+ * is generic and no sub-class implementation is required.
+ * <p/>
+ * In a similar way, any Java Beans events that the delegate
+ * object supports can be listened for and dispatched to
+ * Inq {@link EventListener} instances, for example button
+ * action events.
  */
 public abstract class AnyView extends    InstanceHierarchyMap
                               implements EventGenerator,
@@ -192,7 +198,10 @@ public abstract class AnyView extends    InstanceHierarchyMap
 
   protected static Array actionEventType__    = AbstractComposite.array();
 
-  protected static Any   enabled__  = AbstractValue.flyweightString("enabled");
+  protected static Any   enabled__        = AbstractValue.flyweightString("enabled");
+  protected static Any   checkedValue__   = AbstractValue.flyweightString("checkedValue");
+  protected static Any   uncheckedValue__ = AbstractValue.flyweightString("uncheckedValue");
+
 
   // Used if the model is to be fired after a component event.
   private   static JoinTransaction  jt_ = new JoinTransaction();
@@ -209,12 +218,7 @@ public abstract class AnyView extends    InstanceHierarchyMap
 		actionEventType__.add(EventConstants.E_ACTION);
   }
 
-  public AnyView()
-  {
-    init();
-  }
-
-	public Any getContext()
+  public Any getContext()
 	{
 		return context_;
 	}
@@ -375,7 +379,8 @@ public abstract class AnyView extends    InstanceHierarchyMap
         if (propertyMultiplexer_ != null)
           contextEg.removeEventListener(propertyMultiplexer_);
 
-        contextNode_ = null;
+        if (contextNode_ != this)
+          contextNode_ = null;
         context_     = null;
         //evaluateChildContext();
 			//}
@@ -655,31 +660,34 @@ public abstract class AnyView extends    InstanceHierarchyMap
 
 
 
-	// Listen to our context node for the event type(s) required
-	// by the given listener and dispatch the event to that listener.
+	// Listen to our context node for the data events that
+	// should update this component.
 	// If called more than once previous dispatcher is discarded
 	// so model can be reset during execution rather than only at
 	// gui setup.
 	protected void setupDataListener(Map nodeSpecs)
 	{
-  	// All data events will pass through our context node so we
-  	// listen to it for those that are of interest to us for
-  	// data rendering.
-		DataListener d = new RenderingListener(nodeSpecs);
-
-		EventGenerator contextEg = (EventGenerator)getContextNode();
-
-    if (contextEg == null)
-      throw new AnyRuntimeException("Context node not yet established");
-
-		if (updateDispatcher_ != null)
-		{
-			contextEg.removeEventListener(updateDispatcher_);
-		}
-
-		updateDispatcher_ = new EventDispatcher();
-
-		listenForUpdates(contextEg, updateDispatcher_, d);
+	  if (nodeSpecs.entries() != 0)
+	  {
+    	// All data events will pass through our context node so we
+    	// listen to it for those that are of interest to us for
+    	// data rendering.
+  		DataListener d = new RenderingListener(nodeSpecs);
+  
+  		EventGenerator contextEg = (EventGenerator)getContextNode();
+  
+      if (contextEg == null)
+        throw new AnyRuntimeException("Context node not yet established");
+  
+  		if (updateDispatcher_ != null)
+  		{
+  			contextEg.removeEventListener(updateDispatcher_);
+  		}
+  
+  		updateDispatcher_ = new EventDispatcher();
+  
+  		listenForUpdates(contextEg, updateDispatcher_, d);
+	  }
 	}
 
   /**
@@ -816,7 +824,8 @@ public abstract class AnyView extends    InstanceHierarchyMap
       // Have been removed from the hierarchy. We cannot have a context node or
       // path
       context_     = null;
-      contextNode_ = null;
+      if (contextNode_ != this)
+        contextNode_ = null;
       evaluateChildContext();
     }
   }
@@ -827,9 +836,37 @@ public abstract class AnyView extends    InstanceHierarchyMap
    */
 	protected abstract Object getPropertyOwner(Any property);
 
-	protected abstract RenderInfo getRenderInfo();
+	public abstract RenderInfo getRenderInfo();
 
-	protected void listenForUpdates(EventGenerator  listenTo,
+  protected Any getGUIRendered(Event e) throws AnyException
+  {
+    RenderInfo r = getRenderInfo();
+    Any ret = null;
+    
+    if (r != null)
+    {
+      Map id = (Map)e.getId();
+    
+      Any eventType = id.get(EventConstants.EVENT_TYPE);
+      
+    
+      if (eventType.equals(EventConstants.BOT_UPDATE))
+      {
+        ret = r.resolveDataNode(getContextNode(), false);
+      }
+      else
+      {
+        boolean notDeleting = !(eventType.equals(EventConstants.NODE_REMOVED) ||
+                                eventType.equals(EventConstants.NODE_REMOVED_CHILD));
+        
+        ret = r.resolveDataNode(getContextNode(), true, notDeleting);
+      }
+    }
+    
+    return ret;
+  }
+
+  protected void listenForUpdates(EventGenerator  listenTo,
                                   EventDispatcher dispachVia,
                                   EventListener   processWith)
 	{

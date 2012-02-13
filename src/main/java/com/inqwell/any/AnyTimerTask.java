@@ -191,8 +191,10 @@ public class AnyTimerTask extends    PropertyAccessMap
     sb.append(nextRuns_.toString());
     sb.append(" period: ");
     sb.append(period_.toString());
-    sb.append(" userInfo: ");
-    sb.append((userInfo_ == null) ? "<none>" : userInfo_.toString());
+    // Can cause an infinite loop when userInfo_ legitimately contains this timer.
+    // Script can always fetch userInfo_ by property access itself
+    //sb.append(" userInfo: ");
+    //sb.append((userInfo_ == null) ? "<none>" : userInfo_.toString());
 
     return sb.toString();
 	}
@@ -414,6 +416,9 @@ public class AnyTimerTask extends    PropertyAccessMap
     if (tt_ != null)
     	throw new IllegalStateException("Timer is already scheduled");
     
+    if (func_ == null)
+      throw new IllegalStateException("No dispatch function set");
+
     // Get the owner process's timer.
     Timer timer = p_.getTimer().getTimer();
     
@@ -483,14 +488,19 @@ public class AnyTimerTask extends    PropertyAccessMap
   {
     boolean ret = false;
     
-    if (!nextRuns_.isNull() && delayOrRate_ == FIXED_DELAY)
+    if (!nextRuns_.isNull())
       ret = true;
-    else if (!nextRuns_.isNull() && delayOrRate_ == FIXED_RATE && !period_.isNull())
+    else if (!period_.isNull())
       ret = true;
-    else if (nextRuns_.isNull() && delayOrRate_ == FIXED_DELAY)
-      ret = true;
-    else if (nextRuns_.isNull() && delayOrRate_ == FIXED_RATE && !period_.isNull())
-      ret = true;
+    
+//    if (!nextRuns_.isNull() && delayOrRate_ == FIXED_DELAY)
+//      ret = true;
+//    else if (!nextRuns_.isNull() && delayOrRate_ == FIXED_RATE && !period_.isNull())
+//      ret = true;
+//    else if (nextRuns_.isNull() && delayOrRate_ == FIXED_DELAY)
+//      ret = true;
+//    else if (nextRuns_.isNull() && delayOrRate_ == FIXED_RATE && !period_.isNull())
+//      ret = true;
     
     return ret;
   }
@@ -518,7 +528,7 @@ public class AnyTimerTask extends    PropertyAccessMap
     cancel();
     nextRuns_.setNull();
     period_.setNull();
-    delayOrRate_ = FIXED_RATE;
+    delayOrRate_ = FIXED_DELAY;
   }
   
 	public Iter createIterator () {return DegenerateIter.i__;}

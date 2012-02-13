@@ -98,20 +98,20 @@ public class AnyPMap extends    AnyMap
 		}
   }
   
-  public short getPrivilegeLevel(Any access, Any key)
-  {
-    if (this.definesPrivileges())
-      return super.getPrivilegeLevel(access, key);
-    
-    // Rather ugly in this case and could we not define getParentAny to
-    // return a Map ?
-    Map m = (Map)this.getParentAny();
-    
-    if (m == null)
-      return super.getPrivilegeLevel(access, key);
-      
-    return m.getPrivilegeLevel(access, key);
-  }
+//  public short getPrivilegeLevelImpl(Any access, Any key)
+//  {
+//    if (this.definesPrivileges())
+//      return super.getPrivilegeLevelImpl(access, key);
+//    
+//    // Rather ugly in this case and could we not define getParentAny to
+//    // return a Map ?
+//    Map m = (Map)this.getParentAny();
+//    
+//    if (m == null)
+//      return super.getPrivilegeLevelImpl(access, key);
+//      
+//    return m.getPrivilegeLevel(access, key);
+//  }
 
 //  public String toString()
 //  {

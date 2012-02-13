@@ -1,0 +1,7 @@
+
+string i18n = "fr";
+
+string $catalog.{i18n}.celcius = "Celcius";
+string $catalog.{i18n}.fahrenheit = "Fahrenheit";
+string $catalog.{i18n}.title = "Conversion De la Température";
+
