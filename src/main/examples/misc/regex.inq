@@ -33,7 +33,7 @@ if (b)
   array grps;
   grps = re.properties.groups;
   foreach(grps)
-    writeln($catalog.system.out, "|" + $this + "|");
+    writeln($catalog.system.out, "|" + $loop + "|");
 }
 else
   writeln($catalog.system.out, "No match");
