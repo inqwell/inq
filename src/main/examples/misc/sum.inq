@@ -7,12 +7,15 @@
  * the README file.
  */
 
-// sum test
+// sum test - operand types are heterogeneous
 
-int x.p.a=1;
-int x.q.a=2;
-int x.r.a=3;
+int       x.p.a = 1;
+int       x.q.a = 2;
+long      x.r.a = 3;
+decimal:0 x.s.a = 4;
 
 // Don't forget the $loop qualifier for the sum child expression.
-writeln($catalog.system.out, sum(x, $loop.a));
+writeln($catalog.system.out, any result = sum(x, $loop.a));
 
+// Return result for JUnit
+result;
