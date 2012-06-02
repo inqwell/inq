@@ -7,18 +7,73 @@
  * the README file.
  */
 
-function doMail(string attachMe, any to, any smtp)
+/*
+ * Show Inq's email function. Multipart mime messages are
+ * created with any number of attachments. The body can
+ * have a specified mime type which defaults to text/plain.
+ */
+
+function doMail(string attachMe, any to, any smtp, boolean html)
 {
   hmap mail;
 
-  any    mail.to = to;  // recipients list - an array from the command line
-  string mail.subject  = "Inq Test Mail";
-  string mail.attachment[@last] = attachMe;
-  //string mail.smtphost     = "localhost";
-  string mail.smtphost     = smtp;
-  string mail.from     = "do-not-reply@someone.com";
-  any    mail.debug    = true;
-  string mail.body     = "Hello
+  any mail.to = to;  // recipients list - an array from the command line
+  
+  any mail.subject  = "Inq Test Mail";
+  
+  // Attach this script as text/plain, "attachment" disposition is the default
+  any attachment.attachment = attachMe;
+  any attachment.contentType = "text/plain";
+  any attachment.contentDisposition = "attachment";
+  any mail.attachment[@last] = attachment;
+  
+  // Put a pdf in as well - jms.pdf from the current directory
+  any attachment2.attachment = "file:jms.pdf";
+  any attachment2.contentType = "application/pdf";
+  any attachment2.contentDisposition = "attachment";
+  any mail.attachment[@last] = attachment2;
+  
+  // Put an icon as an inline attachment
+  any attachment3.attachment = "file:q32.png";
+  any attachment3.contentType = "image/png";
+  // Some experimental explicit headers here - seems to work
+  any contentid = "Content-Id";
+  any attachid  = "X-Attachment-Id";
+  any attachment3.headers.{contentid} = "<inqlogo@localhost>";
+  any attachment3.headers.{attachid}  = "inqlogo@localhost";
+  any mail.attachment[@last] = attachment3;
+  
+  any mail.smtphost = smtp;
+  any mail.from     = "do-not-reply@someone.com";
+  
+  // The debug option dumps the server responses to stdout
+  // and creates the file mail.raw.txt containing what is sent
+  // to the server. 
+  any mail.debug    = true;
+  
+  // According to the command line argument -html, if
+  // present send the body as html text. Otherwise plain.
+  if (html)
+  {
+    // Set the mime type for the body text
+    any mail.content = "text/html";
+    
+    // Body text
+    any mail.body     = "<html><h2>Hello</h2>
+
+This mail has been sent to you by the attached Inq script.
+<br/>
+Please do not reply to this automatic mailing.
+<br/><br/><small>
+<em>Kind regards</em><br/>
+The Inq team</small><br/>
+<img src=\"cid:inqlogo@localhost\" alt=\"Inq Logo\"/>
+</html>";
+  }
+  else
+  {
+    // text/plain default body type and content.
+    any mail.body     = "Hello
 
 This mail has been sent to you by the attached Inq script.
 
@@ -26,31 +81,28 @@ Please do not reply to this automatic mailing.
 
 Kind regards
 The Inq team";
+  }
 
 
-
-  if (!sendmail(mail))
+  if (!(any ret = sendmail(mail)))
   {
     writeln($catalog.system.out, "There was some problem with your mail");
     writeln($catalog.system.out, mail.error);
   }
+  
+  ret;
 }
 
 local function usage()
 {
-  writeln($catalog.system.err, "usage: \i -to <recipients> -smtp <smtp-host>");
+  writeln($catalog.system.err, "usage: \i -to <recipients> -smtp <smtp-host> [-html]");
   exit(1);
 }
 
-//writeln($catalog.system.out, .);
-//writeln($catalog.system.out, args);
-//writeln($catalog.system.out, count(args));
-//writeln($catalog.system.out, argsMap);
 if (!argsMap.to || !argsMap.smtp)
   call usage();
 
-//writeln($catalog.system.out, argsMap.arrays.to);
-
-// Send this script to the listed recipients
-call doMail(attachMe = args[0], argsMap.arrays.to, argsMap.smtp);
+// Send this script to the listed recipients. Convert the -to
+// argument to an array.
+call doMail(attachMe = args[0], argsMap.arrays.to, argsMap.smtp, html = argsMap.html);
 
