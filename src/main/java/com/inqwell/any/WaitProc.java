@@ -5,21 +5,16 @@
  * the README file.
  */
 
-/*
- * $Archive: /src/com/inqwell/any/WaitProc.java $
- * $Author: sanderst $
- * $Revision: 1.2 $
- * $Date: 2011-04-07 22:18:19 $
- */
 package com.inqwell.any;
 
 
 /**
  * WaitProc waits for the specified process to terminate with
- * an optional timeout in ms.
+ * an optional timeout in ms. Returns the process's exit status
+ * if the process terminated [before timing out], or 127 if
+ * the process did not terminate after timing out.
  *
  * @author $Author: sanderst $
- * @version $Revision: 1.2 $
  */
 public class WaitProc extends    AbstractFunc
                       implements Cloneable
@@ -60,7 +55,21 @@ public class WaitProc extends    AbstractFunc
     
     proc.join(lt);
     
-    return proc;
+    Any exitStatus;
+    if (proc.isAlive())
+    {
+    	// Process still alive (after a timeout)
+    	exitStatus = UserProcess.ALIVE;
+    }
+    else
+    {
+    	// Is there an exit status?
+    	exitStatus = proc.getIfContains(Process.STATUS);
+    	if (exitStatus == null)
+    		exitStatus = UserProcess.OK;
+    }
+    
+    return exitStatus;
   }
   
   public Object clone () throws CloneNotSupportedException
