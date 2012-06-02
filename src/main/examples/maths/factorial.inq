@@ -32,5 +32,8 @@ if (count(args) < 2)
   exit(1);
 }
 
-writeln($catalog.system.out, call fact(n=args[1]));
+writeln($catalog.system.out, any result = call fact(n=args[1]));
+
+result;
+
 

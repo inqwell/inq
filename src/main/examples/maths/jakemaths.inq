@@ -37,3 +37,6 @@ while (!call isDivisible(number=x))
   x = x + 10;
 
 writeln($catalog.system.out, "The smallest number divisible by 1 to 10 is " + x);
+
+// return for JUnit
+x;

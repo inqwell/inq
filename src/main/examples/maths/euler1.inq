@@ -23,3 +23,7 @@ while (--num)
 }
 
 writeln($catalog.system.out, "The answer is " + total);
+
+// Return the result (for JUnit's sake)
+total;
+

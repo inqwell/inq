@@ -46,7 +46,8 @@ writeln($catalog.system.out, "The answer is " + total);
 writeln($catalog.system.out, "and it took " + (.end - .start) + "ms");
 writeln($catalog.system.out, "over " + n + " iterations");
 
-
+array result;
+result + total;
 
 // Ported from nicola.muto's solution
 // at http://projecteuler.net/index.php?section=forum&id=2&page=25
@@ -76,3 +77,6 @@ date .end = getdate();
 writeln($catalog.system.out, "The answer is " + total);
 writeln($catalog.system.out, "and it took " + (.end - .start) + "ms");
 
+
+// Return the result (for JUnit's sake)
+result + total;
