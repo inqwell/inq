@@ -151,11 +151,23 @@ local function consumerStart(any process, // always provided by Inq
 
 local function jmsEnd()
 {
+  mqclose($this.jms.connection);
   writeln($catalog.system.out, "\e \l Ended: " + $process.processName);
 }
 
 service doProducer(any topic, any queue, any msgCount)
 {
+  // See comments in AckEquivExample.inq. 
+  setexceptionhandler(cfunc f = {
+                                  // Just output the whole stack
+                                  writeln($catalog.system.err, .);
+                                  writeln($catalog.system.err, "Bailing...");
+                                  
+                                  // Leave exit status for waitproc below
+                                  exit(1);
+                                }
+                     );
+
   any $this.jms = call getTopic(topic);
 
   /*
@@ -226,6 +238,17 @@ service doProducer(any topic, any queue, any msgCount)
 
 service doConsumer(any topic, any queue)
 {
+  // See comments in AckEquivExample.inq. 
+  setexceptionhandler(cfunc f = {
+                                  // Just output the whole stack
+                                  writeln($catalog.system.err, .);
+                                  writeln($catalog.system.err, "Bailing...");
+                                  
+                                  // Leave exit status for waitproc below
+                                  exit(1);
+                                }
+                     );
+
   any $this.jms = call getTopic(topic);
 
   /*
@@ -276,12 +299,14 @@ any asynchConsumer  = spawn("CONSUMER",
                             end   = call jmsEnd(),
                             syncext = true);
 
-waitproc(multipleProducer);
-waitproc(asynchConsumer);
+boolean b = waitproc(multipleProducer, 3000);
+b ||= waitproc(asynchConsumer, 3000);
+
+if (b)
+{
+  // See comments in AckEquivExample.inq.
+  kill(publisher);
+  throw("Test fails - check stderr");
+}
 
 writeln($catalog.system.out, "\i terminating.....");
-
-// Terminate. Must exit explicitly as (most likely) the
-// JMS runtime has started other threads
-exit(0);
-

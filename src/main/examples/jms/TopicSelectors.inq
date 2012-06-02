@@ -114,6 +114,17 @@ local function chooseType()
 
 service doProducer(any topic, any queue, any numSubscribers)
 {
+  // See comments in AckEquivExample.inq. 
+  setexceptionhandler(cfunc f = {
+                                  // Just output the whole stack
+                                  writeln($catalog.system.err, .);
+                                  writeln($catalog.system.err, "Bailing...");
+                                  
+                                  // Leave exit status for waitproc below
+                                  exit(1);
+                                }
+                     );
+
   any $this.jms = call getTopic(topic);
 
   /*
@@ -161,6 +172,17 @@ service doProducer(any topic, any queue, any numSubscribers)
 
 service doSubscriber(any topic, any queue, any whatKind, any subscriberNumber)
 {
+  // See comments in AckEquivExample.inq. 
+  setexceptionhandler(cfunc f = {
+                                  // Just output the whole stack
+                                  writeln($catalog.system.err, .);
+                                  writeln($catalog.system.err, "Bailing...");
+                                  
+                                  // Leave exit status for waitproc below
+                                  exit(1);
+                                }
+                     );
+
   // Declare a func variable that is the callback for asynchronously
   // received messages
   cfunc topicListener = call jmsTopicListen();
@@ -241,16 +263,16 @@ while (counter < NUM_SUBSCRIBERS)
   counter++;
 }
 
-foreach(subscribers)
-  waitproc($loop);
+boolean b = waitproc(producer, 3000);
 
-waitproc(producer);
+foreach(subscribers)
+  b ||= waitproc($loop, 3000);
+
+if (b)
+{
+  // See comments in AckEquivExample.inq.
+  kill(publisher);
+  throw("Test fails - check stderr");
+}
 
 writeln($catalog.system.out, "\i terminating.....");
-
-// Terminate. Exit explicitly as (most likely) the
-// JMS runtime has started other threads
-// Ho ho... when you close all your connections properly like
-// jmsEnd does in this example everything terminates cleanly!
-//exit(0);
-

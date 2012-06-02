@@ -142,7 +142,5 @@ writeln($catalog.system.out, " Integer: " + mapMessage.{integer});
 
 writeln($catalog.system.out, "\i terminating.....");
 
-// Terminate. Must exit explicitly as (most likely) the
-// JMS runtime has started other threads
-exit(0);
+mqclose(connection);
 

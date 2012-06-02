@@ -127,6 +127,29 @@ local function jmsTopicListen(any message)
 
 service doSynchProducer(any queue)
 {
+  // The exception handler in this example tries to
+  // terminate the process. Its purpose is to make
+  // this script more JUnit friendly. The waitproc()
+  // function (see bottom) returns the process's
+  // exit status (or 127 if the process is still running)
+  // so the main thread knows whether or not all the
+  // various processes terminated cleanly. 
+  setexceptionhandler(cfunc f = {
+                                  // This process uses the synch JMS model, so
+                                  // the stack will still be current. Check if the
+                                  // connection is there and if so try to close it.
+                                  if (connection)
+                                      mqclose(connection);
+
+                                  // Just output the whole stack
+                                  writeln($catalog.system.err, .);
+                                  writeln($catalog.system.err, "Bailing...");
+                                  
+                                  // Leave exit status for waitproc below
+                                  exit(1);
+                                }
+                     );
+
   any connection  = call getConnection();
   any session     = mqcreatesession(connection, false, CLIENT_ACKNOWLEDGE);
   any queue       = call getQueue(session, queue); // replaces parameter but that's ok...
@@ -147,6 +170,19 @@ service doSynchProducer(any queue)
 
 service doSynchConsumer(any topic, any queue)
 {
+  // See comments in doSynchProducer above
+  setexceptionhandler(cfunc f = {
+                                  if (connection)
+                                      mqclose(connection);
+
+                                  // Just output the whole stack
+                                  writeln($catalog.system.err, .);
+                                  writeln($catalog.system.err, "Bailing...");
+                                  
+                                  exit(1);
+                                }
+                     );
+
   any connection  = call getConnection();
   any session     = mqcreatesession(connection, false, CLIENT_ACKNOWLEDGE);
   any queue       = call getQueue(session, queue); // replaces parameter but that's ok...
@@ -168,6 +204,18 @@ service doSynchConsumer(any topic, any queue)
 
 service doMultiplePublisher(any topic, any controlQueue)
 {
+  // See comments in doSynchProducer above
+  setexceptionhandler(cfunc f = {
+                                  if (connection)
+                                      mqclose(connection);
+
+                                  // Just output the whole stack
+                                  writeln($catalog.system.err, .);
+                                  writeln($catalog.system.err, "Bailing...");
+                                  exit(1);
+                                }
+                     );
+
   any connection  = call getConnection();
   any session     = mqcreatesession(connection, false, AUTO_ACKNOWLEDGE);
   writeln($catalog.system.out, "PUBLISHER: Created auto-acknowledge session");
@@ -206,6 +254,23 @@ service doMultiplePublisher(any topic, any controlQueue)
 
 service doAsynchSubscriber(any topic, any controlQueue)
 {
+  setexceptionhandler(cfunc f = {
+                                  // If an exception occurs during initialisation
+                                  // then the stack will be current and $stack.connection
+                                  // may be present. If it is, try to close.
+                                  if (connection)
+                                      mqclose(connection);
+
+                                  // Just output the whole stack
+                                  writeln($catalog.system.err, .);
+                                  writeln($catalog.system.err, "Bailing...");
+                                  
+                                  // Terminate. The end function asynchSubscriberEnd
+                                  // still runs and tries to clean up JMS.
+                                  exit(1);
+                                }
+                     );
+
   any connection  = call getConnection();
   connection.properties.clientID = "AckEquivExample";
 
@@ -272,10 +337,28 @@ any asynchSubscriber  = spawn("ASYNCH_SUBSCRIBER",
                               end   = call asynchSubscriberEnd(),
                               syncext = true);
 
-waitproc(synchProducer);
-waitproc(synchConsumer);
-waitproc(multiplePublisher);
-waitproc(asynchSubscriber);
+// Await termination of our various processes. Give them a
+// maximum time of 3 seconds, as part of JUnit friendliness.
+boolean b = waitproc(synchProducer, 3000);
+b ||= waitproc(synchConsumer, 3000);
+b ||= waitproc(multiplePublisher, 3000);
+b ||= waitproc(asynchSubscriber, 3000);
+
+// b will be false if all processes terminated with exit status zero
+// In that case all is well. Otherwise throw an exception for
+// JUnit's sake.
+if (b)
+{
+  // Try killing the processes as a last-ditch tidy-up. If
+  // synchConsumer is still running then this is not guaranteed
+  // as it may be blocked in the JMS provider. Inq
+  // issues Thread.interrupt but whether this aborts the JMS
+  // call is another matter.
+  kill(synchProducer);
+  kill(synchConsumer);
+  kill(multiplePublisher);
+  kill(asynchSubscriber);
+  throw("Test fails - check stderr");
+}
 
 writeln($catalog.system.out, "\i terminating.....");
-

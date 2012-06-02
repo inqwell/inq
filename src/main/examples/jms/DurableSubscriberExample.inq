@@ -153,6 +153,17 @@ local function publishMessages(any topicPublisher, int NUMMSGS)
 // Publisher process startup
 service doPublisher(any topic)
 {
+  // See comments in AckEquivExample.inq. 
+  setexceptionhandler(cfunc f = {
+                                  // Just output the whole stack
+                                  writeln($catalog.system.err, .);
+                                  writeln($catalog.system.err, "Bailing...");
+                                  
+                                  // Leave exit status for waitproc below
+                                  exit(1);
+                                }
+                     );
+
   any $this.jms = call getTopic(topic);
   int $this.vars.startindex;
   any topicPublisher = mqcreateproducer($this.jms.session, $this.jms.topic);
@@ -312,8 +323,14 @@ any publisher = spawn("MultiplePublisher",
                       start = call publisherStart($catalog.argsMap.topic),
                       end   = call jmsEnd());
 
-//waitproc(subscriber);
-//waitproc(producer);
+boolean b = waitproc(publisher, 3000);
 
-//writeln($catalog.system.out, "\i terminating.....");
+if (b)
+{
+  // See comments in AckEquivExample.inq.
+  kill(publisher);
+  throw("Test fails - check stderr");
+}
+
+writeln($catalog.system.out, "\i terminating.....");
 

@@ -257,8 +257,9 @@ service doRetailer(any quantity,
 {
   any connection                 = call getConnection();
 
-  // In this example we add a bit of exception handling
-  // for the first time, just to be a little tidier
+  // In this example we use more "conventional" exception
+  // handling instead of setexceptionhandler used in some
+  // of the other examples
   try
   {
     any session                    = mqcreatesession(connection, false, AUTO_ACKNOWLEDGE);
@@ -306,11 +307,20 @@ service doRetailer(any quantity,
 
     // Send a non-text control message indicating end of messages.
     mqsend(msgProducer, mqcreatemessage(session));
+    
+    int exitStatus = 0;
+  }
+  catch
+  {
+    // Just output some exception info and establish error status
+    int exitStatus = 1;
+    writeln($catalog.system.err, @exception);
+    writeln($catalog.system.err, @stackTrace);
   }
   finally
   {
     mqclose(connection);
-    exit(0);
+    exit(exitStatus);
   }
 }
 
@@ -329,8 +339,6 @@ service doVendor(any vendorOrderQueueName,
                  any storageOrderQueueName,
                  any vendorConfirmationQueueName)
 {
-                // TODO other process. asyncSession = connection.createSession(true, 0);
-
   any connection  = call getConnection();
 
   // When creating transactional sessions the acknowledge mode is irrelevant,
@@ -338,7 +346,7 @@ service doVendor(any vendorOrderQueueName,
   // There can only be one transacted session per Process. Once created,
   // commit and rollback are managed by the process's transaction environment.
   // There is no "mqcommit" function, for example. See further notes below.
-  any session     = mqcreatesession(connection, true);
+  any session = mqcreatesession(connection, true);
 
   any vendorOrderQueue        = call getQueue(queue = vendorOrderQueueName, session);
   any monitorOrderQueue       = call getQueue(queue = monitorOrderQueueName, session);
@@ -355,7 +363,7 @@ service doVendor(any vendorOrderQueueName,
   any orderMessage                = mqcreatemapmessage(session);
 
   int r;      // for random number generation
-  int exitResult;
+  int exitResult = 0;
 
   // Start the receipt of messages
   mqstart(connection);
@@ -489,32 +497,48 @@ service doVendor(any vendorOrderQueueName,
       // Certain special paths are valid in a catch{} block. You
       // can writeln the $stack if you want to see them all.
 
-      writeln($catalog.system.out, "Vendor: JMSException occurred: " +
-                                   @exception);
-      writeln($catalog.system.out, @stackTrace);
-      writeln($catalog.system.out, @javaStack);
-      writeln($catalog.system.out, "Vendor: rolled back transaction 1");
-      
-      // TODO exitResult = 1;
+      // Of course, in this example we are throwing the exceptiion
+      // ourselves to simulate an error, so its not actually an
+      // environmental exception at all. In Inq, an exception
+      // is environmental if it arises within the system. If
+      // it is thrown by script it is a "user" exception. In a catch
+      // block we can check the type of the exception using the
+      // special path @environmental.
+      // 
+      if (@exenvironmental)
+      {
+        exitResult = 1;
+      }
+      else
+      {
+        writeln($catalog.system.out, "Vendor: JMSException occurred: " +
+                                     @exception);
+        writeln($catalog.system.out, @stackTrace);
+        writeln($catalog.system.out, @javaStack);
+        writeln($catalog.system.out, "Vendor: rolled back transaction 1");
+      }
 
       // This "continue;" statement is only so we don't hit the
       // writeln below saying we've committed the txn (which we
       // haven't). As mentioned, the flow is a bit contrived
       continue;
-    }
+    } // catch
 
-    // If we get here the simulated error did not occur and the
-    // transaction was committed by Inq
-    writeln($catalog.system.out, "Vendor: committed transaction 1");
-  }
+    // If we get here (without a *real* error) the simulated error
+    // did not occur and the transaction was committed by Inq
+    if (exitResult == 0)
+      writeln($catalog.system.out, "Vendor: committed transaction 1");
+  } // while (true)
 
-  // Wait till suppliers get back with answers.
-  // TODO listener.monitor.waitTillDone();
-  lock("foo", -1, cfunc f = $catalog.jmstest.latch);
+  // Wait until suppliers get back with answers.
+  // q.v. the Java equivalent.
+  // Because we want this script to complete so that it behaves
+  // when run in the JUnit wrapper, use a timeout here.
+  lock("foo", 3000, cfunc f = $catalog.jmstest.latch);
 
   mqclose(connection);
 
-  exit(0);
+  exit(exitResult);
 }
 
 /**
@@ -523,6 +547,23 @@ service doVendor(any vendorOrderQueueName,
  */
 service doGenericSupplier(any itemName, any inQueueName)
 {
+  // See comments in AckEquivExample.inq.
+  // Compared to try/catch above, for bail-out conditions
+  // this mechanism is earier to code. Especially in contrived
+  // examples ;-)
+  setexceptionhandler(cfunc f = {
+                                  if (connection)
+                                    mqclose(connection);
+                                    
+                                  // Just output the whole stack
+                                  writeln($catalog.system.err, .);
+                                  writeln($catalog.system.err, "Bailing...");
+                                  
+                                  // Leave exit status for waitproc below
+                                  exit(1);
+                                }
+                     );
+
   any connection  = call getConnection();
 
   // When creating transactional sessions the acknowledge mode is irrelevant,
@@ -563,8 +604,8 @@ service doGenericSupplier(any itemName, any inQueueName)
                                            getproperty(inMessage.properties.JMSReplyTo));
         mqsend(msgProducer, mqcreatemessage(session));
 
-        // No commit required for Inq  <--- TODO
-        //session.commit();
+        // No commit required for Inq - this will happen
+        // as we leave the transaction {} block.
         break(true);
       }
 
@@ -614,8 +655,7 @@ service doGenericSupplier(any itemName, any inQueueName)
                                    outMessage.Quantity + " " +
                                    outMessage.Item + "(s)");
 
-      // No commit required for Inq  <--- TODO
-      //session.commit();
+      // No commit required for Inq
     }
 
     writeln($catalog.system.out, itemName +
@@ -638,6 +678,17 @@ service doGenericSupplier(any itemName, any inQueueName)
 service doVendorMessageListener(any vendorConfirmationQueueName,
                                 int numSuppliers)
 {
+  // See comments in AckEquivExample.inq. 
+  setexceptionhandler(cfunc f = {
+                                  // Just output the whole stack
+                                  writeln($catalog.system.err, .);
+                                  writeln($catalog.system.err, "Bailing...");
+                                  
+                                  // Leave exit status for waitproc below
+                                  exit(1);
+                                }
+                     );
+
   any connection = call getConnection();
 
   any session                 = mqcreatesession(connection, true);
@@ -677,7 +728,7 @@ local function vendorMessageListener(any message)
       $this.numSuppliers--;
       if ($this.numSuppliers == 0)
       {
-        // TODO
+        // q.v. the Java equivalent
         //monitor.allDone();
         lock("foo");
         notify("foo", cfunc f = $catalog.jmstest.latch = true);
@@ -745,9 +796,8 @@ local function vendorMessageListener(any message)
                                      " computer(s)");
       }
       mqsend(mp, retailerConfirmationMessage);
-                    // TODO
-                    //session.commit();
-                    //System.out.println("  Vendor: committed transaction 2");
+
+      writeln($catalog.system.out, "  Vendor: committed transaction 2");
     }
   }
   // No explicit commit is required. The transactional session is
@@ -896,11 +946,22 @@ any vendorListener   = spawn("VENDOR_LISTENER",
                              end   = call vendorListenerEnd(),
                              syncext = true);
 
-waitproc(retailer);
-waitproc(vendor);
-waitproc(monitorSupplier);
-waitproc(storageSupplier);
-waitproc(vendorListener);
+boolean b = waitproc(retailer, 3000);
+b ||= waitproc(vendor, 3000);
+b ||= waitproc(monitorSupplier, 3000);
+b ||= waitproc(storageSupplier, 3000);
+b ||= waitproc(vendorListener, 3000);
+
+if (b)
+{
+  // See comments in AckEquivExample.inq.
+  kill(retailer);
+  kill(vendor);
+  kill(monitorSupplier);
+  kill(storageSupplier);
+  kill(vendorListener);
+  throw("Test fails - check stderr");
+}
 
 writeln($catalog.system.out, "\i terminating.....");
 

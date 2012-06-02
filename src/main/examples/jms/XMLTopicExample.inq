@@ -92,6 +92,22 @@ local function jmsAsynchEnd()
 
 service doProducer(any topic, any queue, any msgCount)
 {
+  // See comments in AckEquivExample.inq. 
+  setexceptionhandler(cfunc f = {
+                                  // This process uses the synch JMS model, so
+                                  // the stack will still be current. Check if the
+                                  // connection is there and if so try to close it.
+                                  if ($this.jms.connection)
+                                      mqclose($this.jms.connection);
+
+                                  // Just output the whole stack
+                                  writeln($catalog.system.err, .);
+                                  writeln($catalog.system.err, "Bailing...");
+                                  
+                                  // Leave exit status for waitproc below
+                                  exit(1);
+                                }
+                     );
   any $this.jms = call getTopic(topic);
 
   /*
@@ -170,6 +186,17 @@ local function jmsTopicListen(any message)
 
 service doConsumer(any topic, any queue)
 {
+  // See comments in AckEquivExample.inq. 
+  setexceptionhandler(cfunc f = {
+                                  // Just output the whole stack
+                                  writeln($catalog.system.err, .);
+                                  writeln($catalog.system.err, "Bailing...");
+                                  
+                                  // Leave exit status for waitproc below
+                                  exit(1);
+                                }
+                     );
+
   // Declare a func variable that is the callback for asynchronously
   // received messages
   cfunc topicListener = call jmsTopicListen();
@@ -219,8 +246,17 @@ any asynchConsumer  = spawn("AsynchConsumer",
                             end   = call jmsAsynchEnd(),
                             syncext = true);
 
-waitproc(multipleProducer);
-waitproc(asynchConsumer);
+boolean b = waitproc(multipleProducer, 3000);
+b ||= waitproc(asynchConsumer, 3000);
+
+if (b)
+{
+  // See comments in AckEquivExample.inq.
+  kill(multipleProducer);
+  kill(asynchConsumer);
+  throw("Test fails - check stderr");
+}
+
 
 writeln($catalog.system.out, "\i terminating.....");
 

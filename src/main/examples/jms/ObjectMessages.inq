@@ -62,6 +62,9 @@ bytesMessage.properties.bufferSize = 5;
 writeln($catalog.system.out, "BytesMessage contains: " +
                              bytesMessage.properties.bytes);
 
+any byteArray2 = bytesMessage.properties.bytes;
+if (byteArray[1] == byteArray2[1])
+  throw("byteArray[1] == byteArray2[1]");
 
 mqclose(connection);
 

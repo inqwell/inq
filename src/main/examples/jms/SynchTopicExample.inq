@@ -73,6 +73,17 @@ local function jmsEnd()
 
 service doProducer(any topic)
 {
+  // See comments in AckEquivExample.inq. 
+  setexceptionhandler(cfunc f = {
+                                  // Just output the whole stack
+                                  writeln($catalog.system.err, .);
+                                  writeln($catalog.system.err, "Bailing...");
+                                  
+                                  // Leave exit status for waitproc below
+                                  exit(1);
+                                }
+                     );
+
   // Initialise the JMS env
   any jms = call initJMS(topic);
 
@@ -110,6 +121,17 @@ service doProducer(any topic)
 
 service doConsumer(any topic)
 {
+  // See comments in AckEquivExample.inq. 
+  setexceptionhandler(cfunc f = {
+                                  // Just output the whole stack
+                                  writeln($catalog.system.err, .);
+                                  writeln($catalog.system.err, "Bailing...");
+                                  
+                                  // Leave exit status for waitproc below
+                                  exit(1);
+                                }
+                     );
+
   // Initialise the JMS env
   any jms = call initJMS(topic);
 
@@ -143,7 +165,13 @@ any synchConsumer  = spawn("SynchConsumer",
                            type  = PROCESS_DETACHED,
                            start = call consumerStart(topic = $catalog.argsMap.name),
                            end   = call jmsEnd());
-waitproc(simpleProducer);
-waitproc(synchConsumer);
 
+boolean b = waitproc(simpleProducer, 3000);
+b ||= waitproc(synchConsumer, 3000);
 
+if (b)
+{
+  // See comments in AckEquivExample.inq.
+  kill(publisher);
+  throw("Test fails - check stderr");
+}
