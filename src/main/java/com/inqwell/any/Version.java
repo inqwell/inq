@@ -23,14 +23,18 @@ import java.util.Properties;
  * The Inq Version Number
  * 
  * <p>
- * @author $Author: sanderst $
- * @version $Revision: 1.3 $
+ * @author tom
  */
 public class Version extends    AbstractFunc
                      implements Cloneable
 {
-  public Any exec(Any a) throws AnyException
-  {
+	private static Any version__;
+	
+	public static Any getVersion()
+	{
+		if (version__ != null)
+			return version__;
+		
     AnyURL u  = new AnyURL("cp:///inq/inq.properties");
     URL    u1 = u.getURL();
     InputStream s = null;
@@ -41,16 +45,16 @@ public class Version extends    AbstractFunc
       p.load(s = uc.getInputStream());
       Object v = p.get("inq.version");
       if (v == null)
-        throw new AnyException("Unknown version");
+        throw new AnyRuntimeException("Unknown version");
       Object b = p.get("inq.build");
       if (b == null)
-        throw new AnyException("Unknown build");
+        throw new AnyRuntimeException("Unknown build");
       return new ConstString("Inq version " + v.toString() +
                              " (build " + b.toString() + ")");
     }
     catch(IOException e)
     {
-      throw new ContainedException(e);
+      throw new RuntimeContainedException(e);
     }
     finally
     {
@@ -63,6 +67,11 @@ public class Version extends    AbstractFunc
         catch(Exception e) {}
       }
     }
+	}
+	
+  public Any exec(Any a) throws AnyException
+  {
+  	return getVersion();
   }
   
   public Object clone () throws CloneNotSupportedException
