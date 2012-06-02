@@ -13,23 +13,25 @@
  */
 package com.inqwell.any;
 
-import java.net.Socket;
-import java.net.SocketTimeoutException;
-import java.net.InetAddress;
-import java.net.UnknownHostException;
 import java.io.BufferedReader;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
-import java.io.IOException;
-import java.util.Date;
+import java.net.InetAddress;
+import java.net.Socket;
+import java.net.SocketTimeoutException;
+import java.net.UnknownHostException;
 import java.text.SimpleDateFormat;
-import com.inqwell.any.util.SendMailConstants;
-import com.inqwell.any.util.Base64;
-import com.inqwell.any.io.PrintStream;
-import com.inqwell.any.io.PhysicalIO;
+import java.util.Date;
+
 import com.inqwell.any.io.ByteStream;
+import com.inqwell.any.io.PhysicalIO;
+import com.inqwell.any.io.PrintStream;
+import com.inqwell.any.util.Base64;
+import com.inqwell.any.util.SendMailConstants;
 
 /**
  * Send a mail via a given SMTP server.  The message and any
@@ -108,11 +110,6 @@ public class SendMail extends    AbstractFunc
 
 	private Any              mailInfo_;
 
-  private boolean          debug_ = false;
-  private Socket           socket_;
-  private BufferedReader   in_;
-  private PrintWriter      prout_;
-
   private static final String version__  = "$Revision: 1.6 $";
   private static final String boundary__ = "com.inqwell.any.SendMail.Boundary.1234";
 
@@ -131,7 +128,7 @@ public class SendMail extends    AbstractFunc
 
 		BooleanI ret = new AnyBoolean(true);
 
-    validateMap(mailInfo, a);
+    boolean debug = validateMap(mailInfo, a);
 
     // If we get here then we can do the mail message
 
@@ -145,18 +142,64 @@ public class SendMail extends    AbstractFunc
 
     String host = mailInfo.get(MAILHOSTKEY).toString();
 
-    AnyInt responseCode = new AnyInt();
-    StringWriter sw = new StringWriter();
-    PrintWriter errorBuffer = new PrintWriter(sw);
-    if (!doMail(host, port, mailInfo, errorBuffer, responseCode))
+    Socket         socket = null;
+    BufferedReader in     = null;
+    PrintWriter    prout  = null;
+    OutputStream   out    = null;
+    try
     {
-      // Put the error buffer in the caller's map
-      errorBuffer.flush();
-      mailInfo.add(ERROR, new ConstString(sw.toString()));
-      ret.setValue(false);
+    	if (debug)
+        System.out.println("Connecting to " + host + ":" + port);
+
+      socket = new Socket(host, port);
+
+      socket.setSoTimeout(30000);  // timeout on responses from server is 30s
+			in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+
+			if (debug)
+				out = new TeeOutputStream(socket.getOutputStream(), new FileOutputStream("mail.raw.txt"));
+			else
+				out = socket.getOutputStream();
+			
+			prout = new PrintWriter(out);
+    }
+    catch (Exception e)
+    {
+    	if (prout != null)
+    		prout.close();
+    	
+    	if (in != null)
+    	{
+    		try
+    		{
+      		in.close();
+    		}
+    		catch (Exception e2)
+    		{
+    			throw new RuntimeContainedException(e2);
+    		}
+    	}
+      throw new ContainedException(e);
     }
 
-		return ret;
+    try
+    {
+      AnyInt responseCode = new AnyInt();
+      StringWriter sw = new StringWriter();
+      PrintWriter errorBuffer = new PrintWriter(sw);
+      if (!doMail(in, prout, out, mailInfo, errorBuffer, responseCode, debug))
+      {
+        // Put the error buffer in the caller's map
+        errorBuffer.flush();
+        mailInfo.add(ERROR, new ConstString(sw.toString()));
+        ret.setValue(false);
+      }
+    }
+    finally
+    {
+    	close(prout, in);
+    }
+    return ret;
 	}
 
   public Object clone () throws CloneNotSupportedException
@@ -164,19 +207,17 @@ public class SendMail extends    AbstractFunc
 		SendMail c  = (SendMail)super.clone();
 
 		c.mailInfo_ = AbstractAny.cloneOrNull(mailInfo_);
-    c.debug_    = false;
-    c.socket_   = null;
-    c.in_       = null;
-    c.prout_    = null;
 
 		return c;
   }
 
-  private boolean doMail(String      host,
-                         int         port,
-                         Map         mailInfo,
-                         PrintWriter errorBuffer,
-                         IntI        responseCode) throws AnyException
+  private boolean doMail(BufferedReader in,
+  		                   PrintWriter    prout,
+  		                   OutputStream   os,
+  		                   Map            mailInfo,
+                         PrintWriter    errorBuffer,
+                         IntI           responseCode,
+                         boolean        debug) throws AnyException
   {
     // If there are any attachments, validate them first.  We cannot
     // stop a mail being sent once it has entered the DATA phase
@@ -190,54 +231,52 @@ public class SendMail extends    AbstractFunc
         return false;
     }
 
-    socket_ = getSocket(host, port);
-
     // Read the initial connect response line
-    String str = readIncoming(responseCode);
-    if (!responseOK(responseCode))
+    String str = readIncoming(in, responseCode, debug);
+    if (!responseOK(responseCode, debug))
       return false;
 
-    str = ehlo(responseCode);
-    if (!responseOK(responseCode))
+    str = ehlo(in, prout, responseCode, debug);
+    if (!responseOK(responseCode, debug))
     {
       errorBuffer.println(str);
       return false;
     }
 
-    str = mailFrom(mailInfo, responseCode);
-    if (!responseOK(responseCode))
+    str = mailFrom(in, prout, mailInfo, responseCode, debug);
+    if (!responseOK(responseCode, debug))
     {
       errorBuffer.println(str);
       return false;
     }
 
-    rcptTo(errorBuffer, mailInfo, responseCode);
-    if (!responseOK(responseCode))
+    rcptTo(in, prout, errorBuffer, mailInfo, responseCode, debug);
+    if (!responseOK(responseCode, debug))
       return false;
 
-    data(errorBuffer, mailInfo, responseCode, attachments);
-    if (!responseOK(responseCode))
+    data(in, prout, os, errorBuffer, mailInfo, responseCode, attachments, debug);
+    if (!responseOK(responseCode, debug))
       return false;
 
-    quit(responseCode);
-    if (!responseOK(responseCode))
+    quit(in, prout, responseCode, debug);
+    if (!responseOK(responseCode, debug))
     {
       errorBuffer.println(str);
       return false;
     }
 
-    close();
+    close(prout, in);
     return true;
   }
 
-  private String ehlo(IntI responseCode) throws AnyException
+  private String ehlo(BufferedReader in, PrintWriter prout, IntI responseCode, boolean debug) throws AnyException
   {
     try
     {
       String localhost = InetAddress.getLocalHost().getHostName();
 
-      writeCommand("EHLO " + localhost + "\r\n");
-      return readIncoming(responseCode);
+      writeCommand(prout, "EHLO " + localhost + "\r\n", debug);
+      return readIncoming(in, responseCode, debug);
     }
     catch (UnknownHostException uhe)
     {
@@ -245,21 +284,27 @@ public class SendMail extends    AbstractFunc
     }
   }
 
-  private String mailFrom(Map mailInfo, IntI responseCode) throws AnyException
+  private String mailFrom(BufferedReader in,
+                          PrintWriter    prout,
+                          Map            mailInfo,
+                          IntI           responseCode,
+                          boolean        debug) throws AnyException
   {
-    writeCommand(MAILFROM + "<" + mailInfo.get(FROMKEY) + ">\r\n");
-    return readIncoming(responseCode);
+    writeCommand(prout, MAILFROM + "<" + mailInfo.get(FROMKEY) + ">\r\n", debug);
+    return readIncoming(in, responseCode, debug);
   }
 
-  private void rcptTo(PrintWriter errorBuffer,
-                      Map         mailInfo,
-                      IntI        responseCode) throws AnyException
+  private void rcptTo(BufferedReader in,
+  		                PrintWriter    prout,
+  		                PrintWriter    errorBuffer,
+                      Map            mailInfo,
+                      IntI           responseCode,
+                      boolean        debug) throws AnyException
   {
-    String   s      = null;
     boolean  rcptOK = false;
 
     Vectored to     = (Vectored)mailInfo.get(TOKEY);
-    rcptOK = rcptToItems(to, errorBuffer, responseCode);
+    rcptOK = rcptToItems(in, prout, to, errorBuffer, responseCode, debug);
 
     // The only way that mail can actually be delivered
     // anywhere is via the RCPTTO command to the SMTP server.
@@ -279,7 +324,7 @@ public class SendMail extends    AbstractFunc
     if (mailInfo.contains(CCKEY))
     {
       to = (Vectored)mailInfo.get(CCKEY);
-      rcptOther = rcptToItems(to, errorBuffer, responseCode);
+      rcptOther = rcptToItems(in, prout, to, errorBuffer, responseCode, debug);
       if (!rcptOK)
         rcptOK = rcptOther;
     }
@@ -287,7 +332,7 @@ public class SendMail extends    AbstractFunc
     if (mailInfo.contains(BCCKEY))
     {
       to = (Vectored)mailInfo.get(BCCKEY);
-      rcptOther = rcptToItems(to, errorBuffer, responseCode);
+      rcptOther = rcptToItems(in, prout, to, errorBuffer, responseCode, debug);
       if (!rcptOK)
         rcptOK = rcptOther;
     }
@@ -298,18 +343,21 @@ public class SendMail extends    AbstractFunc
       responseCode.setValue(250);
   }
 
-  private boolean rcptToItems(Vectored    recipients,
-                              PrintWriter errorBuffer,
-                              IntI      responseCode) throws AnyException
+  private boolean rcptToItems(BufferedReader in,
+  		                        PrintWriter    prout,
+  		                        Vectored       recipients,
+                              PrintWriter    errorBuffer,
+                              IntI           responseCode,
+                              boolean        debug) throws AnyException
   {
     String  s;
     boolean rcptOK = false;
 
     for(int i = 0; i < recipients.entries(); i++)
     {
-      writeCommand(RCPTTO + "<" + recipients.getByVector(i) + ">\r\n");
-      s = readIncoming(responseCode);
-      if (!responseOK(responseCode))
+      writeCommand(prout, RCPTTO + "<" + recipients.getByVector(i) + ">\r\n", debug);
+      s = readIncoming(in, responseCode, debug);
+      if (!responseOK(responseCode, debug))
         errorBuffer.println(s);
       else
         rcptOK = true;
@@ -318,36 +366,40 @@ public class SendMail extends    AbstractFunc
     return rcptOK;
   }
 
-  private void data(PrintWriter errorBuffer,
-                    Map         mailInfo,
-                    IntI        responseCode,
-                    Array       attachments) throws AnyException
+  private void data(BufferedReader in,
+  		              PrintWriter    prout,
+  		              OutputStream   os,
+  		              PrintWriter    errorBuffer,
+                    Map            mailInfo,
+                    IntI           responseCode,
+                    Array          attachments,
+                    boolean        debug) throws AnyException
   {
-    writeCommand(DATA + "\r\n");
-    String s = readIncoming(responseCode);
-    if (!responseOK(responseCode))
+    writeCommand(prout, DATA + "\r\n", debug);
+    String s = readIncoming(in, responseCode, debug);
+    if (!responseOK(responseCode, debug))
     {
       errorBuffer.println(s);
       return;
     }
 
-    writeHeader(FROM + "<" + mailInfo.get(FROMKEY) + ">");
+    writeHeader(prout, FROM + "<" + mailInfo.get(FROMKEY) + ">");
 
-    writeRecipientsHeader(TO, mailInfo.get(TOKEY));
+    writeRecipientsHeader(prout, TO, mailInfo.get(TOKEY));
 
     SimpleDateFormat sent = new SimpleDateFormat("EEE, d MMM yyyy HH:mm:ss Z");
-    writeHeader(DATE + sent.format(new Date()));
+    writeHeader(prout, DATE + sent.format(new Date()));
 
     if (mailInfo.contains(CCKEY))
-      writeRecipientsHeader(CC, mailInfo.get(CCKEY));
+      writeRecipientsHeader(prout, CC, mailInfo.get(CCKEY));
 
     if (mailInfo.contains(SUBKEY))
     {
       Any a = mailInfo.get(SUBKEY);
-      writeHeader(SUBJECT + a.toString());
+      writeHeader(prout, SUBJECT + a.toString());
     }
 
-    writeHeader("X-Mailer: com.inqwell.any.SendMail version " + version__);
+    writeHeader(prout, "X-Mailer: com.inqwell.any.SendMail version " + Version.getVersion());
 
     boolean isMime = false;
     String contentType = "text/plain; charset=\"us-ascii\"";
@@ -359,27 +411,27 @@ public class SendMail extends    AbstractFunc
     {
       isMime = true;
       // If there are attachments then turn the body into a MIME message
-      writeHeader("Mime-Version: 1.0");
-			writeHeader("Content-Type: multipart/mixed; boundary=\"" +
+      writeHeader(prout, "Mime-Version: 1.0");
+			writeHeader(prout, "Content-Type: multipart/related; boundary=\"" +
                    boundary__ +
                    "\"");
-      prout_.print("\r\n");
-			prout_.print("This is a multipart message in MIME format.\r\n");
-			prout_.print("If you see this message, your mail reading client does not support MIME properly\r\n");
-			prout_.print("\r\n--" + boundary__);
-      prout_.print("\r\n");
+      prout.print("\r\n");
+			prout.print("This is a multipart message in MIME format.\r\n");
+			prout.print("If you see this message, your mail reading client does not support MIME properly\r\n");
+			prout.print("\r\n--" + boundary__);
+      prout.print("\r\n");
 			//writeHeader("Content-Type: text/plain; charset=\"us-ascii\"");
-			writeHeader("Content-Type: " + contentType);
-			writeHeader("Content-Disposition: inline");
+			writeHeader(prout, "Content-Type: " + contentType);
+			writeHeader(prout, "Content-Disposition: inline");
     }
     else
-      writeHeader("Content-Type: " + contentType);
+      writeHeader(prout, "Content-Type: " + contentType);
 
     if (mailInfo.contains(BODYKEY))
     {
       // blank line before body text
-      prout_.print("\r\n");
-      prout_.flush();
+      prout.print("\r\n");
+      prout.flush();
 
       // The SMTP specification sets maximum line length of 1000
       // characters
@@ -389,11 +441,11 @@ public class SendMail extends    AbstractFunc
         Any a;
         PrintStream ps = (PrintStream)body;
         while ((a = ps.read()) != AnyNull.instance())
-          dataString(a.toString());
+          dataString(prout, a.toString());
       }
       else if (body instanceof StringI)
       {
-        dataString(body.toString());
+        dataString(prout, body.toString());
       }
       else
       {
@@ -401,8 +453,8 @@ public class SendMail extends    AbstractFunc
         // We do not want to send a mail in these circumstances
         // so having got this far reset the SMTP server and
         // set an error response.
-        endOfMessage(errorBuffer, responseCode);
-        reset(errorBuffer, responseCode);
+        endOfMessage(in, prout, errorBuffer, responseCode, debug);
+        reset(in, prout, errorBuffer, responseCode, debug);
         responseCode.setValue(504);
         return;
       }
@@ -411,38 +463,41 @@ public class SendMail extends    AbstractFunc
     if (isMime)
     {
       // Do the attachments
-      if (!doAttachments(attachments, errorBuffer, responseCode))
+      if (!doAttachments(prout, os, attachments, errorBuffer, responseCode))
       {
         // If any of the attachments fails then don't send the mail.
         // Since we have written some data, end the message and reset
         // the SMTP server so the message doesn't go
-        endOfMessage(errorBuffer, responseCode);
-        reset(errorBuffer, responseCode);
+        endOfMessage(in, prout, errorBuffer, responseCode, debug);
+        reset(in, prout, errorBuffer, responseCode, debug);
         responseCode.setValue(504);
         return;
       }
       // Ultimate boundary
-      prout_.print("\r\n--" + boundary__ + "--\r\n");
-      prout_.flush();
+      prout.print("\r\n--" + boundary__ + "--\r\n");
+      prout.flush();
     }
 
     // Empty data is OK.  Terminate the data transfer
-    endOfMessage(errorBuffer, responseCode);
+    endOfMessage(in, prout, errorBuffer, responseCode, debug);
   }
 
-  private String quit(IntI responseCode) throws AnyException
+  private String quit(BufferedReader in, PrintWriter prout, IntI responseCode, boolean debug) throws AnyException
   {
-    writeCommand("QUIT\r\n");
-    return readIncoming(responseCode);
+    writeCommand(prout, "QUIT\r\n", debug);
+    return readIncoming(in, responseCode, debug);
   }
 
-  private boolean endOfMessage(PrintWriter errorBuffer,
-                               IntI        responseCode) throws AnyException
+  private boolean endOfMessage(BufferedReader in,
+                               PrintWriter    prout,
+  		                         PrintWriter    errorBuffer,
+                               IntI           responseCode,
+                               boolean        debug) throws AnyException
   {
     boolean ok = true;
-    writeCommand(".\r\n");
-    String s = readIncoming(responseCode);
-    if (!responseOK(responseCode))
+    writeCommand(prout, ".\r\n", debug);
+    String s = readIncoming(in, responseCode, debug);
+    if (!responseOK(responseCode, debug))
     {
       ok = false;
       errorBuffer.println(s);
@@ -450,13 +505,16 @@ public class SendMail extends    AbstractFunc
     return ok;
   }
 
-  private boolean reset(PrintWriter errorBuffer,
-                        IntI        responseCode) throws AnyException
+  private boolean reset(BufferedReader in,
+  		                  PrintWriter    prout,
+  		                  PrintWriter    errorBuffer,
+                        IntI           responseCode,
+                        boolean        debug) throws AnyException
   {
     boolean ok = true;
-    writeCommand("RSET\r\n");
-    String s = readIncoming(responseCode);
-    if (!responseOK(responseCode))
+    writeCommand(prout, "RSET\r\n", debug);
+    String s = readIncoming(in, responseCode, debug);
+    if (!responseOK(responseCode, debug))
     {
       ok = false;
       errorBuffer.println(s);
@@ -464,7 +522,7 @@ public class SendMail extends    AbstractFunc
     return ok;
   }
 
-  private void dataString(String s)
+  private void dataString(PrintWriter prout, String s)
   {
     int len = s.length();
     if (len > 1000)
@@ -474,7 +532,7 @@ public class SendMail extends    AbstractFunc
       do
       {
         String s1 = s.substring(idx, idx+wrt);
-        writeDataString(s1);
+        writeDataString(prout, s1);
         idx += wrt;
         wrt = ((idx + wrt) > len) ? len - idx
                                   : 1000;
@@ -483,64 +541,68 @@ public class SendMail extends    AbstractFunc
     }
     else
     {
-      writeDataString(s);
+      writeDataString(prout, s);
     }
-    prout_.flush();
+    prout.flush();
   }
 
-  private void writeDataString(String s)
+  private void writeDataString(PrintWriter prout, String s)
   {
     // Just check if a single period escape is necessary
     if(s.length() == 1 && s.charAt(0) == '.')
-      prout_.print(".");
+      prout.print(".");
 
-    prout_.print(s);
-    prout_.print("\r\n");
+    prout.print(s);
+    prout.print("\r\n");
   }
 
-  private void writeCommand(String cmd)
+  private void writeCommand(PrintWriter prout, String cmd, boolean debug)
   {
-    prout_.print(cmd);
-    prout_.flush();
-    if (debug_)
+    prout.print(cmd);
+    prout.flush();
+    if (debug)
       System.out.println(cmd);
   }
 
-  private void writeHeader(String hdr)
+  private void writeHeader(PrintWriter prout, String hdr)
   {
     if (hdr.length() > 1000)
       hdr = hdr.substring(0,1000);
 
-    prout_.print(hdr);
-    prout_.print("\r\n");
+    prout.print(hdr);
+    prout.print("\r\n");
   }
 
-  private void writeRecipientsHeader(String hdr, Any recipientsList)
+  private void writeRecipientsHeader(PrintWriter prout, String hdr, Any recipientsList)
   {
     Vectored recipients = (Vectored)recipientsList;
 
-    prout_.print(hdr);
+    prout.print(hdr);
     for (int i = 0; i < recipients.entries(); i++)
     {
       if (i != 0)
       {
-        prout_.print(",\r\n "); // fold the header
+        prout.print(",\r\n "); // fold the header
         //prout_.print(", "); // fold the header
       }
 
-      prout_.print("<" + recipients.getByVector(i) + ">");
+      prout.print("<" + recipients.getByVector(i) + ">");
     }
-    prout_.print("\r\n");
-    prout_.flush();
+    prout.print("\r\n");
+    prout.flush();
   }
 
-  private boolean doAttachments(Array       attachments,
-                                PrintWriter errorBuffer,
-                                IntI        responseCode) throws AnyException
+  private boolean doAttachments(PrintWriter  prout,
+  		                          OutputStream os,
+  		                          Array        attachments,
+                                PrintWriter  errorBuffer,
+                                IntI         responseCode) throws AnyException
   {
     for (int i = 0; i < attachments.entries(); i++)
     {
-      if (!doAttachment(attachments.get(i),
+      if (!doAttachment(prout,
+      		              os,
+      		              attachments.get(i),
                         errorBuffer,
                         responseCode))
         return false;
@@ -548,11 +610,34 @@ public class SendMail extends    AbstractFunc
     return true;
   }
 
-  private boolean doAttachment(Any attachment,
-                               PrintWriter errorBuffer,
-                               IntI        responseCode) throws AnyException
+  private boolean doAttachment(PrintWriter  prout,
+  		                         OutputStream os,
+  		                         Any          attachment,
+                               PrintWriter  errorBuffer,
+                               IntI         responseCode) throws AnyException
   {
     boolean ok = true;
+    
+    // Default content type and disposition
+    String contentType        = "application/octet-stream";
+    String contentDisposition = null;
+    Any    otherHeaders       = null;
+    
+    if (attachment instanceof Map)
+    {
+    	Map m = (Map)attachment;
+    	Any a;
+    	
+    	if ((a = m.getIfContains(CONTENTTYPE)) != null)
+    		contentType = a.toString();
+    	
+    	if ((a = m.getIfContains(CONTENTDISP)) != null)
+    		contentDisposition = a.toString();
+    	
+    	otherHeaders = m.getIfContains(CONTENTHDRS);
+    	
+    	attachment = m.get(ATTACHKEY);
+    }
 
     // The attachment should be a URL we can open with a byte stream
     // that is then written to the mail message as base 64 encoded data.
@@ -568,18 +653,33 @@ public class SendMail extends    AbstractFunc
 
     try
     {
-      OutputStream os = socket_.getOutputStream();
       // Work out the attachment name from the last path component
       String name = bs.getURL().getLastPath();
-			prout_.print("\r\n--" + boundary__ + "\r\n");
-      writeHeader("Content-Type: application/octet-stream; name=\"" + name + "\"");
-      writeHeader("Content-Transfer-Encoding: Base64");
-      writeHeader("Content-Disposition: inline; filename=\"" + name + "\"");
-      prout_.print("\r\n");
+			prout.print("\r\n--" + boundary__ + "\r\n");
+      writeHeader(prout, "Content-Type: " + contentType);// + "; name=\"" + name + "\"");
+      writeHeader(prout, "Content-Transfer-Encoding: Base64");
+      if (contentDisposition != null)
+        writeHeader(prout, "Content-Disposition: " + contentDisposition + "; filename=\"" + name + "\"");
+      
+      // Put out any other headers that were specified
+      if (otherHeaders != null)
+      {
+      	Map m = (Map)otherHeaders;
+      	Iter i = m.createKeysIterator();
+      	while (i.hasNext())
+      	{
+      		Any hdr = i.next();
+      		Any val = m.get(hdr);
+      		writeHeader(prout, hdr.toString() + ": " + val.toString());
+      	}
+      }
+      
+      // Headers done
+      prout.print("\r\n");
 
       // Flush the writer as we will write directly to the
       // underlying output stream for the attachments.
-      prout_.flush();
+      prout.flush();
 
       Any a;
       while ((a = bs.read()) != AnyNull.instance())
@@ -637,6 +737,9 @@ public class SendMail extends    AbstractFunc
     for (int i = 0; i < attachments.entries(); i++)
     {
       Any attachment = attachments.getByVector(i);
+      Any item = attachment;
+      if (attachment instanceof Map)
+      	attachment = ((Map)attachment).get(ATTACHKEY);
 
       try
       {
@@ -652,7 +755,7 @@ public class SendMail extends    AbstractFunc
         if (ret == null)
           ret = AbstractComposite.array();
 
-        ret.add(attachment);
+        ret.add(item);
       }
       finally
       {
@@ -663,35 +766,13 @@ public class SendMail extends    AbstractFunc
     return ret;
   }
 
-  private boolean responseOK(IntI responseCode)
+  private boolean responseOK(IntI responseCode, boolean debug)
   {
     int i = responseCode.getValue();
-    if (debug_)
+    if (debug)
       System.out.println("Response code " + i);
 
     return (i >= 200 && i < 400);
-  }
-
-  // Connect to the mail server, set the read timeout and
-  // establish the streams
-  private Socket getSocket(String host, int port) throws AnyException
-  {
-    socket_ = null;
-    try
-    {
-      socket_ = new Socket(host, port);
-
-      socket_.setSoTimeout(30000);  // timeout on responses from server is 30s
-			in_ = new BufferedReader(new InputStreamReader(socket_.getInputStream()));
-
-			prout_ = new PrintWriter(socket_.getOutputStream());
-    }
-    catch (Exception e)
-    {
-      throw new ContainedException(e);
-    }
-
-    return socket_;
   }
 
   // Read response lines from the mail server returning the last
@@ -703,7 +784,7 @@ public class SendMail extends    AbstractFunc
   // See http://www.faqs.org/rfcs/rfc2821.html
   // This method only throws if something goes wrong with the
   // underlying communication
-	private String readIncoming(IntI responseCode) throws AnyException
+	private String readIncoming(BufferedReader in, IntI responseCode, boolean debug) throws AnyException
   {
     String s = null;
     try
@@ -712,9 +793,9 @@ public class SendMail extends    AbstractFunc
       boolean continuation = true;
       do
       {
-        s = in_.readLine();
+        s = in.readLine();
 
-        if (debug_)
+        if (debug)
           System.out.println(s);
 
         if (s.length() > 3)
@@ -748,7 +829,6 @@ public class SendMail extends    AbstractFunc
 
     catch(Exception ex)
     {
-      close();
       throw new ContainedException(ex);
     }
 
@@ -760,21 +840,21 @@ public class SendMail extends    AbstractFunc
 	  // Handle continuation response
 	}
 
-  private void close()
+  private void close(PrintWriter prout, BufferedReader in)
   {
     // close the socket
     try
     {
-      in_.close();
-      prout_.close();
-      socket_.close();
+    	prout.close();
+      in.close();
     }
     catch (IOException ioX)
     {
+    	throw new RuntimeContainedException(ioX);
     }
   }
 
-  private void validateMap(Map m, Any a) throws AnyException
+  private boolean validateMap(Map m, Any a) throws AnyException
   {
     // 1) Map must contain at least one to: address.
     // 2) An SMTP host can be specified or it defaults
@@ -815,6 +895,45 @@ public class SendMail extends    AbstractFunc
         throw new AnyException("No from address");
     }
 
-    debug_ = m.contains(DEBUGKEY);
+    return AnyBoolean.TRUE.equals(m.getIfContains(DEBUGKEY));
+  }
+  
+  static private class TeeOutputStream extends OutputStream
+  {
+  	private final OutputStream s1;
+  	private final OutputStream s2;
+
+  	private TeeOutputStream(OutputStream s1)
+  	{
+  		this(s1, null);
+  	}
+  	
+  	private TeeOutputStream(OutputStream s1, OutputStream s2)
+  	{
+  		this.s1 = s1;
+  		this.s2 = s2;
+  	}
+  	
+		@Override
+		public void write(int b) throws IOException
+		{
+      s1.write(b);
+      if (s2 != null)
+      	s2.write(b);
+		}
+  	
+    public void flush() throws IOException
+    {
+      s1.flush();
+      if (s2 != null)
+      	s2.flush();
+    }
+
+    public void close() throws IOException
+    {
+      s1.close();
+      if (s2 != null)
+      	s2.close();
+    }
   }
 }
