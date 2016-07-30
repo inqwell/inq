@@ -8,27 +8,16 @@
 package com.inqwell.any.connect;
 
 import java.io.ByteArrayOutputStream;
-import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.logging.Level;
 import java.util.logging.LogManager;
 import java.util.logging.Logger;
 
 import javax.net.ssl.SSLHandshakeException;
-import javax.xml.transform.OutputKeys;
-import javax.xml.transform.Result;
-import javax.xml.transform.Transformer;
 import javax.xml.transform.TransformerException;
-import javax.xml.transform.TransformerFactory;
-import javax.xml.transform.dom.DOMSource;
-import javax.xml.transform.stream.StreamResult;
-import javax.xml.transform.stream.StreamSource;
 
 import com.inqwell.any.AbstractAny;
 import com.inqwell.any.AbstractComposite;
@@ -62,21 +51,21 @@ import com.inqwell.any.channel.AnyChannel;
 import com.inqwell.any.channel.InputChannel;
 import com.inqwell.any.channel.OutputChannel;
 import com.inqwell.any.channel.Socket;
-import com.inqwell.any.io.PhysicalIO;
 import com.inqwell.any.io.XMLXStream;
 import com.inqwell.any.net.InqStreamHandlerFactory;
-import com.inqwell.any.net.StringURLConnection;
 import com.inqwell.any.util.CommandArgs;
 
 /**
  * A connection to a Inq server for synchronous request/response.
+ * This class may be used in a web container to support connections
+ * to an Inq server.
  * 
  * @author tom
  *
  */
 public class ServerConnection extends AbstractAny
 {
-  private static Logger logger__  = LogManager.getLogManager().getLogger("inq.connect");
+  private static Logger logger__  = LogManager.getLogManager().getLogger("inq");
   
   private static Array webResponseEventTypes__;
   private static Any   deniedReason__   = AbstractValue.flyweightString("reason");
@@ -289,8 +278,12 @@ public class ServerConnection extends AbstractAny
     if (!connected_)
       ret = null;
     
-    // TODO: Dom conversion
     return ret;
+  }
+  
+  public boolean isConnected() throws AnyException
+  {
+  	return connected_;
   }
   
   public void close()
@@ -302,7 +295,11 @@ public class ServerConnection extends AbstractAny
       ich_.close();
       och_.close();
     }
-    catch(Exception e) {}
+    catch(Exception e)
+    {
+      logger__.log(Level.WARNING, "Exception while closing", e);
+      logger__.log(Level.WARNING, "Closed anyway");
+    }
   }
   
   private Map makeArgs(java.util.Map<String, String> args)
@@ -341,6 +338,9 @@ public class ServerConnection extends AbstractAny
     return args_;
   }
   
+  // We get the login response service request as part of the
+  // initial message flow. This is not relevant in the
+  // web container environment so this listener does nothing.
   private static class ServiceInvoked extends    AbstractAny
                                       implements EventListener
   {
@@ -462,7 +462,8 @@ public class ServerConnection extends AbstractAny
     //HashMap<String, String> svcArgs = new HashMap<String, String>();
     //svcArgs.put("setName", "myList");
     //Any resp = c.request("loadAllCountries", "xy.sm", svcArgs, -1);
-    Any resp = c.request("webGetAccount", "examples.petstore", null, -1);
+    //Any resp = c.request("webGetAccount", "examples.petstore", null, -1);
+    Any resp = c.request("metaToJson", "system.server", null, -1);
 
 		XMLXStream s = new XMLXStream();
 		
