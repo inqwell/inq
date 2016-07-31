@@ -29,7 +29,7 @@ public abstract class AbstractFunc implements NamedFunc
 	private int lineNumber_    = -1;
 	private int columnNumber_  = -1;
 
-  public static boolean debug = false;
+  public static boolean debugTxn__ = false;
   
   // Any must be a Call statement or a func holder and that contains a
   // call statement.
@@ -63,7 +63,7 @@ public abstract class AbstractFunc implements NamedFunc
     if (t == null)
       t = Transaction.NULL_TRANSACTION;
       
-    if (AbstractFunc.debug &&
+    if (AbstractFunc.debugTxn__ &&
         transaction_ != Transaction.NULL_TRANSACTION &&
         t != Transaction.NULL_TRANSACTION &&
         transaction_ != t)
@@ -243,6 +243,14 @@ public abstract class AbstractFunc implements NamedFunc
   
   protected void nullOperand(Any operand)
   {
+  	Transaction t = getTransaction();
+  	
+    if (!t.getCallStack().isEmpty())
+    {
+      Call.CallStackEntry se = (Call.CallStackEntry)t.getCallStack().peek();
+      se.setLineNumber(t.getLineNumber());
+      throw new AnyRuntimeException("Operand " + operand + " could not be resolved at " + se.toString());
+    }
     throw new AnyRuntimeException("Operand " + operand + " could not be resolved");
   }
   
