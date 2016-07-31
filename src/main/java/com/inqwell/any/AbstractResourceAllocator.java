@@ -14,13 +14,6 @@
 
 package com.inqwell.any;
 
-import java.util.Date;
-
-import com.inqwell.any.channel.AnyChannel;
-import com.inqwell.any.channel.ChannelClosedException;
-import com.inqwell.any.channel.ChannelConstants;
-import com.inqwell.any.channel.FIFO;
-import com.inqwell.any.io.AnyIOException;
 /*
  * Defines a common allocation policy with a protected interface to create and
  * otherwise housekeep the resources themselves.  Ensures synchronization in
@@ -34,11 +27,6 @@ import com.inqwell.any.io.AnyIOException;
 public abstract class AbstractResourceAllocator extends    AbstractAny
                                                 implements ResourceAllocator
 {
-	// if true then the Resource Manager will attempt to create a resource to
-	// and allocate a queue for specification keys which hitherto have
-	// not been accessed or preconfigured.
-	private boolean onDemand_ = false;
-	
 	// Maps keys comprising resource specifications to a channel
   // from which a corresponding resource instance can be retrieved
 	private Map containers_;
@@ -56,51 +44,23 @@ public abstract class AbstractResourceAllocator extends    AbstractAny
   
 	private Map specs_;
 	
-	// if onDemand_ is true then resources for any specification will be made
-	// when requested up to the global limit.
-	private int globalLimit_ = 50;
-	
 	public AbstractResourceAllocator()
 	{
 		init();
 	}
 	
-	public Any acquire(Any spec) throws AnyException
-	{
-		return acquire(spec, -1);
-	}
-	
-	/**
-	 * A set-up method.  Make the given specification known to this resource
-	 * allocator.  Useful when onDemand_ is not set and we want to limit
-	 * resource allocation to only a limited list of specifications
-	 */
-	public void addSpec(Any id, Any spec, int limit)
+	public void addSpec(Any id, Any spec, IntI limit)
 	{
 		synchronized(resourcesMade_)
 		{
-      Any key = (id != null) ? id : spec;
-			if (!resourcesMade_.contains(key))
+			if (!specs_.contains(id))
 			{
-        if (id != null)
-          specs_.add(id, spec);
-          
-				resourcesMade_.replaceItem(key, new AnyInt(0));
-				resourceLimit_.replaceItem(key, new ConstInt(limit));
-				containers_.replaceItem(key,
-				                        new ResourceContainer());
+				specs_.add(id, spec);
+				resourcesMade_.replaceItem(id, new AnyInt(0));
+				resourceLimit_.replaceItem(id, limit);
+				containers_.replaceItem(id, new ResourceContainer());
 			}
 		}
-	}
-	
-	public void addSpec(Any id, Any spec, IntI limit)
-	{
-		addSpec(id, spec, limit.getValue());
-	}
-	
-	public void addSpec(Any spec, int limit)
-	{
-		addSpec(null, spec, limit);
 	}
 	
   public Any getSpec(Any id)
@@ -111,41 +71,49 @@ public abstract class AbstractResourceAllocator extends    AbstractAny
     return specs_.get(id);
   }
   
-	// Set up the maps for the given resource spec.  If the onDemand_ flag is
-	// not set then its an error to establish values for a new resource
-	// and the resourcesMade_ map must already contain the given key.
-	public Any acquire(Any spec, long timeout) throws AnyException
+  public Any acquire(Any spec) throws AnyException
+  {
+  	return acquire(spec, -1);
+  }
+
+  public Any acquire(Any id, long timeout) throws AnyException
+  {
+    Process acquirer = Globals.getProcessForCurrentThread();
+    return acquire(id, acquirer, timeout);
+
+  }
+
+	public Any acquire(Any id, Process acquirer, long timeout) throws AnyException
 	{
-		Any rSpec = checkResSpec(spec);
+		Any rSpec = checkResSpec(id);
 		
-	  ResourceContainer container = (ResourceContainer)containers_.get(spec);
+	  ResourceContainer container = (ResourceContainer)containers_.get(id);
 
     synchronized(resourcesUnavailable_)
     {
-      if (resourcesUnavailable_.contains(spec))
-        throw new AnyException("Resource " + spec + " currently unavailable");
+      if (resourcesUnavailable_.contains(id))
+        throw new AnyException("Resource " + id + " currently unavailable");
     }
   
     boolean got = false;
     Any      resource      = null;
     do
     {
-      Process acquirer = Globals.getProcessForCurrentThread();
       resource = container.getFromQueue(acquirer, 0);
       
       if (resource == null)
       {
         synchronized(resourcesMade_)
         {
-          IntI resourcesMade = (IntI)resourcesMade_.get(spec);
+          IntI resourcesMade = (IntI)resourcesMade_.get(id);
           int resMade          = resourcesMade.getValue();
-          int resourceLimit    = ((IntI)resourceLimit_.get(spec)).getValue();
+          int resourceLimit    = ((IntI)resourceLimit_.get(id)).getValue();
   
           if (resMade < resourceLimit)
           {
             // there's no resources available  but we're below the resource
             // limit so make a new one
-            resource = makeNewResource(spec, rSpec, resMade);
+            resource = makeNewResource(id, rSpec, resMade);
             resMade++;
             resourcesMade.setValue(resMade);
             container.newInQueue(acquirer, resource);
@@ -158,6 +126,9 @@ public abstract class AbstractResourceAllocator extends    AbstractAny
         }
       }
       
+      if (resource == null)
+      	throw new AnyException ("Unable to acquire resource " + id);
+      
       got = beforeAcquire(resource);
       
       if (!got)
@@ -165,7 +136,7 @@ public abstract class AbstractResourceAllocator extends    AbstractAny
         // This one is no good so discard it
         synchronized (resourcesMade_)
         {
-          IntI resourcesMade = (IntI)resourcesMade_.get(spec);
+          IntI resourcesMade = (IntI)resourcesMade_.get(id);
           int resMade          = resourcesMade.getValue();
           resMade--;
           resourcesMade.setValue(resMade);
@@ -178,13 +149,21 @@ public abstract class AbstractResourceAllocator extends    AbstractAny
     return resource;
 	}
 
-	public void release(Any spec,
+	public void release(Any id,
+                      Any resource,
+                      Any arg,
+                      ExceptionContainer e) throws AnyException
+  {
+    release(id, Globals.getProcessForCurrentThread(), resource, arg, e);
+  }
+	
+	public void release(Any id,
+			                Process releaser,
                       Any resource,
                       Any arg,
                       ExceptionContainer e) throws AnyException
 	{
-	  Process releaser = Globals.getProcessForCurrentThread();
-	  ResourceContainer container  = (ResourceContainer)containers_.get(spec);
+	  ResourceContainer container  = (ResourceContainer)containers_.get(id);
     
 		if (beforeRelease(resource, arg, e))
 		{
@@ -195,7 +174,7 @@ public abstract class AbstractResourceAllocator extends    AbstractAny
 		{
 			synchronized (resourcesMade_)
 			{
-				IntI resourcesMade = (IntI)resourcesMade_.get(spec);
+				IntI resourcesMade = (IntI)resourcesMade_.get(id);
 				int resMade          = resourcesMade.getValue();
 				resMade--;
 				resourcesMade.setValue(resMade);
@@ -251,7 +230,11 @@ public abstract class AbstractResourceAllocator extends    AbstractAny
   
 	/**
 	 * Make a new resource according to the supplied specification for
-   * immediate or later allocation
+   * immediate or later allocation.
+   * @param id the ID of this resource pool
+   * @param spec some information to configure the new resource
+   * @made the number of this resource made so far
+   * @return the new resource ready to use
 	 */	
 	protected abstract Any makeNewResource(Any id, Any spec, int made) throws AnyException;
 	
@@ -277,23 +260,16 @@ public abstract class AbstractResourceAllocator extends    AbstractAny
 	 */
 	protected abstract void disposeResource(Any resource);
 	
-	private Any checkResSpec (Any spec) throws ResourceUnavailableException
+	private Any checkResSpec (Any id) throws ResourceUnavailableException
 	{
 		synchronized(resourcesMade_)
 		{
-			if (!resourcesMade_.contains(spec))
+			if (!resourcesMade_.contains(id))
 			{
-				if (!onDemand_)
-					throw new ResourceUnavailableException("Unexpected resource specification " +
-																								 spec);
-
-				addSpec(spec, globalLimit_);
+				throw new ResourceUnavailableException("Unknown resource " + id);
 			}
-
-      if (specs_.contains(spec))
-        spec = specs_.get(spec);
 		}
-		return spec;
+		return specs_.get(id);
 	}
 	
 	private void init()
@@ -399,7 +375,7 @@ public abstract class AbstractResourceAllocator extends    AbstractAny
   }
   */
   
-  protected class ResourceContainer extends AbstractAny
+  protected static class ResourceContainer extends AbstractAny
   {
     // The available resources
     private  Queue         q_ = AbstractComposite.queue();
