@@ -21,11 +21,11 @@ public class ConstString extends AbstractValue
                          implements StringI, Cloneable
 
 {
-  public static String null__   = "__null__";
+  public final static String null__   = "__null__";
 
   private String value_;
 
-  transient private static String empty__ = "";
+  transient private static final String empty__ = "";
 
   public ConstString() { value_ = empty__; }
   public ConstString(char[] c) { value_ = new String(c); }
