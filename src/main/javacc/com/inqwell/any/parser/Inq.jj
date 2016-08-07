@@ -7,9 +7,6 @@
  * Inq language grammar.
  * Author: Tom Sanders
  *
- * $Archive: $
- * $Revision: 1.32 $
- * $Date: 2011-05-25 15:23:32 $
  */
 
 options {
@@ -352,34 +349,6 @@ public class Inq extends AbstractAny
     modifierKeys__.put(EventConstants.MOD_META.toString(), EventConstants.MOD_META);
   }
 
-  // For integration with xml/xsl
-  public static Any parseInq(String expression)
-  {
-    Any ret    = null;
-    Inq parser = null;
-    try
-    {
-      parser = new Inq(new StringReader(expression));
-      ret    = parser.inq();
-    }
-    catch (ParseException x)
-    {
-      throw new RuntimeContainedException(x, parser.documentURL_);
-    }
-    catch (Exception x)
-    {
-      throw new RuntimeContainedException(x, parser.documentURL_);
-    }
-    catch (TokenMgrError x)
-    {
-      throw new RuntimeContainedException(x, parser.documentURL_);
-    }
-    if (parser.getToken(1).kind != EOF)
-      throw new AnyRuntimeException("Expression " + expression + " contains more than one statement");
-
-    return ret;
-  }
-
   public void setPackage(String inqPackage)
   {
     _package = inqPackage;
@@ -411,36 +380,344 @@ public class Inq extends AbstractAny
     return pkg;
   }
 
-  // For integration with xml/xsl
-  public Any parse(String expression)
+  static void initInteractive()
   {
-    Any ret = null;
-    try
+    if (Globals.interpreter__ == null)
     {
-      this.ReInit(new StringReader(expression));
-      token_source.SwitchTo(DEFAULT);
-      ret = this.inq();
+      // Install the custom URL protocols  
+      InqStreamHandlerFactory.install();
+  
+      // Just to get a lock manager in schizo mode. As alluded to above,
+      // the lock manager should stand on its own and not accessed
+      // via the Server instance (i.e. we may not be a Server).
+      com.inqwell.any.server.Server.instance();
+  
+      // Set up the Globals
+      Globals.interactive__               = true;
+      Globals.channelOutputReplacements__ = com.inqwell.any.client.Replacements.clientToServer__;
+      Globals.channelInputReplacements__  = com.inqwell.any.client.Replacements.clientFromServer__;
+      Globals.streamOutputReplacements__  = com.inqwell.any.client.Replacements.clientToNativeStream__;
+      Globals.streamInputReplacements__   = com.inqwell.any.client.Replacements.clientFromNativeStream__;
+      Globals.streamOutputReplacements__  = com.inqwell.any.client.Replacements.clientToNativeStream__;
+      
+      // XML Replacements
+      Globals.xmlStreamOutputReplacements__ = com.inqwell.any.client.Replacements.clientToXMLStream__;
+      Globals.xmlStreamInputReplacements__  = com.inqwell.any.client.Replacements.clientFromXMLStream__;
+  
+      Globals.interpreter__               = new InqInterpreter();
+      
+      // TODO. Make LockManager universal - it doesn't need to rely on being a server
+      //Globals.lockManager__               = new LockManager();
     }
-    catch (ParseException x)
+  }
+  
+  static void initCommandArgs(CommandArgs cArgs)
+  {
+    Map argsMap = cArgs.toMap();
+    argsMap.add(new ConstString("interactive"), AnyBoolean.TRUE);
+    Catalog.instance().getCatalog().replaceItem(CommandArgs.commandLine__, argsMap);
+  }
+  
+  static Process initProcess()
+  {
+    if (Globals.process__ == null)
     {
-      throw new RuntimeContainedException(x, documentURL_);
+      // Make $root for the interactive environment
+      BasicProcess.RootMap root = new BasicProcess.RootMap();
+      
+      // Note - PrimaryTransaction was tried out to get the locking-related
+      // code it has. TODO: This code needs to be pulled up so it is also
+      // available to ClientTransaction    
+      Transaction          t    = new ClientTransaction();
+      //Transaction          t    = new PrimaryTransaction();
+  
+      ExceptionHandler eh; //             = new ExceptionToService(new ConstString("system.client.services.handleException"),
+                           //                                    UserProcess.loginContext__);
+      EventDispatcher  connectedEd    = new EventDispatcher();
+      EventDispatcher  disconnectedEd = new EventDispatcher();
+      connectedEd.addEventListener(InvokeService.makeInvokeService
+                                         (EventConstants.INVOKE_SVC,
+                                          t,
+                                          root));
+  
+      // Bit messy but for interactive testing
+      disconnectedEd.addEventListener(InvokeService.makeInvokeService
+                                         (EventConstants.INVOKE_SVC,
+                                          t,
+                                          root));
+  
+      UpdateEventProcessor.setupNodeEventDispatcher(connectedEd,
+                                                    t,
+                                                    root);
+  
+      eh = new ExceptionToStream(System.err);
+      URL initInq = null;
+      try
+      {
+        initInq = new URL("classpath:///com/inqwell/any/tools/Inqs.inq");
+      }
+      catch(MalformedURLException mue)
+      {
+        mue.printStackTrace();
+        System.exit(0);
+      }
+  
+      UserProcess p = null;
+      try
+      {
+        p = new UserProcess(eh,
+                            t,
+                            root,
+                            connectedEd,
+                            disconnectedEd,
+                            initInq);
+        root.setProcess(p);
+  
+        //Globals.setProcessForThread(Thread.currentThread(), p);
+      }
+      catch(AnyException ae)
+      {
+        // TODO: allow to throw (and catch in main)
+        ae.printStackTrace();
+        System.exit(0);
+      }
+  
+      // This is a test. Not possible to add or remove "package" from
+      // $process. The fact that $process.package is originally installed
+      // as a ConstString prevents it from being changed by value.
+      p.add(UserProcess.package__, AnyAlwaysEquals.instance());
+      Map privs = AbstractComposite.simpleMap();
+      privs.add(AbstractMap.P_ADD, Process.A_MAXIMUM_PRIVILEGE);
+      privs.add(AbstractMap.P_REMOVE, Process.A_MAXIMUM_PRIVILEGE);
+      p.setPrivilegeLevels(privs, UserProcess.package__, false);
+  
+      p.setContext(root);
+      p.setContextPath(ServerConstants.NSROOT);
+      Globals.awtSync__     = true;
+      Globals.process__     = p; // new UserProcess(Thread.currentThread(), root);
     }
-    catch (Exception x)
-    {
-      throw new RuntimeContainedException(x, documentURL_);
-    }
-    catch (TokenMgrError x)
-    {
-      throw new RuntimeContainedException(x, documentURL_);
-    }
-    if (this.getToken(1).kind != EOF)
-      throw new AnyRuntimeException("Expression " + expression + " contains more than one statement");
+    return Globals.process__;
+  }
+  
+  static Inq initParser(CommandArgs cArgs, String args[])
+  {
+    String cwd = System.getProperties().getProperty("user.dir");
+    String fs  = System.getProperties().getProperty("file.separator");
 
-    return ret;
+    AnyURL    url = new AnyURL();
+    InputStream is;
+    URL inUrl = null;
+    if (cArgs.arg("-in", url) || cArgs.arg("-shebang", url))
+    {
+      inUrl = url.getURL(new AnyURL("file:///" + cwd + fs));
+      try
+      {
+        is = inUrl.openStream();
+      }
+      catch(IOException e)
+      {
+        throw new RuntimeContainedException(e);
+      }
+    }
+    else
+    {
+      // When no file was specified (we are reading the tty we assume)
+      // set up jline library
+      initJline();
+      is = System.in;
+    }
+
+    Reader ir = new InputStreamReader(is);
+    //if (cArgs.arg("-echo"))
+    //  ir = new EchoReader(ir);
+    // Can't do this because of buffering by the token mgr!
+    
+    Inq parser = new Inq(ir);
+    String documentURL = (inUrl != null) ? inUrl.toString()
+                                         : "file:///" + cwd + fs + "system.in";
+    parser.setDocumentURL(documentURL);
+    parser.isInteractive_ = true;
+    parser.blockLevel_ = 0;
+
+    Transaction t = Globals.process__.getTransaction();
+    Map argsMap = (Map)Catalog.instance().getCatalog().get(CommandArgs.commandLine__);
+    
+    Call.setupCommandLineArgs(documentURL, args, argsMap, cArgs, t);
+    if (inUrl != null)
+      argsMap.replaceItem(CommandArgs.absin__, new AnyString(inUrl.toString()));
+      
+    // Save the input reader - only used if we want to reinitialise
+    // when reading from stdin
+    if (is == System.in)
+      argsMap.add(CommandArgs.inputReader__, new AnyObject(ir));
+
+    //parser.enable_tracing();
+
+    parser.userTxn_ = t;
+
+    AnyURL callStart = null;
+    if (inUrl == null)
+      callStart = new AnyURL(documentURL);
+    else
+    {
+      callStart = new AnyURL(inUrl);
+      t.setExecURL(callStart);
+    }
+
+    t.getCallStack().empty();
+    t.getCallStack().push(new Call.CallStackEntry(callStart, Interpreter.parser__));
+    
+    return parser;
+  }
+  
+  static Any parseLoop(Inq parser, CommandArgs cArgs)
+  {
+    Transaction t       = Globals.process__.getTransaction();
+    boolean     show    = cArgs.arg("-show");
+    Map         root    = Globals.process__.getRoot();
+    Map         argsMap = (Map)Catalog.instance().getCatalog().get(CommandArgs.commandLine__);
+    
+    Any ret = null;
+    
+    while(true)
+    {
+      AnyRuntimeException e = null;
+      try
+      {
+        while (true)
+        {
+          //System.out.flush();
+          parser.lineOffset_ = 0;
+  
+          Any a = parser.inq();
+          if (a == eof__)
+            return ret;
+  
+          if (a == nonExec__)
+            continue;
+  
+          ret = EvalExpr.evalFunc(t,
+                                    root,
+                                    a.cloneAny());
+          t.commit();
+          if (show)
+            System.out.println(ret);
+        }
+      }
+      catch (ParseException x)
+      {
+        e = new RuntimeContainedException(x, parser.documentURL_);
+        e.fillInCallStack(t);
+        t.getCallStack().empty();
+      }
+      catch (AnyException x)
+      {
+        e = new RuntimeContainedException(x, parser.documentURL_);
+        e.fillInCallStack(t);
+        t.getCallStack().empty();
+      }
+      catch (AnyRuntimeException x)
+      {
+        e = x;
+        e.fillInCallStack(t);
+        t.getCallStack().empty();
+      }
+      catch (Exception x)
+      {
+        e = new RuntimeContainedException(x, parser.documentURL_);
+        e.fillInCallStack(t);
+        t.getCallStack().empty();
+      }
+      catch (StackOverflowError x)
+      {
+        e = new RuntimeContainedException(x, parser.documentURL_);
+        e.topOfStack(t);
+      }
+      catch (TokenMgrError x)
+      {
+        e = new RuntimeContainedException(x, parser.documentURL_);
+        e.fillInCallStack(t);
+        t.getCallStack().empty();
+      }
+      if (e != null)
+      {
+        // When running with stdin print
+        // out the exception details and carry on.
+        // Otherwise throw
+        if (argsMap.contains(CommandArgs.inputReader__))
+        {
+          InputStreamReader ir = (InputStreamReader)((AnyObject)argsMap.get(CommandArgs.inputReader__)).getValue();
+          t.getCallStack().empty();
+          System.err.println(e.getMessage());
+          e.printStackTrace();
+          parser.ReInit(ir);
+        }
+        else
+        {
+          throw e;
+        }
+      }
+    }
   }
 
+  public static void main(String args[])
+  {
+    initInteractive();
+    CommandArgs cArgs = new CommandArgs(args);
+    initCommandArgs(cArgs);
+    Process p = initProcess();
+
+    boolean version = cArgs.arg("-version");
+    if (version)
+    {
+      Version v = new Version();
+      try
+      {
+        System.out.println(v.exec(null));
+      }
+      catch(AnyException e)
+      {
+        e.printStackTrace();
+      }
+      finally
+      {
+        System.exit(0);
+      }
+    }
+    
+    Map argsMap = (Map)Catalog.instance().getCatalog().get(CommandArgs.commandLine__);
+    if (!cArgs.arg("-q") && !argsMap.contains(CommandArgs.shebang__))
+    {
+      System.out.println("Inq Parser");
+      System.out.println("Copyright (c) Inqwell Ltd 2002-2012");
+      System.out.println("JavaCC Copyright (c) 2006, Sun Microsystems, Inc.");
+      System.out.println("Docking Frames Copyright (c) Benjamin Sigg and others 2011");
+      System.out.println("JDateChooser Copyright (c) Kai Toedter 1999 - 2009; Inqwell 2011");
+      System.out.println("JLine Copyright (c) 2002-2006, Marc Prud'hommeaux <mwp1@cornell.edu>.");
+    }
+    
+    Inq parser = initParser(cArgs, args);
+    
+    Globals.setProcessForThread(Thread.currentThread(), p);
+    
+    // Just in case script does graphics and events come up the awt thread
+    synchronized(Globals.process__)
+    {
+      Globals.inqActive__ = true;
+      SwingInvoker.initSwing();
+      parseLoop(parser, cArgs);
+      Globals.inqActive__ = false;
+    }
+    parser.userTxn_ = null;
+    Globals.removeProcessForThread(Thread.currentThread(), p);
+    ((UserProcess)p).startThread(true); // make it a daemon from the cmd line
+
+    if (!cArgs.arg("-q") && !argsMap.contains(CommandArgs.shebang__))
+      System.out.println("Inq done");
+  }
+  
   // For parser testing
-  public static void main(String args[]) throws IOException
+  public static void OLDmain(String args[]) throws IOException
   {
     InqStreamHandlerFactory.install();
 
@@ -474,7 +751,7 @@ public class Inq extends AbstractAny
     URL initInq = null;
     try
     {
-      initInq = new URL("classpath:///com/inqwell/any/tools/Inqs.inq");
+      initInq = new URL("cp:///com/inqwell/any/tools/Inqs.inq");
     }
     catch(MalformedURLException mue)
     {
@@ -525,9 +802,13 @@ public class Inq extends AbstractAny
     Globals.process__.setContextPath(ServerConstants.NSROOT);
 
     CommandArgs cArgs   = new CommandArgs(args);
+////
     Map         argsMap = cArgs.toMap();
     argsMap.add(new ConstString("interactive"), AnyBoolean.TRUE);
     Catalog.instance().getCatalog().add(CommandArgs.commandLine__, argsMap);
+////
+
+// Proper main start....
 
     boolean version = cArgs.arg("-version");
     if (version)
@@ -550,7 +831,7 @@ public class Inq extends AbstractAny
     if (!cArgs.arg("-q") && !argsMap.contains(CommandArgs.shebang__))
     {
       System.out.println("Inq Parser");
-      System.out.println("Copyright (c) Inqwell Ltd 2002-2011");
+      System.out.println("Copyright (c) Inqwell Ltd 2002-2012");
       System.out.println("JavaCC Copyright (c) 2006, Sun Microsystems, Inc.");
       System.out.println("Docking Frames Copyright (c) Benjamin Sigg and others 2011");
       System.out.println("JDateChooser Copyright (c) Kai Toedter 1999 - 2009; Inqwell 2011");
@@ -562,7 +843,6 @@ public class Inq extends AbstractAny
     String cwd = System.getProperties().getProperty("user.dir");
     String fs  = System.getProperties().getProperty("file.separator");
 
-    //AnyString in  = new AnyString();
     AnyURL    url = new AnyURL();
     InputStream is;
     URL inUrl = null;
@@ -592,6 +872,7 @@ public class Inq extends AbstractAny
     parser.isInteractive_ = true;
     parser.blockLevel_ = 0;
 
+////
     p.add(UserProcess.package__, AnyAlwaysEquals.instance());
     Map privs = AbstractComposite.simpleMap();
     
@@ -601,6 +882,7 @@ public class Inq extends AbstractAny
     privs.add(AbstractMap.P_ADD, Process.A_MAXIMUM_PRIVILEGE);
     privs.add(AbstractMap.P_REMOVE, Process.A_MAXIMUM_PRIVILEGE);
     p.setPrivilegeLevels(privs, UserProcess.package__, false);
+////
 
     Call.setupCommandLineArgs(documentURL, args, argsMap, cArgs, t);
     if (inUrl != null)
@@ -1926,7 +2208,6 @@ public class Inq extends AbstractAny
   // If the jline library is available and we are not on windows then
   // try to initialise it. For windows we let the dos prompt to history
   // for us...
-  // As yet, not really any extensive use of jline....
   static void 
   initJline()
   {
@@ -3148,6 +3429,7 @@ TOKEN:
      | <EXNAME>
      | <EXMSG>
      | <EXINFO>
+     | <EXENVIRO>
      | <STACKTRACE>
      | <CAPPED>
      | <JAVASTACK>
@@ -3219,6 +3501,7 @@ TOKEN:
 | < #EXCOMMIT  :    "@excommit" >
 | < #EXMSG:         "@exmsg" >
 | < #EXINFO:        "@exinfo" >
+| < #EXENVIRO:      "@exenvironment" >
 | < #USER:          "@user" >
 | < #PASSWD:        "@passwd" >
 | < #PKG:           "@package" >
