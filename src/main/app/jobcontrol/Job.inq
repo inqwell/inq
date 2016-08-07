@@ -202,6 +202,8 @@ typedef Job
 		#include <{db}/Job.pkey.sql>
   )
 
+  // Returns all Jobs whose parent is this Job (or put another
+  // way all the children of this Job).
 	key ByParent
 	(
 		fields(ParentJob)
