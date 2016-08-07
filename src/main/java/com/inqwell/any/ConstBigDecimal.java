@@ -32,7 +32,7 @@ public class ConstBigDecimal extends    AbstractValue
                                         Decimal,
                                         Cloneable
 {  
-  private static final java.util.Map nulls__ = new HashMap();
+  private static final java.util.Map<Any, BigDecimal> nulls__ = new HashMap<Any, BigDecimal>();
   private static final AnyInt nullLookup__   = new AnyInt();
 
   // The default value for a Decimal.  Default scale is zero.
@@ -55,6 +55,11 @@ public class ConstBigDecimal extends    AbstractValue
   	setToValue(default__);
   }
 
+  public ConstBigDecimal(int value)
+  {
+  	setToValue(new BigDecimal(value));
+  }
+  
   public ConstBigDecimal(BigDecimal d)
   {
   	setToValue(d);
