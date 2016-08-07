@@ -72,7 +72,9 @@ rem -- Server Startup
 :SERVER
 rem Add the headless and logging config system properties
 set INQSERVERARGS=-Djava.awt.headless=true -Djava.util.logging.config.file=%INQHOME%/etc/server.log.properties
-%LAUNCHER% -Xmx512m %INQCOMMONARGS% %INQSERVERARGS% %INQCUSTOM% com.inqwell.any.server.Server %arg1% %arg2% %arg3% %arg4% %arg5% %arg6% %arg7% %arg8% %arg9% %arg10% %arg11% %arg12%
+rem Some JDBC drivers, though there are others
+set INQJDBCARGS=-Djdbc.drivers=com.mysql.jdbc.Driver:oracle.jdbc.driver.OracleDriver:com.sybase.jdbc.SybDriver
+%LAUNCHER% -Xmx512m %INQCOMMONARGS% %INQSERVERARGS% %INQJDBCARGS% com.inqwell.any.server.Server %arg1% %arg2% %arg3% %arg4% %arg5% %arg6% %arg7% %arg8% %arg9% %arg10% %arg11% %arg12%
 GOTO END
 
 :CLIENT
