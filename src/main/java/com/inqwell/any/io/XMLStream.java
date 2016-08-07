@@ -57,6 +57,7 @@ import com.inqwell.any.Iter;
 import com.inqwell.any.LocateNode;
 import com.inqwell.any.LongI;
 import com.inqwell.any.Map;
+import com.inqwell.any.NativeDescriptor;
 import com.inqwell.any.Process;
 import com.inqwell.any.RuntimeContainedException;
 import com.inqwell.any.Set;
@@ -595,7 +596,7 @@ public class XMLStream extends AbstractStream
     {
       pw_.print("<map ");
       typeAttr(m);
-      descrAttr(m);
+      descrAttr(m.getDescriptor());
       
       vmIdAttr(m);        // Must be last attr
       
@@ -656,12 +657,18 @@ public class XMLStream extends AbstractStream
       pw_.print("type=\"");
       pw_.print(a.getClass().getName());
       pw_.print("\" ");
+      
+      if (a instanceof NativeDescriptor.NativeEnumProto)
+      {
+      	// When the scalar type is part of an enum then write the typedef of it
+      	NativeDescriptor.NativeEnumProto n = (NativeDescriptor.NativeEnumProto)a;
+      	Descriptor d = n.getDescriptor();
+      	descrAttr(d);
+      }
     }
 
-    private void descrAttr(Map m)
+    private void descrAttr(Descriptor d)
     {
-      Descriptor d = m.getDescriptor();
-      
       if (d != Descriptor.degenerateDescriptor__)
       {
         pw_.print("typedef=\"");
@@ -798,24 +805,10 @@ public class XMLStream extends AbstractStream
         String typedef = getAttrVal(attr, ATTR_DESCR);
         if (typedef != null)
         {
-          Descriptor d = null;
+          Descriptor d = findDescriptor(typedef);
           
-          LocateNode ln = new LocateNode(typedef);
-          try
-          {
-            d = (Descriptor)EvalExpr.evalFunc(Transaction.NULL_TRANSACTION,
-                Catalog.instance().getCatalog(),
-                ln,
-                Descriptor.class);
-            
-            if (d != null)
-              map_.setDescriptor(d);
-          }
-          catch(AnyException e)
-          {
-            throw new RuntimeContainedException(new InvalidObjectException
-                (e.getMessage()));
-          }
+          if (d != null)
+            map_.setDescriptor(d);
         }
         
         a_ = map_;
@@ -1006,115 +999,64 @@ public class XMLStream extends AbstractStream
       }
     }
     
-    private Any meh(HashMap attr, StringI content)
+    private Any makeAny(HashMap attr, StringI content)
     {
-      Any ret = null;
+      String className = getAttrVal(attr, ATTR_TYPE);
+      String strScale  = getAttrVal(attr, ATTR_SCALE);
+      String typedef   = getAttrVal(attr, ATTR_DESCR);
       
-      try
+      Any ret;
+      
+      if (typedef == null)
       {
-        String className = getAttrVal(attr, ATTR_TYPE);
-        // Special handling for dates - they are stored as long values
-        // and there is no support for these as strings
-        if (className.endsWith("Date"))
+        ret = Util.makeAny(className, content.toString(), strScale);
+        if (className.endsWith("Date") ||
+            className.endsWith("Boolean") ||
+            className.endsWith("AnyNull"))
+          return ret;
+        
+        // Any other class is subject to possible substitution (not
+        // other scalar types really but anything else, yes)
+        StreamFunc f = (StreamFunc)Globals.xmlStreamInputReplacements__.get(ret.getClass());
+        
+        // If there's no func then just hope its OK as is.
+        if (f != null)
         {
-          long l = Long.parseLong(content.toString());
-          Constructor c = Class.forName(className).getConstructor(long__);
-          Object[] ctorArgs = new Object[1];
-          ctorArgs[0] = new Long(l);
-          ret = (Any)c.newInstance(ctorArgs);
-        }
-        // Special handling for booleans. String conversion in Inq
-        // does not regard "true" and "false" as such. Anything non-zero/null
-        // is true.
-        else if (className.endsWith("Boolean"))
-        {
-          boolean b = Boolean.parseBoolean(content.toString());
-          Constructor c = Class.forName(className).getConstructor(boolean__);
-          Object[] ctorArgs = new Object[1];
-          ctorArgs[0] = new Boolean(b);
-          ret = (Any)c.newInstance(ctorArgs);
-        }
-        else if (className.endsWith("AnyNull"))
-        {
-          ret = AnyNull.instance();
-        }
-        else
-        {
-          // All other values provide a String constructor. Check for
-          // scale attr
-          String strScale = getAttrVal(attr, ATTR_SCALE);
-          Object[] ctorArgs;
-          Class[] ctorSig;
-          if (strScale == null)
-          {
-            ctorArgs = new Object[1];
-            ctorSig = string__;
-          }
-          else
-          {
-            ctorArgs = new Object[2];
-            ctorSig = stringScale__;
-            ctorArgs[1] = new Integer(Integer.parseInt(strScale));
-          }
-          
-          Constructor c = Class.forName(className).getConstructor(ctorSig);
-          ctorArgs[0] = content.toString();
-          
-          Any xmlObj = null;
-          xmlObj = (Any)c.newInstance(ctorArgs);
-
-          // Consider object resolution
-          StreamFunc f = (StreamFunc)Globals.xmlStreamInputReplacements__.get(xmlObj.getClass());
-          
-          // If there's no func then just hope its OK as is.
-          if (f != null)
-          {
-          	ret = f.exec(xmlObj, null);
-      			//System.out.println ("Resolved : " + xmlObj.getClass());
-      			//System.out.println ("With : " + ret.getClass());
-          }
-          else
-          {
-          	ret = xmlObj;
-          }
+          ret = f.exec(ret, null);
+          //System.out.println ("Resolved : " + xmlObj.getClass());
+          //System.out.println ("With : " + ret.getClass());
         }
       }
-      catch(Exception e)
+      else
       {
-        throw new RuntimeContainedException(e);
-      }
-      
-      if (ret.isConst())
-      {
-        ret = AbstractValue.flyweightConst(ret);
+      	// Scalar typedefs carry the descriptor
+      	Descriptor d = findDescriptor(typedef);
+      	ret = d.newInstance();
+      	ret.copyFrom(new AnyString(content));
       }
       
       return ret;
     }
     
-    private Any makeAny(HashMap attr, StringI content)
+    private Descriptor findDescriptor(String typedef)
     {
-      String className = getAttrVal(attr, ATTR_TYPE);
-      String strScale  = getAttrVal(attr, ATTR_SCALE);
-      Any ret = Util.makeAny(className, content.toString(), strScale);
-      if (className.endsWith("Date") ||
-          className.endsWith("Boolean") ||
-          className.endsWith("AnyNull"))
-        return ret;
+      Descriptor d = null;
       
-      // Any other class is subject to possible substitution (not
-      // other scalar types really but anything else, yes)
-      StreamFunc f = (StreamFunc)Globals.xmlStreamInputReplacements__.get(ret.getClass());
-      
-      // If there's no func then just hope its OK as is.
-      if (f != null)
+      LocateNode ln = new LocateNode(typedef);
+      try
       {
-        ret = f.exec(ret, null);
-        //System.out.println ("Resolved : " + xmlObj.getClass());
-        //System.out.println ("With : " + ret.getClass());
+        d = (Descriptor)EvalExpr.evalFunc(Transaction.NULL_TRANSACTION,
+            Catalog.instance().getCatalog(),
+            ln,
+            Descriptor.class);
+        
+        return d;
       }
-      
-      return ret;
+      catch(AnyException e)
+      {
+        throw new RuntimeContainedException(new InvalidObjectException
+            (e.getMessage()));
+      }
     }
 
     private void pushCollection()
