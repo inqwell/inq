@@ -27,6 +27,10 @@
       <useProjectArtifact>false</useProjectArtifact>
       <useTransitiveDependencies>false</useTransitiveDependencies>
       <unpack>true</unpack>
+      <excludes>
+        <exclude>org.apache.tomcat:servlet-api</exclude>
+        <exclude>junit:junit</exclude>
+      </excludes>
     </dependencySet>
   </dependencySets>
 

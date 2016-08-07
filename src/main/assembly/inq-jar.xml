@@ -27,6 +27,9 @@
       <useProjectArtifact>false</useProjectArtifact>
       <useTransitiveDependencies>false</useTransitiveDependencies>
       <unpack>true</unpack>
+      <excludes>
+        <exclude>junit:junit</exclude>
+      </excludes>
     </dependencySet>
   </dependencySets>
 
