@@ -231,9 +231,7 @@ public class AnyChannel extends    AbstractAny
 						if (timeout > 0)
 						{
 							wait(timeout);
-							// if we were shutdown its OK to wait again.
-							//if (channelDriver_ == current)
-                timeout = 0;
+              timeout = 0;
 						}
 						else
 						{
@@ -565,19 +563,11 @@ public class AnyChannel extends    AbstractAny
     }
   }
     
-  public void startReader(Socket        s,
-                          OutputChannel forwardTo,
-                          boolean       blockOnFull)
-  {
-    startReader(s, forwardTo, blockOnFull, null);
-  }
-  
   public void setThreadName(String name)
   {
     if (reader_ != null)
     {
       reader_.setName(name);
-      //System.out.println("********** " + name);
     }
     if (keepOpenProbe_ != null)
       keepOpenProbe_.setName(name + ".KeepAlive");
