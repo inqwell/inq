@@ -108,6 +108,7 @@ function makeRelativeToRoot(any filename)
  * requested by remote clients because it is a descendant of fileroot
  * 
  * @param filename the file name to convert. Must be a string, not a file.
+ * @param excFunc client-supplied function for any exceptions
  * @return a string (not a file) that is the absolute path
  */ 
 function makeAbsoluteFromRoot(any filename, func excFunc)
