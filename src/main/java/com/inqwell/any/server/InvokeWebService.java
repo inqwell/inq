@@ -40,7 +40,6 @@ public class InvokeWebService extends    AbstractAny
   private OutputChannel      toClient_;
   private LocateNode         ln_ = new LocateNode();
   private NodeSpecification  s_  = new NodeSpecification();
-  private IntI               sequence_ = new AnyInt();
   
  static public Array eventTypes__;
 
@@ -80,7 +79,6 @@ public class InvokeWebService extends    AbstractAny
   {
     // The service to invoke and any arguments
     Map m = (Map)e.getContext();
-    sequence_.setValue(e.getSequence());
 
     // Service name - must have
     Any serviceName = m.get(ServerConstants.SVCEXEC);
@@ -93,7 +91,7 @@ public class InvokeWebService extends    AbstractAny
     Any resp = invokeService(serviceName,
                              args);
     
-    sendResponse(resp);
+    sendResponse(resp, e);
     
     return true;
   }
@@ -220,11 +218,9 @@ public class InvokeWebService extends    AbstractAny
     return s.exec(root_, getTransaction(), callArgs);
   }
 
-  private void sendResponse(Any response) throws AnyException
+  private void sendResponse(Any response, Event invoker) throws AnyException
   {
-    // We're alright reusing sequence_ if the client is always remote (i.e.
-    // serialized to !!)
-    Event e = new SimpleEvent(EventConstants.WEBSVC_RESP, response, sequence_);
+    Event e = new SimpleEvent(EventConstants.WEBSVC_RESP, response, invoker.getParameter());
     
     toClient_.write(e);
     toClient_.flushOutput();
