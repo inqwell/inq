@@ -22,11 +22,11 @@ public class AnyString extends    ConstString
 	public static final AnyObject class__ = new AnyObject(AnyString.class);
 
   // String representations for BooleanI values.
-  public static ConstString TRUE  = new ConstString ("true");
-  public static ConstString FALSE = new ConstString ("false");
+  public static final ConstString TRUE  = new ConstString ("true");
+  public static final ConstString FALSE = new ConstString ("false");
 
-	public static StringI EMPTY = new ConstString("");
-	public static StringI NULL  = new ConstString(null__);
+	public static final StringI EMPTY = new ConstString("");
+	public static final StringI NULL  = new ConstString(null__);
 
   private transient CopyFrom copier_;
 
