@@ -9,7 +9,7 @@
  * Inqwell GUI Verifiers and Validators
  *
  * Functions and ready-made func variables that may be used
- * as validateInsert and inputVerifier properties on
+ * as validateInsert and inputVerifier properties on input widgets
  *
  */
 

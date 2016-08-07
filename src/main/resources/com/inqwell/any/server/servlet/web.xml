@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<!--
+  Copyright (C) 2012 Inqwell Ltd
+ 
+  You may distribute under the terms of the Artistic License, as specified in
+  the README file.
+-->
+
+  
+<web-app xmlns="http://java.sun.com/xml/ns/j2ee"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://java.sun.com/xml/ns/j2ee http://java.sun.com/xml/ns/j2ee/web-app_2_4.xsd"
+    version="2.4">
+
+
+    <!-- General description of your web application -->
+
+    <display-name>Inq Server Web Access</display-name>
+    <description>
+      Provides web access to Inq services returning the
+      results as Json or Jsonp
+    </description>
+
+
+    <!-- Context initialization parameters that define shared
+         String constants used within your application, which
+         can be customized by the system administrator who is
+         installing your application.  The values actually
+         assigned to these parameters can be retrieved in a
+         servlet or JSP page by calling:
+
+             String value =
+               getServletContext().getInitParameter("name");
+
+         where "name" matches the <param-name> element of
+         one of these initialization parameters.
+
+         You can define any number of context initialization
+         parameters, including zero.
+    -->
+
+    <!--
+    <context-param>
+      
+    </context-param>
+    -->
+
+
+    <!-- Servlet definitions for the servlets that make up
+         your web application, including initialization
+         parameters.  With Tomcat, you can also send requests
+         to servlets not listed here with a request like this:
+
+           http://localhost:8080/{context-path}/servlet/{classname}
+
+         but this usage is not guaranteed to be portable.  It also
+         makes relative references to images and other resources
+         required by your servlet more complicated, so defining
+         all of your servlets (and defining a mapping to them with
+         a servlet-mapping element) is recommended.
+
+         Servlet initialization parameters can be retrieved in a
+         servlet or JSP page by calling:
+
+             String value =
+               getServletConfig().getInitParameter("name");
+
+         where "name" matches the <param-name> element of
+         one of these initialization parameters.
+
+         You can define any number of servlets, including zero.
+    -->
+
+    <!--
+    There is only one servlet supplied with Inq. It provides
+    access to an Inq server, executing services defined within
+    it and returning the results as JSON.
+    
+    There are various configuration options (TO BE DOCUMENTED)
+    
+    Several instances of the servlet can be configured in the
+    same web-app, invoked by different paths, and each may
+    have different configuration parameters as required.
+    -->
+    <servlet>
+    
+      <servlet-name>petstore</servlet-name>
+      <description>
+        There is a single servlet that comes with Inq to provide web access
+        to Inq services. 
+      </description>
+      <servlet-class>com.inqwell.any.server.servlet.InqServlet</servlet-class>
+      
+      <init-param>
+        <param-name>requiresLogin</param-name>
+        <param-value>false</param-value>
+        <description>
+          Whether login is required. If true then the user
+          must authenticate before any service requests are
+          accepted. Default is true
+        </description>
+      </init-param>
+
+      <init-param>
+        <param-name>defaultPackage</param-name>
+        <param-value>examples.petstore</param-value>
+        <description>
+          The assumed package for all service invocations.
+          When a specific package is given this cannot
+          be overridden - any package argument will
+          be ignored.
+        </description>
+      </init-param>
+
+      <init-param>
+        <param-name>inqUrl</param-name>
+        <param-value>speakinq://localhost</param-value>
+        <description>
+          The URL to contact the Inq server
+        </description>
+      </init-param>
+
+      <init-param>
+        <param-name>inqLoginUser</param-name>
+        <param-value>ACID</param-value>
+        <description>
+          If requiresLogin is false then these user,
+          password and package will be used to connect
+          to the Inq server. If requiresLogin is true
+          then these parameters are ignored.
+        </description>
+      </init-param>
+      
+      <init-param>
+        <param-name>inqLoginPwd</param-name>
+        <param-value>anything</param-value>
+      </init-param>
+
+<!--      
+      <init-param>
+        <param-name>user</param-name>
+        <param-value>ACID</param-value>
+        <description>
+          If requiresLogin is false then these user,
+          password and package will be used to connect
+          to the Inq server. If requiresLogin is true
+          then these parameters are ignored.
+        </description>
+      </init-param>
+      
+      <init-param>
+        <param-name>password</param-name>
+        <param-value>anything</param-value>
+      </init-param>
+      
+      <init-param>
+        <param-name>package</param-name>
+        <param-value>examples.petstore</param-value>
+      </init-param>
+-->
+
+      <!-- Load this servlet at server startup time -->
+      <load-on-startup>5</load-on-startup>
+    </servlet>
+
+    <servlet-mapping>
+      <servlet-name>petstore</servlet-name>
+      <url-pattern>/petstore</url-pattern>
+    </servlet-mapping>
+
+
+    <!-- Define the default session timeout for your application,
+         in minutes.  From a servlet or JSP page, you can modify
+         the timeout for a particular session dynamically by using
+         HttpSession.getMaxInactiveInterval(). -->
+
+    <session-config>
+      <session-timeout>30</session-timeout>    <!-- 30 minutes -->
+    </session-config>
+
+
+</web-app>
