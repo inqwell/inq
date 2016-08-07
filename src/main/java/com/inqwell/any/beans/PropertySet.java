@@ -207,13 +207,13 @@ public class PropertySet extends AbstractAny
 	{
 		if (!set_.contains(property))
 		{
-		  //return null;
+		  return null;
 		  
 		  // TODO Choose between above and below
-			throw new IllegalArgumentException("Unsupported property " +
-			                                   property +
-			                                   " on "
-			                                   + o.getClass());
+//			throw new IllegalArgumentException("Unsupported property " +
+//			                                   property +
+//			                                   " on "
+//			                                   + o.getClass());
 		}
 
     PropertyInfo pi = (PropertyInfo)set_.get(property);
