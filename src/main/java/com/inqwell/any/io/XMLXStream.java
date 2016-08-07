@@ -44,6 +44,7 @@ import com.inqwell.any.AnyFormat;
 import com.inqwell.any.AnyFuncHolder;
 import com.inqwell.any.AnyInt;
 import com.inqwell.any.AnyNull;
+import com.inqwell.any.AnyOrderedMap;
 import com.inqwell.any.AnyRuntimeException;
 import com.inqwell.any.AnyString;
 import com.inqwell.any.Array;
@@ -65,6 +66,7 @@ import com.inqwell.any.FloatI;
 import com.inqwell.any.Func;
 import com.inqwell.any.IntI;
 import com.inqwell.any.Iter;
+import com.inqwell.any.KeyDef;
 import com.inqwell.any.LocateNode;
 import com.inqwell.any.LongI;
 import com.inqwell.any.Map;
@@ -78,8 +80,10 @@ import com.inqwell.any.Stack;
 import com.inqwell.any.StringI;
 import com.inqwell.any.Transaction;
 import com.inqwell.any.Value;
+import com.inqwell.any.Vectored;
 import com.inqwell.any.Visitor;
 import com.inqwell.any.util.Util;
+import com.inqwell.json.Handler;
 
 /**
  * Perform IO to the underlying stream in Inq Rich XML format
@@ -167,7 +171,7 @@ public class XMLXStream extends AbstractStream
   private StringI  content_  = new AnyString();
   private BooleanI last_     = new AnyBoolean();
   private BooleanI descend_  = new AnyBoolean(true);
-  private Map      attrs_    = AbstractComposite.simpleMap();
+  private Map      attrs_    = AbstractComposite.orderedMap();
 
   
   
@@ -854,6 +858,7 @@ public class XMLXStream extends AbstractStream
       {
         typedefAttr(m.getDescriptor());
         nodeSetAttr(m);
+        keyAttrs(m);
       }
       else
       {
@@ -1105,7 +1110,8 @@ public class XMLXStream extends AbstractStream
       {
         typedefAttr(m.getDescriptor());
         nodeSetAttr(m);
-        
+        keyAttrs(m);
+
         // Step down in the structure
         node_ = node;
         child_ = null;
@@ -1227,7 +1233,7 @@ public class XMLXStream extends AbstractStream
 
     protected void typedefAttr(Descriptor d)
     {
-      if (d != Descriptor.degenerateDescriptor__)
+      if (inqAttributes_ &&  d != Descriptor.degenerateDescriptor__)
       {
         Any fQName = d.getFQName();
         Any s = typedefAttrs_.getIfContains(fQName);
@@ -1237,6 +1243,18 @@ public class XMLXStream extends AbstractStream
           typedefAttrs_.add(fQName, s);
         }
         attrs_.add(Descriptor.typedef__, s);
+      }
+    }
+    
+    protected void keyAttrs(Map m)
+    {
+      if (inqAttributes_ && m.contains(KeyDef.key__))
+      {
+      	Descriptor d = (Descriptor)m.get(Descriptor.descriptor__);
+      	// attrs_ is an ordered map so the __key member is
+        // produced (and more importantly parsed) first. See JSONHandler.
+      	attrs_.add(KeyDef.key__, m.get(KeyDef.key__));
+      	typedefAttr(d);
       }
     }
     
@@ -1250,7 +1268,7 @@ public class XMLXStream extends AbstractStream
       // Null is returned as "null" (without quotes)
       // Booleans are true/false (no quotes either)
 
-      if (AnyNull.isNull(a) || (a instanceof Value && ((Value)a).isNull()))
+      if (a != null && AnyNull.isNull(a))
         content = "null";
       else if (a == null || a instanceof StringI || a instanceof DateI)
         content = "\"" + Util.escapeJSON(content) + "\"";
@@ -1502,7 +1520,10 @@ public class XMLXStream extends AbstractStream
       
       if (m != null)
       {
+      	// NB only one of typedefAttr() and keyAttrs() should
+      	// generate anything
         typedefAttr(m.getDescriptor());
+        keyAttrs(m);
         boolean array = nodeSetAttr(m) != null;
         
         // When a map is supplied we are entering a nested JSON object or array
@@ -1513,13 +1534,17 @@ public class XMLXStream extends AbstractStream
         {
           pw_.print("{");
           
+          // Output the (special) "attributes" as members. They
+          // can be handled specially when parsing.
           attrs();
         }
         attrs_.empty();
       }
       else
       {
-        fieldAttr(d_, realKey_);
+      	// In fact JSON is unable to support field "attributes"
+      	// so it doesn't make sense to attempt to produce them.
+        //fieldAttr(d_, realKey_);
       }
     }
 
@@ -1585,7 +1610,21 @@ public class XMLXStream extends AbstractStream
     
     private void attrs()
     {
-      Any typ = attrs_.getIfContains(Descriptor.typedef__);
+    	// The key member must come first, so the right
+    	// kind of Java object is created by the parser.
+    	Any key = attrs_.getIfContains(KeyDef.key__);
+    	if (key != null)
+    	{
+    		newLine(NO_INFO);
+    		indent(NO_INFO);
+    		pw_.print("  \"");
+    		pw_.print(KeyDef.key__);
+    		pw_.print("\": \"");
+    		pw_.print(key);
+    		pw_.print("\",");
+    	}
+
+    	Any typ = attrs_.getIfContains(Descriptor.typedef__);
       if (typ != null)
       {
         newLine(NO_INFO);
@@ -1596,6 +1635,7 @@ public class XMLXStream extends AbstractStream
         pw_.print(typ);
         pw_.print("\",");
       }
+      
       attrs_.empty();
     }
   }
@@ -1892,6 +1932,12 @@ public class XMLXStream extends AbstractStream
           // Skip null keys
           if (k == null)
             continue;
+          
+          // If inq attributes are being generated then skip
+          // any special fields that characterise keys. They
+          // will appear as attributes instead.
+          if (inqAttributes_ && (k.equals(KeyDef.key__) || k.equals(Descriptor.descriptor__)))
+          	continue;	
   
           // Append current key to the path for matching
           path_.addLiteral(NodeSpecification.strict__);
@@ -1913,6 +1959,19 @@ public class XMLXStream extends AbstractStream
               Any v = m.get(k);
               if (v != null)
               {
+              	// There could be many things that are present in the
+              	// Map that cannot be 'serialised' by the current
+              	// implementation. Most likely an exception will arise,
+              	// however for Descriptors (that are present in maps
+              	// representing key values) we serialise these
+              	// as their fqname string (possibly modified by the
+              	// implementation).
+              	// TODO: consider using the substitution mechanism, as
+              	// this is a bit messy.
+              	if (v instanceof Descriptor)
+              	{
+              		v = ((Descriptor)v).getFQName();
+              	}
                 ordinal_.setValue(ordinal++);
                 v.accept(this);
               }
@@ -1969,6 +2028,21 @@ public class XMLXStream extends AbstractStream
           closeTag(null);
 //        }
       }
+    }
+    
+    public void visitAnyObject(ObjectI o)
+    {
+			// Assume string representation will do
+			if (openTag(null, o))
+			{
+				// Objects are not subject to any formatting
+				if (content_.isNull())
+					content(o.toString(), null);
+				else
+					content(content_.toString(), null);
+
+				closeTag(null);
+			}
     }
     
     protected abstract void startTag(Map m, Any a);
@@ -2029,7 +2103,8 @@ public class XMLXStream extends AbstractStream
         // Check for tag name substitution
         tagName(m, a);
         
-        // Check if the key was reset to null by any tag function
+        // Check if the key was reset to null by any tag function, meaning
+        // it will not be produced.
         if (key_ != null)
           startTag(m, a);
       }
@@ -2077,6 +2152,16 @@ public class XMLXStream extends AbstractStream
       if (inqAttributes_ && d != Descriptor.degenerateDescriptor__)
       {
         attrs_.add(Descriptor.typedef__, d.getFQName());
+      }
+    }
+    
+    protected void keyAttrs(Map m)
+    {
+      if (inqAttributes_ && m.contains(KeyDef.key__))
+      {
+      	Descriptor d = (Descriptor)m.get(Descriptor.descriptor__);
+        attrs_.add(Descriptor.typedef__, d.getFQName());
+        attrs_.add(KeyDef.key__, m.get(KeyDef.key__));
       }
     }
     
@@ -2311,7 +2396,7 @@ public class XMLXStream extends AbstractStream
       indent(NO_INFO);
       
       field.accept(n);
-      if (n.isNumeric_)
+      if (n.isNumeric())
       {
         metaTag(META_NUMERIC, parent, "INQisnumeric", "true", null, null, true, true, -1, false);
         
@@ -2831,9 +2916,216 @@ public class XMLXStream extends AbstractStream
     
   }
   
-  static private class IsNumeric implements Visitor
+  // The handler for reading JSON. Objects are represented by
+  private class JSONHandler implements Handler<Map, Vectored>
+  {
+  	// To identify the special container types required
+  	// when deserializing typedef and key instances, special
+  	// members must be present in the JSON form.
+  	private String key_;
+  	private String typedef_;
+  	
+  	private final AnyString str_ = new AnyString(); 
+  	
+  	private java.util.Map<String, Descriptor> typeCache_;
+  	
+  	@Override
+  	/**
+  	 * Clear down the special members. Object creation is deferred until
+  	 * the first JSON member is found. If a key, these must be in the
+  	 * order key followed by typedef. Note that the supported "special"
+  	 * object productions (of typedef instance or key instance) do not
+  	 * themselves contain objects, so we do not need to preserve key_
+  	 * and typedef_ as we go.
+  	 */
+  	public Map startObject(String name, Map parentObject, Vectored parentArray)
+  	{
+  		key_     = null;
+  		typedef_ = null;
+  		
+  		return null;
+  	}
+  	
+  	@Override
+  	public Vectored startArray(String name, Map parentObject, Vectored parentArray)
+  	{
+  		// TODO: We could include the node set attribute in the JSON
+  		// form and even beef this up with what implementation to use,
+  		// so at the moment this is as basic as it gets
+  		return new AnyOrderedMap();
+  	}
+  	
+		@Override
+		public Vectored endArray(String name, Vectored array,
+				Map parentObject, Vectored parentArray)
+		{
+			if (parentObject != null)
+  			parentObject.add(AbstractValue.flyweightString(name), array);
+			else if (parentArray != null)
+			{
+				// Arrays are, in fact, AnyOrderedMaps, see above
+				Map m = (Map)parentArray;
+  			m.add(AbstractValue.flyweightString(name), array);
+			}
+			
+			return array;
+		}
+
+		@Override
+		public Map endObject(String name, Map object, Map parentObject,
+				Vectored parentArray)
+		{
+			if (parentObject != null)
+  			parentObject.add(AbstractValue.flyweightString(name), object);
+			else if (parentArray != null)
+			{
+				// Arrays are, in fact, AnyOrderedMaps, see above
+				Map m = (Map)parentArray;
+  			m.add(new ConstInt(System.identityHashCode(object)), object);
+			}
+			
+			return object;
+		}
+
+		@Override
+		public String name(String name, Map object)
+		{
+			return name;
+		}
+
+		@Override
+		public Vectored valueToArray(String value, Vectored array, int count, boolean isNumeric)
+		{
+			// 1. We have no meta-data to drive the Any we should make, so
+			// leave it as a string
+			// 2. As we are using ordered maps for the array implementation,
+			// we need a key to add the value with. Use its identity
+			IntI k = new ConstInt(System.identityHashCode(value));
+			Map m = (Map)array;
+			m.add(k, new AnyString(value));
+			
+			return array;
+		}
+
+		@Override
+		public Map valueToObject(String name, String value, Map object,	boolean isNumeric)
+		{
+			// The order of the "special" JSON members is important and should be
+			// kept as follows if JSONWriter is modified:
+			// 1. KeyDef.key__
+			// 2. Descriptor.typedef__
+			// There is no handling of nodesets yet, but this would be mutually exclusive
+			// with keys/typedefs
+			
+			if (name.equals(KeyDef.key__.toString()))
+			{
+				// The special member indicating that this is a key. Just note
+				// it down - until we know the typedef we cannot make the appropriate
+				// map.
+				key_ = value;
+			}
+			else if (name.equals(Descriptor.typedef__.toString()))
+			{
+				// TODO: we are only doing this for the case where the metadata
+				// is embedded in the production and the typedef name is used
+				// as a JSON member name. That doesn't happen in this part of
+				// the production, so consider 
+				typedef_ = value.replace('_', '.');
+				
+				Descriptor d = getTypedef(typedef_);
+				
+				if (key_ == null)
+					object = (Map)d.newInstance();
+				else
+				{
+					str_.setValue(value);
+					KeyDef kd = d.getKey(str_);
+					object = kd.getKeyProto(); 
+				}
+			}
+			else
+			{
+				// Not a special member. If we are using an object
+				// created by a special member then this already
+				// has the expected fields in it. Copy the value
+				// over.
+				if (typedef_ != null)
+				{
+					str_.setValue(name);
+					Any v = object.get(str_);
+
+					// Is it JSON null ?
+					if (com.inqwell.json.DefaultHandler.isNull(value))
+					{
+						((Value)v).setNull();
+					}
+					else if (com.inqwell.json.DefaultHandler.isTrue(value))
+					{
+						v.copyFrom(AnyBoolean.TRUE);
+					}
+					else if (com.inqwell.json.DefaultHandler.isFalse(value))
+					{
+						v.copyFrom(AnyBoolean.FALSE);
+					}
+					else
+					{
+						// Just copy from the string value. Because it is a string
+						// this is fine for decimal values also.
+						str_.setValue(value);
+						v.copyFrom(str_);
+					}
+				}
+				else
+				{
+					// Not reconstructing a particular instance type conveyed
+					// via the special members. Just add the string to the
+					// current map, creating one if not already done so.
+					if (object == null)
+						object = AbstractComposite.simpleMap();
+					
+					object.add(AbstractValue.flyweightString(name), new AnyString(value));
+				}
+			}
+			
+			return object;
+		}
+		
+		private Descriptor getTypedef(String name)
+		{
+			Descriptor d = null;
+			d = typeCache_.get(name);
+			if (d == null)
+			{
+				// Find the typedef
+        LocateNode ln = new LocateNode(name);
+        try
+        {
+          d = (Descriptor)EvalExpr.evalFunc(Transaction.NULL_TRANSACTION,
+              Catalog.instance().getCatalog(),
+              ln,
+              Descriptor.class);
+        }
+        catch(AnyException e)
+        {
+          throw new RuntimeContainedException(e);
+        }
+			}
+			
+			if (d == null)
+				throw new AnyRuntimeException("Unknown type " + name);
+			
+			return d;
+		}
+  }
+  
+  static public class IsNumeric implements Visitor
   {
     private boolean isNumeric_;
+    
+    public boolean isNumeric()
+    {
+    	return isNumeric_;
+    }
 
     public Transaction getTransaction()
     {
