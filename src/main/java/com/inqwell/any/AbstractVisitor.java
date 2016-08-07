@@ -23,7 +23,7 @@ public abstract class AbstractVisitor implements Visitor
       t = Transaction.NULL_TRANSACTION;
       
     // TODO: REMOVE DEBUG
-    if (AbstractFunc.debug &&
+    if (AbstractFunc.debugTxn__ &&
         transaction_ != Transaction.NULL_TRANSACTION &&
         t != Transaction.NULL_TRANSACTION &&
         transaction_ != t)
