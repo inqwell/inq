@@ -129,12 +129,4 @@ public interface InputChannel extends Any
 	
   public Any getSessionId();
   
-  /**
-   * Set up this channel to read from the specified socket and
-   * forward to the given input.
-   */
-  public void startReader(Socket        s,
-                          OutputChannel forwardTo,
-                          boolean       blockOnFull);
-
 }
