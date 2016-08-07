@@ -493,7 +493,6 @@ public class Socket extends    AbstractAny
       urlConnection_.setTrusted(cert);
 
       urlConnection_.connect();
-      //System.out.println("openURL " + u);
       // review this - keepOpen is only important for servers?
 
       writeChannelDriver_ = urlConnection_.getWriteChannelDriver();
