@@ -1,0 +1,20 @@
+/**
+ * Copyright (C) 2012 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * Test Utilities
+ *
+ */
+
+package inq.test;
+
+function assertEquals(any expected, any result)
+{
+  if (expected != result)
+    throw (renderf("Expected {0} but was {1}", expected, result));
+}
+ 
