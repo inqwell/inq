@@ -141,7 +141,7 @@ public class AnyFormat extends    Format
     if (pattern != null && pattern.length() == 0)
       pattern = null;
 
-		AnyFormat f = _makeFormat.makeFormat(a, pattern);
+		AnyFormat f = _makeFormat.makeFormat(a, pattern, cleanPattern);
     return f;
   }
 
@@ -1075,11 +1075,14 @@ public class AnyFormat extends    Format
   {
     private AnyFormat _formatter;
     private String    _pattern;
+    private StringI   _cleanPattern;
     
-    synchronized AnyFormat makeFormat (Any a, String pattern)
+    synchronized AnyFormat makeFormat (Any a, String pattern, StringI cleanPattern)
     {
       _pattern = pattern;
+      _cleanPattern = cleanPattern;
       a.accept(this);
+      _cleanPattern = null;
       AnyFormat f = _formatter;
       _formatter = null;
       return f;
@@ -1133,6 +1136,8 @@ public class AnyFormat extends    Format
                                     
         _formatter.setDirectives(directives);
         _formatter.setMustResolveDirectives(mustResolve);
+        if (_cleanPattern != null)
+          _cleanPattern.setValue(_pattern);
       }
       else
         _formatter = new AnyFormat
