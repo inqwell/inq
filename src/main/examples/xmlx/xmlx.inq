@@ -33,6 +33,11 @@ typedef FooType
   (
     fields(ProductId)
   )
+  
+  key K
+  (
+    fields(HotFlag)
+  )
 }
 
 // A test tag function. It changes the content and tag name and
@@ -95,12 +100,16 @@ string m.z.c = "String C";
 any m.z.a3 = null;
 
 // Put a typedef instance in to test implicit formatting
-// and enums
+// and enums. In addition, a "typedef" member is output
+// in the JSON case to aid deserailising to instances.
 any m.z.fooinstance = new(FooType);
 m.z.fooinstance.Rate = 1.23456;
 m.z.fooinstance.Big = "3456789.01234";
 m.z.fooinstance.Comment = "Comments & a ' character, überslackers of the world unite";
 m.z.fooinstance.HotFlag = enum(FooType.HotFlag, M);
+
+// Put in a Key instance. 
+any m.z.keyK = new(FooType.K);
 
 // Tell the stream to include the metadata in the output
 x.properties.writeMeta = true;

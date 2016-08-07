@@ -11,8 +11,8 @@
     "c": 1234567.9
   },
   {
-    "cat": null,
-    "a3": null,
+    "cat": "Stuff on my cat",
+    "a3": "",
     "fooinstance": {
       "typedef": "xmltest_types_FooType",
       "Comment": "Comments & a ' character, überslackers of the world unite",
@@ -21,7 +21,11 @@
       "ProductId": null,
       "Rate": 1.235,
       "Big": 3456789.01
-    }
+    },
+    "keyK": {
+      "__key": "K",
+      "typedef": "xmltest_types_FooType",
+      "HotFlag": null    }
   }
 ],
   "INQmetadata": {

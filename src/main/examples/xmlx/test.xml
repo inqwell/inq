@@ -21,6 +21,9 @@
       <Rate field="Rate">1.235</Rate>
       <Big field="Big">3,456,789.01</Big>
     </fooinstance>
+    <keyK typedef="xmltest.types.FooType" __key="K">
+      <HotFlag></HotFlag>
+    </keyK>
   </z>
   <INQmetadata>
     <INQtypedef INQfqname="xmltest.types.FooType">
