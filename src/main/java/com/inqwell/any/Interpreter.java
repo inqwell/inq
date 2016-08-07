@@ -21,7 +21,7 @@ import java.io.Reader;
 
 public interface Interpreter extends Any
 {
-  static public ConstString parser__ = new ConstString("<parser>");
+  static public final ConstString parser__ = new ConstString("<parser>");
 
   public Any  run(Any root, AnyURL baseURL, Transaction t, InputStream i);
   public Any  run(Any root, AnyURL baseURL, Transaction t, Reader r);
