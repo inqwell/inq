@@ -37,7 +37,7 @@ service saveMyAccount(any account, any ack)
   {
     // Read the managed instance in the server
     read(Account, account);
-    
+        
     // Assign it from the updated version received from the client.
     Account = account;
   }
