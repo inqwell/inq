@@ -443,9 +443,11 @@ local function makeOutputFile()
   // The three-argument version of createtmpfile takes prefix, suffix
   // and directory. We are expecting to find inq_home/tmp as the
   // output directory.
+  any dir = call inq.filexfer:makeAbsoluteFromRoot(filename = "tmp");
+  loginfo($catalog.ps.logger, "tmp dir is {0}", dir);
   any f = createtmpfile($process.loginName,
                         ".pdf",
-                        call inq.filexfer:makeAbsoluteFromRoot(filename = "tmp"));
+                        dir);
 
   f.properties.canonicalPath;
 }
