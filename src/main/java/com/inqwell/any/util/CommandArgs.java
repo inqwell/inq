@@ -36,12 +36,14 @@ import com.inqwell.any.StringI;
  */ 
 public class CommandArgs extends AbstractMap
 {
-  public static Any commandLine__      = AbstractValue.flyweightString("argsMap");
-  public static Any shebang__          = AbstractValue.flyweightString("shebang");
-  public static String minusShebang__  = "-shebang";
-  public static String minusIn__       = "-in";
+  public static final Any commandLine__      = AbstractValue.flyweightString("argsMap");
+  public static final Any absin__            = AbstractValue.flyweightString("absin");
+  public static final Any inputReader__      = AbstractValue.flyweightString("inputReader");
+  public static final Any shebang__          = AbstractValue.flyweightString("shebang");
+  public static final String minusShebang__  = "-shebang";
+  public static final String minusIn__       = "-in";
   
-  private String args_[];   // From main (String args[])
+  private final String args_[];   // From main (String args[])
   
   AnyString s_ = new AnyString();
  
