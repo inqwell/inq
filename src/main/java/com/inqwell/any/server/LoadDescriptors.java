@@ -28,7 +28,7 @@ import com.inqwell.any.*;
 public class LoadDescriptors extends Service
 {
 
-  private static Any servicePath__ = new ConstString("system.services.LoadDescriptors");
+  private static Any servicePath__ = new ConstString("system.server.services.LoadDescriptors");
   private static Any dummy__       = new ConstString("dummy__");
 
   public LoadDescriptors() throws AnyException
