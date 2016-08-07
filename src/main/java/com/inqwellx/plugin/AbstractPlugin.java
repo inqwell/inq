@@ -187,6 +187,8 @@ public abstract class AbstractPlugin extends    DefaultPropertyAccessMap
   
   final public boolean delete(Map m)
   {
+  	boolean b;
+  	
     if (process_ == null)
     {
       System.out.println("[DEBUG] delete() called m: " + m);
@@ -202,12 +204,16 @@ public abstract class AbstractPlugin extends    DefaultPropertyAccessMap
       synchronized(sync)
       {
         b_.copyFrom(callInq(deleteF_, m, false));
+        b = b_.getValue();
       }
     }
     else
+    {
       b_.copyFrom(callInq(deleteF_, m, false));
+      b = b_.getValue();
+    }
     
-    return b_.getValue();
+    return b;
   }
   
   final public void end(boolean commit)
