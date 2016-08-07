@@ -290,6 +290,7 @@ public class AnyException extends    Exception
   
   protected void printInqStackTrace(PrintStream s)
   {
+  	s.println(toString());
   	if (callStack_ != null)
   	{
     	s.println(callStack_);
@@ -300,6 +301,7 @@ public class AnyException extends    Exception
   
   protected void printInqStackTrace(PrintWriter s)
   {
+  	s.println(toString());
   	if (callStack_ != null)
   	{
     	s.println(callStack_);
