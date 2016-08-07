@@ -18,7 +18,7 @@ import com.inqwell.any.io.PhysicalIO;
 
 public interface KeyDef extends Any
 {
-  public static Any key__         = new ConstString("key__");
+  public static Any key__         = new ConstString("__key");
   public static Any defaultKey__  = AbstractValue.flyweightString("unique");
   public static Any primaryKey__  = AbstractValue.flyweightString("pkey");
 
