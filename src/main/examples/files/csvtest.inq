@@ -15,7 +15,10 @@ csv.properties.autoTable   = true;
 omap myRoot;
 csv.properties.root = myRoot;
 
-if (open(csv, "test.csv", OPEN_READ))
+// Using absurl with one argument bases the given (relative) url
+// against the current script. "test.csv" as-is bases against cwd.
+// Using absurl makes running scripts as unit tests easier.  
+if (open(csv, absurl("test.csv"), OPEN_READ))
 {
   writeln($catalog.system.out, "Start:");
   int counter;

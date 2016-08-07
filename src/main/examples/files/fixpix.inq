@@ -20,22 +20,27 @@
 // images restored from a corrupted memory card.
 // Long live the panda.
 
-// The cwd (where the files are)
-file headers = ".";
-file images  = ".";
+// The cwd (where the files are). Note you don't have to use
+// absurl() - it is being used here to base the input files
+// against the location of this script. This makes it
+// easier to run the script from some other cwd, as is the
+// case when running from within JUnit under eclipse or
+// from maven. So this is just really to help with regression
+file headers = absurl(".");
+file images  = absurl(".");
 
 // Headers are odd numbered files, bodies even. Set up two filters.
 // The files are called "image_nnnn.JPG"
 // The Inq filefilter type uses a regex to determine whether
 // the file is eligible. A scripted function is also possible.
-filefilter headerF = ".*[13579]\\.JPG";
-filefilter imageF  = ".*[02468]\\.JPG";
+filefilter headerF = "image.*[13579]\\.JPG";
+filefilter imageF  = "image.*[02468]\\.JPG";
 
 // Rule out directories. Default is true.
 headerF.properties.acceptDirs =
   imageF.properties.acceptDirs = false;
 
-// Put the filters into the files representing the cwd
+// Put the filters into the files representing the source directory
 headers.properties.fileFilter = headerF;
 images.properties.fileFilter = imageF;
 
@@ -57,6 +62,8 @@ ioByte h;
 ioByte i;
 ioByte o;
 
+array outfiles;
+
 // Iterate over the header list (doesn't matter which)
 foreach(headerFiles)
 {
@@ -67,14 +74,18 @@ foreach(headerFiles)
   open(h, $loop, OPEN_READ);
   open(i, imageFiles[@count], OPEN_READ);
 
-  // Make the output file name - it is the header with the string "image_"
-  // removed. We have to convert the file to a string explicity, as the "sub"
-  // function only works on strings
-  string s = $loop;
-  writeln($catalog.system.out, "Output file is " + (s = sub("", "image_", s)));
+  // Make the output file name - it is the header file name written
+  // to the system temporary directory.
+  // 1) Assign the temporary directory property to a file type. These are
+  // interchangable with URLs.
+  file f = $properties.java_io_tmpdir;
+  // 2) Base the header file's name on the temporary directory to make
+  // an absolute URL there.
+  any outfile = absurl($loop.properties.name, f);
+  writeln($catalog.system.out, "Output file is " + outfile);
 
   // Open the output stream and write the inputs to it
-  open(o, s, OPEN_WRITE);
+  open(o, outfile, OPEN_WRITE);
   while(any a = readstream(h))
     writestream(o, a);
   while(any a = readstream(i))
@@ -83,7 +94,12 @@ foreach(headerFiles)
   close(h);
   close(i);
   close(o);
+  
+  // Result for JUnit usage - an array of files
+  outfiles + (file f = outfile);
 
   writeln($catalog.system.out, "");
 }
 
+// Return for JUnit
+outfiles;
