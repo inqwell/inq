@@ -49,15 +49,12 @@ public class SqlManager extends    AbstractResourceAllocator
 	
 	public static void addSqlServer(Any id, Any spec, IntI limit)
 	{
-		//System.out.println ("inside addSqlServer " + limit + " " + id + " " + spec);
 		SqlManager.instance().addSpec(id, spec, limit);
-		//System.out.println ("leaving addSqlServer");
 	}
 
 	protected Any makeNewResource(Any id, Any spec, int made) throws AnyException
 	{
 		// SQL Servers are keyed on a Map comprising the user/passwd/JDBC-URL
-    //System.out.println(id + " " + spec);
     
 		Map m = (Map)spec;
 		Any user   = m.get(IoConstants.user__);
