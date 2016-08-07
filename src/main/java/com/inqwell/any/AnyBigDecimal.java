@@ -38,6 +38,11 @@ public class AnyBigDecimal extends    ConstBigDecimal
   	super();
   }
 
+  public AnyBigDecimal(int value)
+  {
+  	super(value);
+  }
+  
   public AnyBigDecimal(BigDecimal d)
   {
   	super(d);
