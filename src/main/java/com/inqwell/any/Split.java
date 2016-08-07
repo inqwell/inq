@@ -17,9 +17,11 @@ package com.inqwell.any;
 import java.util.regex.Pattern;
 
 /**
- * Split the first operand around occurrances of the second, regex,
- * operand.  Returns an array of strings in order of occurance of
- * the regex split delimiter.
+ * Split the first operand around occurrences of the second, regex,
+ * operand.  Returns an array of strings in order of occurrence of
+ * the regex split delimiter. If the optional third argument limit
+ * is specified then the array will contain at most <code>limit</code>
+ * items.
  * <p>
  * @author $Author: sanderst $
  * @version $Revision: 1.2 $
@@ -45,28 +47,27 @@ public class Split extends    AbstractFunc
 
 	public Any exec(Any a) throws AnyException
 	{
-		StringI toSplit    = (StringI)EvalExpr.evalFunc
+		StringI toSplit  = (StringI)EvalExpr.evalFunc
                                            (getTransaction(),
                                             a,
                                             toSplit_,
                                             StringI.class);
 
-		StringI regex    = (StringI)EvalExpr.evalFunc
+		Any regex        =            EvalExpr.evalFunc
                                            (getTransaction(),
                                             a,
-                                            regex_,
-                                            StringI.class);
+                                            regex_);
 
-		Any limit          =            EvalExpr.evalFunc
+		Any limit        =            EvalExpr.evalFunc
                                            (getTransaction(),
                                             a,
                                             limit_);
 
     if (toSplit == null)
-      throw new AnyException("Could not resolve string " + toSplit_);
+    	nullOperand(toSplit_);
 
-    if (toSplit == null)
-      throw new AnyException("Could not resolve regex " + regex_);
+    if (regex == null)
+    	nullOperand(regex_);
     
     int pLimit = 0;
     if (limit != null)
@@ -76,7 +77,8 @@ public class Split extends    AbstractFunc
       pLimit = i.getValue();
     }
 
-    Pattern p = Pattern.compile(regex.getValue());
+    Pattern p = (regex instanceof AnyMatcher) ? ((AnyMatcher)regex).pattern()
+    		                                      : Pattern.compile(regex.toString());
     
     String[] s = p.split(toSplit.getValue(), pLimit);
     

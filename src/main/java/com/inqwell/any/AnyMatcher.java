@@ -329,6 +329,11 @@ public class AnyMatcher extends    PropertyAccessMap
 	protected void beforeRemove(Any key) {}
 	protected void afterRemove(Any key, Any value) {}
 	protected void emptying() {}
+	
+	Pattern pattern()
+	{
+		return p_;
+	}
 
   private void checkInitialised()
   {
