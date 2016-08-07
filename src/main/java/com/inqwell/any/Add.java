@@ -141,6 +141,6 @@ public class Add extends OperatorVisitor
     if (res2 == null)
       notResolved(op2);
 
-    return null; // can't happen
+    return null;
   }
 }
