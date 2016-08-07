@@ -43,18 +43,21 @@ public interface SendMailConstants
 	final String ENDOFEMAIL  = ".";
 
 	// keys into the email composite
-	final Any FROMKEY     = new AnyString("from");
-	final Any TOKEY	      = new AnyString("to");
-	final Any CCKEY       = new AnyString("cc");
-	final Any BCCKEY      = new AnyString("bcc");
-	final Any SUBKEY      = new AnyString("subject");
-	final Any TEXTKEY     = new AnyString("text");
-  final Any BODYKEY     = new AnyString("body");
-  final Any CONTENTKEY  = new AnyString("content");
-	final Any ATTACHKEY	  = new AnyString("attachment");
-	final Any ATTNAMEKEY  = new AnyString("attName");
-	final Any MAILHOSTKEY = new AnyString("smtphost");
-	final Any MAILPORTKEY = new AnyString("port");
-	final Any DEBUGKEY    = new AnyString("debug");
-	final Any ERROR       = new AnyString("error");
+	final Any FROMKEY     = new ConstString("from");
+	final Any TOKEY	      = new ConstString("to");
+	final Any CCKEY       = new ConstString("cc");
+	final Any BCCKEY      = new ConstString("bcc");
+	final Any SUBKEY      = new ConstString("subject");
+	final Any TEXTKEY     = new ConstString("text");
+  final Any BODYKEY     = new ConstString("body");
+  final Any CONTENTKEY  = new ConstString("content");
+	final Any ATTACHKEY	  = new ConstString("attachment");
+	final Any CONTENTTYPE = new ConstString("contentType");
+	final Any CONTENTDISP = new ConstString("contentDisposition");
+	final Any CONTENTHDRS = new ConstString("headers");
+	final Any ATTNAMEKEY  = new ConstString("attName");
+	final Any MAILHOSTKEY = new ConstString("smtphost");
+	final Any MAILPORTKEY = new ConstString("port");
+	final Any DEBUGKEY    = new ConstString("debug");
+	final Any ERROR       = new ConstString("error");
 }
