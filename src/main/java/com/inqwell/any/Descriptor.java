@@ -20,23 +20,23 @@ public interface Descriptor extends Any
   public static final Any typedef__ = AbstractValue.flyweightString("typedef");
   public static final Any nodeset__ = AbstractValue.flyweightString("nodeset");
   
-	static Any        descriptor__           = new ConstString("__descriptor");
-	static Descriptor degenerateDescriptor__ = new DegenerateDescriptor();
+	static final Any        descriptor__           = new ConstString("__descriptor");
+	static final Descriptor degenerateDescriptor__ = new DegenerateDescriptor();
 	
-	static String label__     = "label";
-	static String textfield__ = "textfield";
-	static String combobox__  = "combo-box";
-	static String checkbox__  = "check-box";
+	static final String label__     = "label";
+	static final String textfield__ = "textfield";
+	static final String combobox__  = "combo-box";
+	static final String checkbox__  = "check-box";
 	
-	static Any new__          = new ConstString("new");
-	static Any old__          = new ConstString("old");
+	static final Any new__          = new ConstString("new");
+	static final Any old__          = new ConstString("old");
   
-  static Any construct__    = new ConstString("<construct>");
-  static Any join__         = new ConstString("<join>");
-	static Any mutate__       = new ConstString("<mutate>");
-	static Any destroy__      = new ConstString("<destroy>");
+  static final Any construct__    = new ConstString("<construct>");
+  static final Any join__         = new ConstString("<join>");
+	static final Any mutate__       = new ConstString("<mutate>");
+	static final Any destroy__      = new ConstString("<destroy>");
   
-  static Any fieldOrder__   = new ConstString("field-order");
+  static final Any fieldOrder__   = new ConstString("field-order");
   
   static final int RESOLVE_NOTHING   = 0;
   static final int RESOLVE_SOMETHING = 1;
