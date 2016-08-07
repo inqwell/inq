@@ -74,7 +74,12 @@ public class UserProcess extends    BasicProcess
   public  static final Any keepAlivePeriod__ = AbstractValue.flyweightString("keepAlivePeriod"); // useful for internet sockets
   public  static final Any lastFromClient__  = AbstractValue.flyweightString("lastFromClient");
   
-  public  static final Any KILLED        = AbstractValue.flyweightConst(new ConstInt(255));
+  // Process terminated - killed
+  public  static final Any  KILLED = AbstractValue.flyweightConst(new ConstInt(255));
+  // Process terminated - OK
+  public  static final IntI OK     = (IntI)AbstractValue.flyweightConst(new ConstInt(0));
+  // Process is still alive
+  public  static final Any  ALIVE  = AbstractValue.flyweightConst(new ConstInt(127));
 
 
   private static final Any postLoginsvc__ = AbstractValue.flyweightString("system.client.services.PostLogin");
@@ -89,6 +94,10 @@ public class UserProcess extends    BasicProcess
   private final static Array     loginDetailsEventTypes__;
   private final static Array     loginRequestEventTypes__;
   private final static Array     loginServiceEventTypes__;
+  private final static Array     keepAliveEventTypes__;
+  
+	private static final Event pong_ = new SimpleEvent(EventConstants.PONG_KEEPALIVE);
+
 
 	private Thread           thread_;
   
@@ -153,6 +162,9 @@ public class UserProcess extends    BasicProcess
 
     loginServiceEventTypes__ = AbstractComposite.array();
     loginServiceEventTypes__.add(EventConstants.INVOKE_LOGINSVC);
+    
+    keepAliveEventTypes__ = AbstractComposite.array();
+    keepAliveEventTypes__.add(EventConstants.PING_KEEPALIVE);
   }
 
 	/**
@@ -280,9 +292,6 @@ public class UserProcess extends    BasicProcess
 
 	public void run()
 	{
-		// make sure our members are not garbage collected!
-		Process p = this;
-
 		boolean channelClosed = false;
 
 		initInThread();
@@ -385,10 +394,6 @@ public class UserProcess extends    BasicProcess
           terminateProcess();
       }
     }
-    
-    // Just to shut eclipse up
-    if (p != null)
-      p = null;
     
     threadDeath();
 	}
@@ -589,8 +594,6 @@ public class UserProcess extends    BasicProcess
                                                              "." +
                                                              "services.Logout"),
                                                null,
-                                               null,
-                                               null,
                                                null));
           }
         }
@@ -664,6 +667,9 @@ public class UserProcess extends    BasicProcess
 	 */
 	public void kill(Process p) throws AnyException
 	{
+		if (killed_ || !thread_.isAlive())
+			return; // already killed
+		
 //		if (p != this && !p.isSupervisor() && !isAncestor(p))
 //			throw new PermissionException("Can't kill if not supervisor or parent");
 
@@ -1261,6 +1267,7 @@ public class UserProcess extends    BasicProcess
 		}
     ed.addEventListener(new LoginRequest());
     ed.addEventListener(new LoginService());
+    ed.addEventListener(new PingResponder());
 		ed.addEventListener(new DispatchListener(getRoot(), getTransaction()));
 	}
 
@@ -1338,9 +1345,7 @@ public class UserProcess extends    BasicProcess
 
 		o.write(SendRequest.makeRequestEvent(postLoginsvc__,
                                          loginWindow__,
-                                         null,
-                                         args,
-                                         null));
+                                         args));
 
     // Check the server's response, which includes the privilege
     // level assigned to us and whether the server will shortly
@@ -1633,9 +1638,7 @@ public class UserProcess extends    BasicProcess
                                                  "." +
                                                  "services.Login"),
                                    null,
-                                   null,
-                                   args,
-                                   null));
+                                   args));
     
     logLogin("Login ", loginSpec);
   }
@@ -1826,6 +1829,28 @@ public class UserProcess extends    BasicProcess
       return loginServiceEventTypes__;
     }
   }
+	
+	// Only used when we are a server. Echo a resposnse to a
+	// received PING_KEEPALIVE
+	private class PingResponder extends    AbstractAny
+	                            implements EventListener
+	{
+
+		@Override
+		public boolean processEvent(Event e) throws AnyException
+		{
+			oc_.write(pong_);
+			oc_.flushOutput();
+			return true;
+		}
+
+		@Override
+		public Array getDesiredEventTypes()
+		{
+			return keepAliveEventTypes__;
+		}
+	}
+	
   // Pops up a window for the user to input the proxy server
   // parameters while the user process is in a primordial
   // state.
