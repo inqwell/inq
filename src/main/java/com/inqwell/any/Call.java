@@ -600,9 +600,9 @@ public class Call extends    AbstractFunc
     
     Map stack = t.getCurrentStackFrame();
     
-    stack.add(args__,    aArgs);
-    argsMap.add(arrays__, cArgs);
-    stack.add(CommandArgs.commandLine__, argsMap);
+    stack.replaceItem(args__,    aArgs);
+    argsMap.replaceItem(arrays__, cArgs);
+    stack.replaceItem(CommandArgs.commandLine__, argsMap);
   }
   
   static public class CallStackEntry extends AbstractAny
