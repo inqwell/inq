@@ -108,7 +108,7 @@ public class AnyTreeModel implements TreeModel,
 	// locate the root node - contrary to the JDK docs,
 	// it is illegal to return null from getRoot() when
 	// the tree is empty.
-	static private AnyTreeNode dummyRoot__     = new AnyTreeNode(null);
+	static private AnyTreeNode dummyRoot__     = new AnyTreeNode(TreeLevel.terminalLevel__);
 
 	static private AnyCellRenderer dummyRenderer__ =
     new AnyCellRenderer(new AnyRenderInfo(new ConstString("Root")),
