@@ -35,8 +35,6 @@ import com.inqwell.any.channel.OutputChannel;
 public class Exit extends    AbstractFunc
 									implements Cloneable
 {
-  private static final IntI OK = (IntI)AbstractValue.flyweightConst(new ConstInt(0));
-  
 	private static final long serialVersionUID = 1L;
 	
 	private Any exitStatus_;
@@ -51,9 +49,12 @@ public class Exit extends    AbstractFunc
     Any exitStatus  = EvalExpr.evalFunc(getTransaction(),
 																        a,
 																        exitStatus_);
+    
+    if (exitStatus == null && exitStatus_ != null)
+    	nullOperand(exitStatus_);
 
 		IntI i = (exitStatus != null) ? new ConstInt(exitStatus)
-		                                  : OK;
+		                                  : UserProcess.OK;
 
 		if (Globals.isServer())
 		{
