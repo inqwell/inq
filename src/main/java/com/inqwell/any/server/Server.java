@@ -56,6 +56,7 @@ import com.inqwell.any.UserProcess;
 import com.inqwell.any.channel.AnyChannel;
 import com.inqwell.any.client.AnyComponent;
 import com.inqwell.any.net.InqStreamHandlerFactory;
+import com.inqwell.any.server.json.MetaToJson;
 import com.inqwell.any.util.CommandArgs;
 
 /**
@@ -333,6 +334,7 @@ public final class Server extends PropertyAccessMap
 
 			new CompileInq();
 			new LoadDescriptors();
+			new MetaToJson();
 			new NullService();
 			new RunInq();
 			new LoginOK();
