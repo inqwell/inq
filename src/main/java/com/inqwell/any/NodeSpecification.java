@@ -205,6 +205,7 @@ public class NodeSpecification extends AnyQueue
   public final static Any atStackTrace__  = AbstractValue.flyweightString("@stackTrace");
   public final static Any atJavaStack__   = AbstractValue.flyweightString("@javaStack");
   public final static Any atExCommit__    = AbstractValue.flyweightString("@excommit");
+  public final static Any atExEnviro__    = AbstractValue.flyweightString("@exenvironment");
 
   public final static Any atChannel__    = AbstractValue.flyweightString("@channel");
 
