@@ -214,6 +214,18 @@ public class Util
       {
         result.append("&amp;");
       }
+      else if (ch == '\n')
+      {
+        result.append(ch);
+      }
+      else if (ch == '\r')
+      {
+        result.append(ch);
+      }
+      else if (ch == '\t')
+      {
+        result.append(ch);
+      }
       else if ((ch >= '\u0000' && ch <= '\u001F') ||
                (ch >= '\u007F' && ch <= '\u009F') ||
                (ch >= '\u2000' && ch <= '\u20FF'))
