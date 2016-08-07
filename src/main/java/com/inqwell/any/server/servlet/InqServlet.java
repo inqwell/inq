@@ -7,6 +7,7 @@
 
 package com.inqwell.any.server.servlet;
 
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -229,6 +230,11 @@ public class InqServlet extends HttpServlet
 	protected void doPost(HttpServletRequest req, HttpServletResponse resp)
 			throws ServletException, IOException
 	{
+		BufferedReader r = req.getReader();
+		char[] c = new char[2048];
+		int count = r.read(c);
+		String s = new String(c, 0, count);
+		
 		doRequest(req, resp);
 	}
 	
