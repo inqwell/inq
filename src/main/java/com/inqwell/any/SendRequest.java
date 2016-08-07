@@ -52,24 +52,18 @@ public class SendRequest extends    AbstractFunc
 	
 	public static Event makeRequestEvent(Any serviceName,
 																			 Any context,
-																			 Any saveAt,
-																			 Map args,
-																			 Any response)
+																			 Map args)
 	{
     return makeRequestEvent(EventConstants.INVOKE_SVC,
                             serviceName,
                             context,
-                            saveAt,
-                            args,
-                            response);
+                            args);
 	}
   
 	public static Event makeRequestEvent(Any eventType,
                                        Any serviceName,
 																			 Any context,
-																			 Any saveAt,
-																			 Map args,
-																			 Any response)
+																			 Map args)
 	{
 
     Map toSend = AbstractComposite.map();
@@ -155,9 +149,7 @@ public class SendRequest extends    AbstractFunc
 
     outputChannel.write(makeRequestEvent(serviceName,
 																				 context,
-																				 null, //saveAt,
-																				 resolveArgs(args, a, t),
-																				 null));
+																				 resolveArgs(args, a, t)));
 		outputChannel.flushOutput();
     
 		return null;
@@ -198,9 +190,7 @@ public class SendRequest extends    AbstractFunc
     
     Event request = makeRequestEvent(serviceName_,
                                      context_,
-                                     null,  // saveAt_,
-                                     argsMap,
-                                     null);
+                                     argsMap);
 
     //System.out.println ("SendRequest.processEvent() " + serviceName_ + " " + argsMap);
     //request.add(ServerConstants.SVCEVNT, e);
