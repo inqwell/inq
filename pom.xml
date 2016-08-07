@@ -4,7 +4,7 @@
   <groupId>com.inqwell</groupId>
   <artifactId>inq</artifactId>
   <packaging>jar</packaging>
-  <version>1.2</version>
+  <version>1.2.1-SNAPSHOT</version>
   <name>inq</name>
   <url>http://www.inqwell.com</url>
 
@@ -12,6 +12,7 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <maven.build.timestamp.format>yyyyMMdd_HHmm</maven.build.timestamp.format>
     <buildNumber>${maven.build.timestamp}</buildNumber>
+    <external.apps>${HOME}/apps</external.apps>
   </properties>
 
   <build>
@@ -26,6 +27,16 @@
         <filtering>true</filtering>
       </resource>
     </resources>
+    
+    <!--
+    <extensions>
+      <extension>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>javascript-maven-plugin</artifactId>
+        <version>2.0.0-SNAPSHOT</version>
+      </extension>
+    </extensions>
+    -->
 
     <plugins>
 
@@ -55,19 +66,20 @@
             <descriptor>file:src/main/assembly/inq-jar.xml</descriptor>
             <descriptor>file:src/main/assembly/dependencies-jar.xml</descriptor>
             <descriptor>file:src/main/assembly/distro.xml</descriptor>
+            <descriptor>file:src/main/assembly/servlet-deploy.xml</descriptor>
           </descriptors>
           <archive>
+              <!--
             <manifest>
               <mainClass>com.inqwell.any.parser.Inq</mainClass>
-              <!--
               <addClasspath>true</addClasspath>
               See http://jira.codehaus.org/browse/MASSEMBLY-334
               and http://stackoverflow.com/questions/1074603/maven-assembly-plugin
               Work around this by unpacking the dependencies
               rather than packaging them as jars. See the
               assembly descriptor.
-              -->
             </manifest>
+              -->
           </archive>
         </configuration>
         <executions>
@@ -154,6 +166,22 @@
       <!-- <version>1.3.3-inqwell-1.1-SNAPSHOT</version> -->
       <scope>compile</scope>
     </dependency>
+    <dependency>
+      <groupId>org.apache.tomcat</groupId>
+      <artifactId>servlet-api</artifactId>
+      <version>6.0.35</version>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.inqwell</groupId>
+      <artifactId>json</artifactId>
+      <version>1.2</version>
+    </dependency>
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <version>4.10</version>
+    </dependency>
     <!--
     Docking Frames Common depends on Core but
     specifying them both means they end up in
@@ -183,5 +211,18 @@
       <version>1.1.1p5c</version>
       <classifier>core</classifier>
     </dependency>
+    
+    <!--
+    For running unit tests only - we are hard-coded
+    against the glassfish JMS implementation in imq.jar 
+    -->
+    <dependency>
+      <groupId>com.sun.messaging</groupId>
+      <artifactId>imq</artifactId>
+      <version>4.4</version>
+      <scope>system</scope>
+      <systemPath>${external.apps}/MessageQueue44/mq/lib/imq.jar</systemPath>
+    </dependency>
+
   </dependencies>
 </project>
