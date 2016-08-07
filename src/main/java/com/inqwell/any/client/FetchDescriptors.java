@@ -62,7 +62,7 @@ public class FetchDescriptors extends    AbstractFunc
   
 	private void init()
 	{		
-		sr_ = new SendRequest (new AnyString("system.services.LoadDescriptors"),
+		sr_ = new SendRequest (new AnyString("system.server.services.LoadDescriptors"),
 													 null,  // no context
 													 null,  // no args
 													 new LocateNode (ServerConstants.ROCHANNEL));
