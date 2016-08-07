@@ -218,6 +218,14 @@ public abstract class OperatorVisitor extends    AbstractVisitor
 
   protected void notResolved(Any op1)
   {
+  	Transaction t = getTransaction();
+  	
+    if (!t.getCallStack().isEmpty())
+    {
+      Call.CallStackEntry se = (Call.CallStackEntry)t.getCallStack().peek();
+      se.setLineNumber(t.getLineNumber());
+      throw new AnyRuntimeException("Operand " + op1 + " could not be resolved at " + se.toString());
+    }
     throw new AnyRuntimeException("Operand " + op1 + " could not be resolved");
   }
 
