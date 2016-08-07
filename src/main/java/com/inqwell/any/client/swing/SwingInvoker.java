@@ -42,9 +42,19 @@ public abstract class SwingInvoker implements Runnable
   public  static Any   lookandfeel__          = AbstractValue.flyweightString("lookandfeel");
   public  static Any   fontadjust__           = AbstractValue.flyweightString("fontadjust");
   public  static Any   nolookandfeel__        = AbstractValue.flyweightString("none");
+  
+  private static boolean initialised__ = false;
 
   static public void initSwing()
   {
+  	synchronized(SwingInvoker.class)
+  	{
+  		if (initialised__)
+  			return;
+  		
+  		initialised__ = true;
+  	}
+  	
     AnyWindow.inqEventQueue();
     
     SwingInvoker ss = new SwingInvoker()
