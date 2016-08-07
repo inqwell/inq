@@ -41,10 +41,9 @@ import com.inqwell.any.channel.OutputChannel;
  * A The system level login service on the INQ server.
  * <p>
  * This service is executed on the server when any user logs in
- * as the <code>system</code> package.
+ * to a package.
  * <p>
  * @author $Author: sanderst $
- * @version $Revision: 1.4 $
  */
 public class LoginOK extends Exec
 {
