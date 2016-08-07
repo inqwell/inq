@@ -36,8 +36,7 @@ public class AnyObject extends    AbstractAny
 
 	public String toString()
 	{
-		return (value_ == null) ? "AnyObject:null" : value_.toString();
-		//return (super.toString() + "<" + value_.getClass().getName() + "@" + Integer.toHexString(value_.hashCode()) + ">");
+		return (value_ == null) ? "" : value_.toString();
 	}
 	
 	public int hashCode()
