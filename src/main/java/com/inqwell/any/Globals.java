@@ -137,7 +137,7 @@ public class Globals
     synchronized(Globals.class)
     {
       if (threadMap__.containsKey(t))
-        throw new AnyRuntimeException("Already have a process for " + t);
+        throw new AnyRuntimeException("Already have a process for thread " + t.getId() + " (" + t.getName() + ")");
       
       threadMap__.put(t, p);
     }
@@ -148,7 +148,7 @@ public class Globals
     synchronized(Globals.class)
     {
       if (!threadMap__.containsKey(t))
-        throw new AnyRuntimeException("No process for thread!");
+        throw new AnyRuntimeException("No process for thread id " + t.getId() + " (" + t.getName() + ")");
       
       threadMap__.remove(t);
     }
