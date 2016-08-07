@@ -100,6 +100,13 @@ public class AnyTreeNode extends AbstractAny
     any_ = any;
   }
   
+  // Just for dummy root
+  AnyTreeNode(TreeLevel treeLevel)
+  {
+    isLeaf_ = true;
+    setLevel(treeLevel);
+  }
+  
   /**
    * Add the given node as a child to this
    */
