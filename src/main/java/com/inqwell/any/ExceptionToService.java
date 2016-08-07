@@ -129,9 +129,7 @@ e.printStackTrace();
                                                : EventConstants.INVOKE_LOGINSVC,
                                              service_,
                                              context,
-                                             null,
-                                             args,
-                                             null));
+                                             args));
     }
     catch (AnyException ex)
     {
