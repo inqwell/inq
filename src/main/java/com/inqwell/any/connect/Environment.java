@@ -26,6 +26,7 @@ import com.inqwell.any.client.StackTransaction;
 /**
  * Environment manager for the connect package.
  * @author tom
+ * TODO: Speculative
  *
  */
 public class Environment extends AbstractAny
