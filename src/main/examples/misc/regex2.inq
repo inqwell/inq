@@ -1,0 +1,14 @@
+#! /bin/inq -shebang
+
+regex re;
+
+re.properties.pattern  = "^[,\\s*]";
+re.properties.sequence = "system.server, system, inq.system";
+while (boolean b = re.properties.find)
+{
+  string s = re.properties.group;
+  writeln($catalog.system.out, s);
+  writeln($catalog.system.out, "Start " + re.properties.start);
+}
+
+
