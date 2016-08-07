@@ -567,6 +567,7 @@ public class Try extends    AbstractFunc
       stackFrame.remove(NodeSpecification.atException__);
       stackFrame.remove(NodeSpecification.atExMsg__);
       stackFrame.remove(NodeSpecification.atExName__);
+      stackFrame.remove(NodeSpecification.atExEnviro__);
       javaStack = stackFrame.remove(NodeSpecification.atJavaStack__);
       if (ret.getUserInfo() != null)
         stackFrame.remove(NodeSpecification.atExInfo__);
@@ -581,6 +582,7 @@ public class Try extends    AbstractFunc
       stackFrame.add(NodeSpecification.atException__, e);
       stackFrame.add(NodeSpecification.atExMsg__, e.getExceptionMessage());
       stackFrame.add(NodeSpecification.atExName__, e.getExceptionName());
+      stackFrame.add(NodeSpecification.atExEnviro__, e.isUser() ? AnyBoolean.FALSE : AnyBoolean.TRUE);
       if (javaStack == null)
         javaStack = new JavaStack();
       stackFrame.add(NodeSpecification.atJavaStack__, javaStack);
@@ -614,6 +616,7 @@ public class Try extends    AbstractFunc
       Map stackFrame = getTransaction().getCurrentStackFrame();
       stackFrame.remove(NodeSpecification.atException__);
       stackFrame.remove(NodeSpecification.atExName__);
+      stackFrame.remove(NodeSpecification.atExEnviro__);
       stackFrame.remove(NodeSpecification.atExMsg__);
       stackFrame.remove(NodeSpecification.atJavaStack__);
       if (curEx.getUserInfo() != null)
