@@ -130,6 +130,17 @@ public abstract class AbstractProcess extends    InstanceHierarchyMap
   public void setExecURL(Any execUrl) { execUrl_ = execUrl;   }
 
   public Stack getCallStack()         { return callStack_;    }
+  
+  public Any getCurrentStack()
+  {
+    if (!getCallStack().isEmpty())
+    {
+			Call.CallStackEntry se = (Call.CallStackEntry)getCallStack().peek();
+			se.setLineNumber(getLineNumber());
+    }
+    
+    return new ConstString(getCallStack().toString());
+  }
 
   public Any copyFrom (Any a)
   {

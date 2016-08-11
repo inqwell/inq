@@ -207,6 +207,7 @@ public interface Process extends Map
   public Any  getExecURL();
   public void setExecURL(Any execUrl);
   public Stack getCallStack();
+  public Any getCurrentStack();
   
   public Any getSync();
   

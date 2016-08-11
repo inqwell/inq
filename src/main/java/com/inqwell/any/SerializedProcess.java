@@ -211,6 +211,11 @@ public class SerializedProcess extends    SimpleMap
     throw new UnsupportedOperationException();
   }
   
+  public Any getCurrentStack()
+  {
+    throw new UnsupportedOperationException();
+  }
+  
   public void setColumn(int col)
   {
     throw new UnsupportedOperationException();

@@ -2554,6 +2554,7 @@ SKIP :
 | < GROUPBY:          "groupby" >
 | < GETDATE:          "getdate" >
 | < GETBLOB:          "getblob" >
+| < GETCURRENTSTACK:  "getcurrentstack" >
 | < GETLOCALHOST:     "getlocalhost" >
 | < GETLOGGER:        "getlogger" >
 | < LOGGERNAMES:      "loggernames" >
@@ -4125,6 +4126,7 @@ Any Operand() :
   | a = GetProperty()
   | a = SetBlob()
   | a = GetBlob()
+  | a = GetCurrentStack()
   | a = Xfunc()
   | a = SetExceptionHandler()
   | a = FocusTo()
@@ -6871,6 +6873,18 @@ Any GetBlob() :
   "(" a = Expression() ")"
   {
     GetBlob g = new GetBlob(a);
+    g.setLineNumber(line);
+    return g;
+  }
+}
+
+Any GetCurrentStack() :
+{ Any a; int line; }
+{
+  "getcurrentstack" { line = token.beginLine; }
+  "(" ")"
+  {
+    GetCurrentStack g = new GetCurrentStack();
     g.setLineNumber(line);
     return g;
   }
