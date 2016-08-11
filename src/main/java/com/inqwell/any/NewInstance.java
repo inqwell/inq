@@ -53,7 +53,7 @@ public class NewInstance extends    AbstractFunc
 																					 a,
 																					 copyFrom_);
     
-    if (copyFrom != null && copyFrom == null)
+    if (copyFrom_ != null && copyFrom == null)
       nullOperand(copyFrom_);
     
 		Any any = null;
