@@ -183,6 +183,7 @@ import javax.swing.text.StyleConstants;
 
 import com.inqwell.any.server.Create;
 import com.inqwell.any.server.IsCreating;
+import com.inqwell.any.server.IsManaged;
 import com.inqwell.any.server.Creating;
 import com.inqwell.any.server.Modifying;
 import com.inqwell.any.server.IsModifying;
@@ -2569,6 +2570,7 @@ SKIP :
 | < INDEXOF:          "indexof" >
 | < INTERRUPT:        "interrupt" >
 | < ISCREATING:       "iscreating" >
+| < ISMANAGED:        "ismanaged" >
 | < ISEMPTYCHANNEL:   "ischannelempty" >
 | < ISENUM:           "isenum" >
 | < ISDIGIT:          "isdigit" >
@@ -3985,6 +3987,7 @@ Any Operand() :
   | a = IndexOf()
   | a = Interrupt()
   | a = IsCreating()
+  | a = IsManaged()
   | a = Creating()
   | a = Deleting()
   | a = Modifying()
@@ -4974,6 +4977,23 @@ Any IsCreating() :
     IsCreating c = new IsCreating(a);
     c.setLineNumber(line);
     return c;
+  }
+}
+
+Any IsManaged() :
+{
+  Any a;
+  int line;
+}
+{
+  "ismanaged" { line = token.beginLine; }
+  "("
+  a = Expression()
+  ")"
+  {
+    IsManaged m = new IsManaged(a);
+    m.setLineNumber(line);
+    return m;
   }
 }
 
