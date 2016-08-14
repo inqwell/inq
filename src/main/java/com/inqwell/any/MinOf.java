@@ -138,7 +138,7 @@ public class MinOf extends    AbstractFunc
           
           // If there is a new minimum then set the candidate child to the
           // current child also.
-          if (newMin == next)
+          if (newMin.equals(next))
             minChild = child;
           
           min = newMin;

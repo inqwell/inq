@@ -58,6 +58,9 @@ public class MaxOf extends    AbstractFunc
   private Any root_;
   private Any expression_;
   private Any childMode_;
+  
+//  private static     LogManager lm = LogManager.getLogManager();
+//  private static     Logger l = lm.getLogger("inq");
 
 	/**
 	 * 
@@ -138,10 +141,12 @@ public class MaxOf extends    AbstractFunc
           maxop.setOp2(next);
           Any newMax = maxop.exec(a);
           
-          // If there is a new minimum then set the candidate child to the
+          // If there is a new maximum then set the candidate child to the
           // current child also.
-          if (newMax == next)
+          if (newMax.equals(next))
+          {
             maxChild = child;
+          }
   
           max = newMax;
         }
