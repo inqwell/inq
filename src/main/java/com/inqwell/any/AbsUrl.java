@@ -47,6 +47,9 @@ public class AbsUrl extends    AbstractFunc
     if (relative == null)
       nullOperand(relative_);
 
+    if (absolute_ != null && absolute == null)
+      nullOperand(absolute_);
+
     AnyURL base;
 
     if (absolute == null)
