@@ -58,6 +58,9 @@ public class MinOf extends    AbstractFunc
   private Any expression_;
   private Any childMode_;
 
+//  private static     LogManager lm = LogManager.getLogManager();
+//  private static     Logger l = lm.getLogger("inq");
+
 	/**
 	 * 
 	 */
@@ -134,12 +137,18 @@ public class MinOf extends    AbstractFunc
           
           minop.setOp1(min);
           minop.setOp2(next);
-          Any newMin = minop.exec(a);
+          Any newMin = EvalExpr.evalFunc(t, a, minop);
+//          l.severe("min is " + min);
+//          l.severe("next is " + next);
+//          l.severe("newMin is " + newMin);
           
           // If there is a new minimum then set the candidate child to the
           // current child also.
           if (newMin.equals(next))
+          {
             minChild = child;
+//            l.severe("minChild now " + minChild);
+          }
           
           min = newMin;
         }
@@ -151,6 +160,8 @@ public class MinOf extends    AbstractFunc
       t.setLoop(curLoop);
     }
     
+//    l.severe("Final scalar " + res);
+    
     if (childMode != null && childMode.getValue())
       res = minChild;
     
@@ -160,6 +171,7 @@ public class MinOf extends    AbstractFunc
     if (res == null)
       res = AnyNull.instance();
       
+//    l.severe("Final result " + res);
 		return res;
   }
   

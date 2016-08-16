@@ -139,7 +139,7 @@ public class MaxOf extends    AbstractFunc
           
           maxop.setOp1(max);
           maxop.setOp2(next);
-          Any newMax = maxop.exec(a);
+          Any newMax = EvalExpr.evalFunc(t, a, maxop);
           
           // If there is a new maximum then set the candidate child to the
           // current child also.

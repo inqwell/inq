@@ -52,9 +52,8 @@ public class EqualsOrNull extends    AbstractFunc
     }
     
     EvalExpr equals = new EvalExpr(op1, op2, new Equals());
-    equals.setTransaction(getTransaction());
     
-    return equals.exec(a);
+    return EvalExpr.evalFunc(getTransaction(), a, equals);
   }
   
   public Iter createIterator ()
