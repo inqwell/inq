@@ -39,6 +39,7 @@ import com.inqwell.any.Composite;
 import com.inqwell.any.ConstString;
 import com.inqwell.any.DegenerateIter;
 import com.inqwell.any.Globals;
+import com.inqwell.any.IntI;
 import com.inqwell.any.Iter;
 import com.inqwell.any.LocateNode;
 import com.inqwell.any.LockManager;
@@ -272,11 +273,20 @@ public final class Server extends PropertyAccessMap
 		Globals.sessionList__               = SessionManager.instance();
 
     System.out.println("Inq Server");
-    System.out.println("Copyright (c) InqWell Ltd 2002-2011");
+    System.out.println("Copyright (c) InqWell Ltd 2002-2016");
     System.out.println("JavaCC Copyright (c) 2006, Sun Microsystems, Inc.");
 
 		try
 		{
+
+			Runtime.getRuntime().addShutdownHook(new Thread()
+                                       		 {
+                                       			 public void run()
+                                       			 {
+                                       			   setName("Shutdown");
+                                       			   logger.info("Server stopped");
+                                       			 }
+                                       		 });
 
 			// Establish speakinq:// protocol and other url types
 		  InqStreamHandlerFactory.install();
@@ -292,18 +302,6 @@ public final class Server extends PropertyAccessMap
 				Server.instance().loadProperties(propURL.toString());
 			}
 
-      AnyString initURL = new AnyString();
-			if (!cArgs.arg("-init", initURL))
-			{
-        ClassLoader cl = Server.class.getClassLoader();
-
-        URL serverInq = cl.getResource("com/inqwell/any/server/Server.inq");
-        serverInq = AnyURL.fixJarURL(serverInq);
-        //System.out.println(serverInq);
-        initURL.setValue(serverInq.toString());
-
-			}
-      
 			Map catalog = Catalog.instance().getCatalog();
 
       AnyString config = new AnyString();
@@ -345,7 +343,9 @@ public final class Server extends PropertyAccessMap
       BuildNodeMap bn = new BuildNodeMap();
       bn.build(serverPath__, Server.instance(), Catalog.instance().getCatalog());
 
-      // Start a process to run the server's initial script
+      // Start a process to run the server's initial scripts. These are
+      // the mandatory startup in Server.inq and anyting provided on the
+      // command line via -init <URL>
       SpawnProcess startup =
         new SpawnProcess(startup__, // process name
                          Process.DETACHED,
@@ -358,19 +358,78 @@ public final class Server extends PropertyAccessMap
       Process p = (Process)startup.exec(null);
       p.setRealPrivilegeLevel((short)0);
       p.setEffectivePrivilegeLevel((short)0);
+      p.add(UserProcess.loginName__,  new ConstString("admin"));
       p.add(UserProcess.package__,  RunInq.system__);
       p.startThread();
+
+      AnyURL u  = new AnyURL("classpath:///com/inqwell/any/server/Server.inq");
+      URL    serverInq = u.getURL();
+
+      AnyString serverStartupURL = new AnyString();
+      serverStartupURL.setValue(serverInq.toString());
 
       // Send it a request to run it
       AnyChannel c = (AnyChannel)p.get(ServerConstants.ICHANNEL);
       Map sargs = AbstractComposite.simpleMap();
-      sargs.add(RunInq.source__, initURL);
+      sargs.add(RunInq.source__, serverStartupURL);
       SendRequest sr = new SendRequest(RunInq.servicePath__,
                                        null,
                                        sargs,
                                        c);
       sr.setTransaction(p.getTransaction());
       sr.exec(null);
+      
+      // Now for any -init on the command line.
+      AnyString initURL = new AnyString();
+			if (cArgs.arg("-init", initURL))
+			{
+        Map iargs = AbstractComposite.simpleMap();
+        iargs.add(RunInq.source__, initURL);
+        sr = new SendRequest(RunInq.servicePath__,
+                             null,
+                             iargs,
+                             c);
+        sr.setTransaction(p.getTransaction());
+        sr.exec(null);
+			}
+
+      // If there is -test we are kicking off a unit test file. Send it
+      AnyString test = new AnyString();
+			if (cArgs.arg("-test", test))
+			{
+		    System.out.println("Running regression tests");
+				// Load the test support
+	      u  = new AnyURL("classpath:///inq/test/testing.inq");
+	      serverInq = u.getURL();
+
+	      serverStartupURL = new AnyString();
+	      serverStartupURL.setValue(serverInq.toString());
+
+	      // Send it a request to run it
+	      sargs = AbstractComposite.simpleMap();
+	      sargs.add(RunInq.source__, serverStartupURL);
+	      sr = new SendRequest(RunInq.servicePath__,
+	                                       null,
+	                                       sargs,
+	                                       c);
+	      sr.setTransaction(p.getTransaction());
+	      sr.exec(null);
+
+	      // Run the test
+        Map targs = AbstractComposite.simpleMap();
+        targs.add(RunInq.source__, test);
+        sr = new SendRequest(RunInq.servicePath__,
+                             null,
+                             targs,
+                             c);
+        sr.setTransaction(p.getTransaction());
+        sr.exec(null);
+        
+        // Tests must call exit(<status>) so wait for the process
+        // to terminate and pass the status back to the environment
+        p.join();
+        System.exit(((IntI)p.get(Process.STATUS)).getValue());
+			}
 
       // Then close the channel to get rid of the process
       c.close();
@@ -388,14 +447,6 @@ public final class Server extends PropertyAccessMap
 				new ServerListener(speakinqsPort.getValue(),
 				                   new SpeakinqsProtocolHandler());
 
-			Runtime.getRuntime().addShutdownHook(new Thread()
-                                      		 {
-                                      			 public void run()
-                                      			 {
-                                      			   setName("Shutdown");
-                                      			   logger.info("Server stopped");
-                                      			 }
-                                      		 });
       logger.info("Server started");
       
 			// and one for httpinq TO BE RETIRED

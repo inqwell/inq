@@ -1,0 +1,170 @@
+/**
+ * Copyright (C) 2016 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * Test Framework Support
+ *
+ */
+
+package inq.test;
+
+function record(any results, any test, any root, any base)
+{
+  any p = call resultsPath(test, root);
+  
+  ioXMLX x;
+  x.properties.formatOutput = true;
+  x.properties.writeMeta    = true;
+  x.properties.groupingUsed = false;
+
+  // Make the path where the results will go. It is relative
+  // to this script as "./results/<p>"
+  file resf = absurl(p, base);
+  
+  // Make sure the parent directory is present
+  file dir  = resf.properties.parentPath;
+  mkdirs(dir);
+
+  open(x, resf, OPEN_WRITE);
+  writestream(x, results);
+ 
+  close(x);
+}
+
+function retrieve(any test, any root, any base)
+{
+  any p = call resultsPath(test, root);
+  
+  ioXMLX x;
+  object cp = path($this*child);
+  any tagFuncs.{cp} = cfunc f = call childTag();
+  x.properties.tagFuncs = tagFuncs;
+  x.properties.seed     = omap m;
+
+  // Make the path where the results will go. It is relative
+  // to this script as "./results/<p>"
+  file resf = absurl(p, base);
+  
+  if (!open(x, resf, OPEN_READ))
+    throw(renderf("No results found at {0}", p));
+  
+  any expected = readstream(x);
+  close(x);
+  
+  //writeln($catalog.system.out, "\e \l");
+  //writeln($catalog.system.out, expected);
+  
+  expected;
+}
+
+local function childTag(any node,
+                        any parent,
+                        any nodeName,
+                        any ordinal,
+                        any content,
+                        any last,    // always false - SAX parser does not know
+                        any descend,
+                        any attributes)
+{
+  nodeName + ordinal;
+}
+
+local function resultsPath(any test, any root)
+{
+  // evaluate the results file name
+  if (!root)
+    any root = $process.test.name;
+    
+  any p = "results" + $properties.file_separator + root;
+  if (test)
+    p += $properties.file_separator + test;
+  
+  p += ".xml";
+}
+
+function compareNodeSets(any results, any expected, any paths)
+{
+  // Compare two node sets, checking they have the same number of children
+  // and that the specified fields are equal for all of them. 
+  any ct = count(results);
+  any ce = count(expected);
+
+  if (ct != ce)
+    throw(renderf("Node set count expected {0} but have {1}", ce, ct));
+  
+  foreach(results)
+  {
+    any c = @count;
+    any n = $loop;
+    foreach(paths)
+    {
+      any t = n.{$loop};
+      any e = expected[c].{$loop};
+      if (t != e)
+        throw(renderf("Expected {0} got {1} for field {2} ordinal {3}\nnode {4}\nexpected {5}",
+                      e, t, $loop, c, n, expected[c]));
+    }
+  }
+}
+
+function runTests (any tests, any base)
+{
+  int success = 0;
+  int fail    = 0;
+  
+  boolean record = if ($catalog.argsMap.record) true; else false;;
+  
+  writeln ($catalog.system.out, "");
+  if (record)
+  {
+    writeln ($catalog.system.out, "Recording...");
+    writeln ($catalog.system.out, "");
+  }
+
+  foreach(tests)
+  {
+    any test = exec($loop, base);
+  
+    try
+    {
+      writeln ($catalog.system.out, renderf("Running tests {0}", test.name));
+      writeln ($catalog.system.out, "");
+      
+      xfunc(test.funcs.setup, name = test.name, record);
+      
+      foreach(test.funcs.tests)
+      {
+        writeln ($catalog.system.out, getdate());
+        writeln ($catalog.system.out, renderf("Running test {0}", $loop));
+        xfunc($loop);
+        test.success++;
+        success++;
+        writeln ($catalog.system.out, "");
+      }
+    }
+    catch
+    {
+      writeln($catalog.system.err, renderf("Test {0} failed", $process.test.name));
+      writeln($catalog.system.err, @exmsg);
+      writeln($catalog.system.err, @stackTrace);
+      fail++;
+    }
+    finally
+    {
+      writeln ($catalog.system.out, renderf("{0}: {1} out of {2} tests successful", test.name, test.success, count(test.funcs.tests)));
+    }
+    writeln ($catalog.system.out, "");
+  }
+  
+  writeln ($catalog.system.out, "Total successful: " + success);
+  writeln ($catalog.system.out, "Failed: " + fail);
+  
+  if (fail)
+    exit(1);
+  else
+    exit(0);
+}

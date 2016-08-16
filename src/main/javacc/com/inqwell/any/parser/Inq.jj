@@ -5728,11 +5728,18 @@ Any EqualsOrNull() :
 }
 
 Any Exec() :
-{ Any script; int line; }
+{ Any script; Any base = null; int line; }
 {
-  "exec" { line = token.beginLine; } "(" script = Expression() ")"
+  "exec" { line = token.beginLine; }
+  "("
+  script = Expression()
+  [ "," base = Expression() ]
+  ")"
   {
-    ExecInq e = new ExecInq(script, documentAnyURL_);
+    if (base == null)
+      base = documentAnyURL_;
+      
+    ExecInq e = new ExecInq(script, base);
     e.setLineNumber(line);
 
     return e;
