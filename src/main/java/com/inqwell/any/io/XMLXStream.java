@@ -18,6 +18,7 @@ package com.inqwell.any.io;
 import java.io.InvalidObjectException;
 import java.io.OutputStream;
 import java.io.PrintWriter;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map.Entry;
@@ -38,6 +39,7 @@ import com.inqwell.any.AbstractFunc;
 import com.inqwell.any.AbstractValue;
 import com.inqwell.any.AbstractVisitor;
 import com.inqwell.any.Any;
+import com.inqwell.any.AnyArray;
 import com.inqwell.any.AnyBoolean;
 import com.inqwell.any.AnyException;
 import com.inqwell.any.AnyFormat;
@@ -72,6 +74,7 @@ import com.inqwell.any.LongI;
 import com.inqwell.any.Map;
 import com.inqwell.any.NodeSpecification;
 import com.inqwell.any.ObjectI;
+import com.inqwell.any.Orderable;
 import com.inqwell.any.Process;
 import com.inqwell.any.RuntimeContainedException;
 import com.inqwell.any.Set;
@@ -1923,7 +1926,23 @@ public class XMLXStream extends AbstractStream
         // Possibly configure via a property. Only affects json output.
         array_ = m.getNodeSet() != null;
         
-        Iter i = m.createKeysIterator();
+        Iter i;
+        
+        if (m instanceof Orderable)
+        {
+          i = m.createKeysIterator();
+        }
+        else
+        {
+          Object[] keys = m.keys().toArray();
+          Arrays.sort(keys);
+          AnyArray akeys = new AnyArray();
+          for (Object s : keys)
+          	akeys.add((Any)s);
+          
+          i = akeys.createIterator();
+        }
+        
         while (i.hasNext())
         {
           Any k = i.next();

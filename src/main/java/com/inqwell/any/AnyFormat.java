@@ -13,6 +13,8 @@
  */
 package com.inqwell.any;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.text.DateFormat;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
@@ -438,6 +440,16 @@ public class AnyFormat extends    Format
     }
   }
   
+  public int getMaximumFractionDigits()
+  {
+    if (_formatter instanceof DecimalFormat)
+      return ((DecimalFormat)_formatter).getMaximumFractionDigits();
+    else
+    {
+      throw new IllegalStateException("Not a DecimalFormat");
+    }
+  }
+  
   public void setNegativePrefix(String prefix)
   {
     if (_formatter instanceof DecimalFormat)
@@ -621,7 +633,24 @@ public class AnyFormat extends    Format
                                 FieldPosition pos)
   {
     if (_formatter instanceof NumberFormat)
-      formatDouble(d.doubleValue(), toAppendTo, pos);
+    {
+    	NumberFormat f = (NumberFormat)_formatter;
+
+    	int fd = f.getMaximumFractionDigits();
+    	if (fd < d.scale())
+    	{
+    		BigDecimal bd = d.getValue().setScale(fd, RoundingMode.HALF_UP);
+        toAppendTo.append(bd.toPlainString());
+    	}
+    	else
+    	{
+        toAppendTo.append(d.getValue().toPlainString());
+        if (!_trailingZeros)
+        {
+          trimTrailingZeros(toAppendTo, pos);
+        }
+    	}
+    }
     else
     {
       toAppendTo.append(d.toString());

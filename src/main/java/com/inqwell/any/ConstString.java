@@ -18,7 +18,7 @@ package com.inqwell.any;
  * An immutable string
  */
 public class ConstString extends AbstractValue
-                         implements StringI, Cloneable
+                         implements StringI, Cloneable, Comparable
 
 {
   public final static String null__   = "__null__";
@@ -160,6 +160,13 @@ public class ConstString extends AbstractValue
     return o;
   }
 
+  public int compareTo(Object o)
+  {
+    StringI s = (StringI)o;
+    
+    return getValue().compareTo(s.getValue());
+  }
+  
   // The non-const version is derived from us.
   protected void setString(String s)
   {
