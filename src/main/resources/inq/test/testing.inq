@@ -21,6 +21,10 @@ function record(any results, any test, any root, any base)
   x.properties.writeMeta    = true;
   x.properties.groupingUsed = false;
 
+// This will affect the formatting used in recorded XML, should we wish to do that
+//  if ($process.test.formatters)
+//    x.properties.formatters = $process.test.formatters;
+
   // Make the path where the results will go. It is relative
   // to this script as "./results/<p>"
   file resf = absurl(p, base);
@@ -103,6 +107,23 @@ function compareNodeSets(any results, any expected, any paths)
     foreach(paths)
     {
       any t = n.{$loop};
+      
+      // See if we have any formatters
+      if ($process.test.formatters)
+      {
+        // See if there is a formatter for the current path. If found
+        // use it to flatten the current value to whatever that format is.
+        object p = path($this.{$loop});
+        any f = $process.test.formatters.{p};
+        if (f)
+        {
+          any t1 = clone(t);
+          any ff = format(f, t);
+          parse(render(t, format=ff), ff, t1);
+          any t = t1;
+        }
+      }
+      
       any e = expected[c].{$loop};
       if (t != e)
         throw(renderf("Expected {0} got {1} for field {2} ordinal {3}\nnode {4}\nexpected {5}",
@@ -118,6 +139,8 @@ function runTests (any tests, any base)
   
   boolean record = if ($catalog.argsMap.record) true; else false;;
   
+  any durationFmt = format("HH:mm:ss@zone='GMT'@", any ss = getdate());
+  
   writeln ($catalog.system.out, "");
   if (record)
   {
@@ -131,37 +154,54 @@ function runTests (any tests, any base)
   
     try
     {
-      writeln ($catalog.system.out, renderf("Running tests {0}", test.name));
+      writeln ($catalog.system.out, renderf("{0} tests {1}", (record ? "Recording" : "Running"), test.name));
       writeln ($catalog.system.out, "");
       
       xfunc(test.funcs.setup, name = test.name, record);
       
       foreach(test.funcs.tests)
       {
-        writeln ($catalog.system.out, getdate());
-        writeln ($catalog.system.out, renderf("Running test {0}", $loop));
-        xfunc($loop);
-        test.success++;
-        success++;
+        any ts = getdate();
+        writeln ($catalog.system.out, ts);
+        writeln ($catalog.system.out, renderf("{0} test {1}", (record ? "Recording" : "Running"), $loop));
+        try
+        {
+          xfunc($loop);
+
+          date td = getdate() - ts;
+          writeln($catalog.system.out, renderf("Duration: {0}", render(td, format=durationFmt)));
+
+          test.success++;
+          success++;
+        }
+        catch
+        {
+          writeln($catalog.system.err, renderf("Test {0} failed", $loop));
+          writeln($catalog.system.err, @exmsg);
+          writeln($catalog.system.err, @stackTrace);
+          fail++;
+        }
         writeln ($catalog.system.out, "");
       }
+      writeln ($catalog.system.out, renderf("{0}: {1} out of {2} tests {3}",
+                                            test.name,
+                                            test.success,
+                                            count(test.funcs.tests),
+                                            (record ? "recorded" : "successful")));
     }
     catch
     {
-      writeln($catalog.system.err, renderf("Test {0} failed", $process.test.name));
+      writeln($catalog.system.err, renderf("Test {0} setup failed", $process.test.name));
       writeln($catalog.system.err, @exmsg);
       writeln($catalog.system.err, @stackTrace);
-      fail++;
-    }
-    finally
-    {
-      writeln ($catalog.system.out, renderf("{0}: {1} out of {2} tests successful", test.name, test.success, count(test.funcs.tests)));
     }
     writeln ($catalog.system.out, "");
   }
   
-  writeln ($catalog.system.out, "Total successful: " + success);
+  writeln ($catalog.system.out, renderf("Total {0}: {1}", (record ? "recorded" : "successful"), success));
   writeln ($catalog.system.out, "Failed: " + fail);
+  date sd = getdate() - ss;
+  writeln($catalog.system.out, renderf("Total time: {0}", render(sd, format=durationFmt)));
   
   if (fail)
     exit(1);
