@@ -151,42 +151,42 @@ public class Clone extends    AbstractFunc
     }
     public void visitAnyBoolean(BooleanI b)
     {
-      cloned_ = b.cloneAny();
+      cloned_ = b.buildNew(b);
     }
 
     public void visitAnyByte(ByteI b)
     {
-      cloned_ = b.cloneAny();
+      cloned_ = b.buildNew(b);
     }
 
     public void visitAnyChar(CharI c)
     {
-      cloned_ = c.cloneAny();
+      cloned_ = c.buildNew(c);
     }
 
     public void visitAnyDate(DateI d)
     {
-      cloned_ = d.cloneAny();
+      cloned_ = d.buildNew(d);
     }
 
     public void visitAnyDouble(DoubleI d)
     {
-      cloned_ = d.cloneAny();
+      cloned_ = d.buildNew(d);
     }
 
     public void visitAnyFloat(FloatI f)
     {
-      cloned_ = f.cloneAny();
+      cloned_ = f.buildNew(f);
     }
 
     public void visitAnyInt(IntI i)
     {
-      cloned_ = i.cloneAny();
+      cloned_ = i.buildNew(i);
     }
 
     public void visitAnyLong(LongI l)
     {
-      cloned_ = l.cloneAny();
+      cloned_ = l.buildNew(l);
     }
 
     public void visitAnyObject(ObjectI o)
@@ -196,12 +196,12 @@ public class Clone extends    AbstractFunc
 
     public void visitAnyShort(ShortI s)
     {
-      cloned_ = s.cloneAny();
+      cloned_ = s.buildNew(s);
     }
 
     public void visitAnyString(StringI s)
     {
-      cloned_ = s.cloneAny();
+      cloned_ = s.buildNew(s);
     }
 
     public void visitArray(Array a)
@@ -223,7 +223,7 @@ public class Clone extends    AbstractFunc
 
     public void visitDecimal(Decimal d)
     {
-      cloned_ = d.cloneAny();
+      cloned_ = d.buildNew(d);
     }
 
     public void visitFunc(Func f)
