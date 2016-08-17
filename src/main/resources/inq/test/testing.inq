@@ -17,9 +17,9 @@ function record(any results, any test, any root, any base)
   any p = call resultsPath(test, root);
   
   ioXMLX x;
-  x.properties.formatOutput = true;
-  x.properties.writeMeta    = true;
-  x.properties.groupingUsed = false;
+  x.properties.formatOutput  = true;
+  x.properties.inqAttributes = true;
+  x.properties.groupingUsed  = false;
 
 // This will affect the formatting used in recorded XML, should we wish to do that
 //  if ($process.test.formatters)
