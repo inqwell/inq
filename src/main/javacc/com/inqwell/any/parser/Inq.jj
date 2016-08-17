@@ -10923,7 +10923,16 @@ void OtherKey(BOTDescriptor d, KeyDef primary, boolean cached) :
       // field references that would have disabled it.
       ((AbstractKeyDef)key).setShouldCache(true);
     }
-    d.addKey(key);
+    
+    // Ignore special test keys if not in test mode
+    if (keyName.startsWith("Test"))
+    {
+      Map argsMap = (Map)Catalog.instance().getCatalog().get(CommandArgs.commandLine__);
+      if (argsMap.contains(new ConstString("test")))
+        d.addKey(key);
+    }
+    else
+      d.addKey(key);
   }
 }
 
