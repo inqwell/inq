@@ -151,42 +151,66 @@ public class Clone extends    AbstractFunc
     }
     public void visitAnyBoolean(BooleanI b)
     {
-      cloned_ = b.buildNew(b);
+      if (b instanceof NativeDescriptor.NativeEnumProto)
+        cloned_ = b.cloneAny();
+      else
+      	cloned_ = b.buildNew(b);
     }
 
     public void visitAnyByte(ByteI b)
     {
-      cloned_ = b.buildNew(b);
+      if (b instanceof NativeDescriptor.NativeEnumProto)
+        cloned_ = b.cloneAny();
+      else
+      	cloned_ = b.buildNew(b);
     }
 
     public void visitAnyChar(CharI c)
     {
-      cloned_ = c.buildNew(c);
+      if (c instanceof NativeDescriptor.NativeEnumProto)
+        cloned_ = c.cloneAny();
+      else
+      	cloned_ = c.buildNew(c);
     }
 
     public void visitAnyDate(DateI d)
     {
-      cloned_ = d.buildNew(d);
+      if (d instanceof NativeDescriptor.NativeEnumProto)
+        cloned_ = d.cloneAny();
+      else
+      	cloned_ = d.buildNew(d);
     }
 
     public void visitAnyDouble(DoubleI d)
     {
-      cloned_ = d.buildNew(d);
+      if (d instanceof NativeDescriptor.NativeEnumProto)
+        cloned_ = d.cloneAny();
+      else
+      	cloned_ = d.buildNew(d);
     }
 
     public void visitAnyFloat(FloatI f)
     {
-      cloned_ = f.buildNew(f);
+      if (f instanceof NativeDescriptor.NativeEnumProto)
+        cloned_ = f.cloneAny();
+      else
+      	cloned_ = f.buildNew(f);
     }
 
     public void visitAnyInt(IntI i)
     {
-      cloned_ = i.buildNew(i);
+      if (i instanceof NativeDescriptor.NativeEnumProto)
+        cloned_ = i.cloneAny();
+      else
+      	cloned_ = i.buildNew(i);
     }
 
     public void visitAnyLong(LongI l)
     {
-      cloned_ = l.buildNew(l);
+      if (l instanceof NativeDescriptor.NativeEnumProto)
+        cloned_ = l.cloneAny();
+      else
+      	cloned_ = l.buildNew(l);
     }
 
     public void visitAnyObject(ObjectI o)
@@ -196,12 +220,18 @@ public class Clone extends    AbstractFunc
 
     public void visitAnyShort(ShortI s)
     {
-      cloned_ = s.buildNew(s);
+      if (s instanceof NativeDescriptor.NativeEnumProto)
+        cloned_ = s.cloneAny();
+      else
+      	cloned_ = s.buildNew(s);
     }
 
     public void visitAnyString(StringI s)
     {
-      cloned_ = s.buildNew(s);
+      if (s instanceof NativeDescriptor.NativeEnumProto)
+        cloned_ = s.cloneAny();
+      else
+      	cloned_ = s.buildNew(s);
     }
 
     public void visitArray(Array a)
