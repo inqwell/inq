@@ -27,13 +27,18 @@ import com.inqwell.any.AbstractComposite;
 import com.inqwell.any.AbstractFunc;
 import com.inqwell.any.Any;
 import com.inqwell.any.AnyException;
+import com.inqwell.any.AnyFormat;
 import com.inqwell.any.AnyNull;
 import com.inqwell.any.AnyRuntimeException;
 import com.inqwell.any.AnyString;
 import com.inqwell.any.Array;
 import com.inqwell.any.Call;
+import com.inqwell.any.Catalog;
+import com.inqwell.any.Composite;
 import com.inqwell.any.ConstString;
 import com.inqwell.any.ContainedException;
+import com.inqwell.any.Descriptor;
+import com.inqwell.any.EvalExpr;
 import com.inqwell.any.Globals;
 import com.inqwell.any.IntI;
 import com.inqwell.any.Iter;
@@ -41,11 +46,13 @@ import com.inqwell.any.LocateNode;
 import com.inqwell.any.Map;
 import com.inqwell.any.Process;
 import com.inqwell.any.RuntimeContainedException;
+import com.inqwell.any.StringI;
 import com.inqwell.any.Transaction;
 import com.inqwell.any.Value;
 import com.inqwell.any.Vectored;
 import com.inqwell.any.client.AnyRenderInfo;
 import com.inqwell.any.client.RenderInfo;
+import com.inqwell.any.server.BOTDescriptor;
 
 /**
  *
@@ -59,6 +66,7 @@ public class CSVStream extends AbstractStream
 	private transient Csv   parser_;
 
 	private Array protos_;
+	private Map   formatters_;
 	private Call  filterFunc_;
 
   // Relating to output
@@ -67,6 +75,7 @@ public class CSVStream extends AbstractStream
 	private int                 linesWritten_;
 
   private boolean autoTable_;
+  private boolean scan_;
 
   private boolean first_ = true;
 
@@ -187,19 +196,23 @@ public class CSVStream extends AbstractStream
    */
 	public boolean write (Any outputItem, Transaction t) throws AnyException
   {
-		if (outputItem instanceof Vectored)
-		{
-			Iter i = outputItem.createIterator();
-			while (i.hasNext())
-			{
-				writeIt(i.next());
-			}
-		}
+		if (scan_)
+			writeNodeSets(outputItem);
 		else
 		{
-			writeIt(outputItem);
+  		if (outputItem instanceof Vectored)
+  		{
+  			Iter i = outputItem.createIterator();
+  			while (i.hasNext())
+  			{
+  				writeIt(i.next());
+  			}
+  		}
+  		else
+  		{
+  			writeIt(outputItem);
+  		}
 		}
-
   	return true;
   }
 
@@ -329,6 +342,11 @@ public class CSVStream extends AbstractStream
     return autoTable_;
   }
 
+  public void setScanNodeSets(boolean scan)
+  {
+    scan_ = scan;
+  }
+  
   public void setIgnoreBlank(boolean ignoreBlank)
   {
     createParser();
@@ -447,7 +465,7 @@ public class CSVStream extends AbstractStream
     }
 	}
 
-	private void writeCell(String cell) throws AnyException
+	private void writeCell(String cell)
 	{
     try
     {
@@ -473,10 +491,147 @@ public class CSVStream extends AbstractStream
     }
     catch(Exception e)
     {
-      throw new ContainedException(e);
+      throw new RuntimeContainedException(e);
     }
   }
+	
+	private void writeNodeSets(Any root)
+	{
+		// Scan the root for node sets. When a node set is found
+		// write out the contents of its primary typedef.
+		if (!(root instanceof Map))
+			throw new AnyRuntimeException("root is not a map");
+		
+		Composite c = (Composite)root;
+		searchNodeSet(c);
+	}
+	
+	private void searchNodeSet(Composite c)
+	{
+		Any ns;
+		if ((ns = c.getNodeSet()) != null)
+		{
+			// Found one - write it out (if it's a map)
+			if (c instanceof Map)
+				writeNodeSet((Map)c, ns);
+		}
+		else
+		{
+			Iter i = c.createIterator();
+			while (i.hasNext())
+			{
+				Any child = i.next();
+				
+				if (child instanceof Map)
+				{
+					// Don't descend into type instances
+					Map m = (Map)child;
+					if (m.getDescriptor() != Descriptor.degenerateDescriptor__)
+						continue;
+				}
+				
+				if (child instanceof Composite)
+					searchNodeSet((Composite)child);
+			}
+		}
+	}
+	
+	private void writeNodeSet(Map m, Any ns)
+	{
+		Descriptor d = null;
+		
+		if (ns instanceof StringI)
+		{
+			// May be the NS information is a typedef reference. They often are.
+			d = findType(ns);
+		}
+		
+		if (d == null || (!(d instanceof BOTDescriptor)))
+			return;
+		
+		Iter i = m.createIterator();
+		while (i.hasNext())
+		{
+			Any child = i.next();
+			writeNSChild(child, (BOTDescriptor)d);
+		}
+		formatters_ = null;
+		ps_.print(lineSeparator__);
+		ps_.flush();
 
+	}
+	
+	private void writeNSChild(Any c, BOTDescriptor d)
+	{
+		if (!(c instanceof Map))
+			return;
+		
+		Map m = (Map)c;
+		
+		// Children of node sets are maps containing a primary type
+		// indicated by the given Descriptor and any others
+		// aggregated in. Because we are simple CSV at the moment
+		// just write out the primary children.
+		
+		// Fetch the instance child
+		Map ic =(Map) m.get(d.getName());
+		
+		// Make the formatters
+		if (formatters_ == null)
+		{
+			formatters_ = AbstractComposite.simpleMap();
+			Iter i = d.getFieldOrder().createIterator();
+			while (i.hasNext())
+			{
+				Any fName = i.next();
+				Any val = ic.get(fName);
+				AnyFormat fmt = AnyFormat.makeFormat(val, d.getFormat(fName));
+				fmt.setGroupingUsed(false);
+				formatters_.add(fName, fmt);
+				
+				// Using this as the first line condition, write the headers
+  			writeCell(fName.toString());
+			}
+			ps_.print(lineSeparator__);
+			ps_.flush();
+			cellsWritten_ = 0;
+		}
+		
+		writeInstance(ic, d);
+	}
+	
+	private void writeInstance(Map m, BOTDescriptor d)
+	{
+		Iter i = d.getFieldOrder().createIterator();
+		while (i.hasNext())
+		{
+			Any fName = i.next();
+			Any val   = m.get(fName);
+			AnyFormat fmt = (AnyFormat)formatters_.get(fName);
+			writeCell(fmt.format(val));
+		}
+
+		ps_.print(lineSeparator__);
+		ps_.flush();
+		cellsWritten_ = 0;
+	}
+
+	Descriptor findType(Any fqName)
+	{
+    LocateNode ln = new LocateNode(fqName);
+    try
+    {
+      Descriptor d = (Descriptor) EvalExpr.evalFunc(Transaction.NULL_TRANSACTION,
+          Catalog.instance().getCatalog(), ln, Descriptor.class);
+
+      return d;
+    }
+    catch (AnyException e)
+    {
+      throw new RuntimeContainedException(e);
+    }
+	}
+	
   private void createParser()
   {
     if (parser_ == null)

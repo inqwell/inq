@@ -77,7 +77,7 @@ local function childTag(any node,
   nodeName + ordinal;
 }
 
-local function resultsPath(any test, any root)
+local function resultsPath(any test, any root, string ext = ".xml")
 {
   // evaluate the results file name
   if (!root)
@@ -87,8 +87,29 @@ local function resultsPath(any test, any root)
   if (test)
     p += $properties.file_separator + test;
   
-  p += ".xml";
+  p += ext;
 }
+
+function storeCSV(any results, any test, any root, any base)
+{
+  any p = call resultsPath(test, root, ext=".csv");
+  
+  ioCSV c;
+  c.properties.scanNodeSets = true;
+
+  // Make the path where the results will go. It is relative
+  // to this script as "./results/<p>"
+  file resf = absurl(p, base);
+  
+  // Make sure the parent directory is present
+  file dir  = resf.properties.parentPath;
+  mkdirs(dir);
+
+  open(c, resf, OPEN_WRITE);
+  writestream(c, results);
+  close(c);
+}
+
 
 function compareNodeSets(any results, any expected, any paths)
 {
@@ -138,6 +159,7 @@ function runTests (any tests, any base)
   int fail    = 0;
   
   boolean record = if ($catalog.argsMap.record) true; else false;;
+  any $process.test.csv = if ($catalog.argsMap.csv) true; else false;;
   
   any durationFmt = format("HH:mm:ss@zone='GMT'@", any ss = getdate());
   
@@ -166,7 +188,7 @@ function runTests (any tests, any base)
         writeln ($catalog.system.out, renderf("{0} test {1}", (record ? "Recording" : "Running"), $loop));
         try
         {
-          xfunc($loop);
+          any results = xfunc($loop); // No use for results in here yet
 
           date td = getdate() - ts;
           writeln($catalog.system.out, renderf("Duration: {0}", render(td, format=durationFmt)));
