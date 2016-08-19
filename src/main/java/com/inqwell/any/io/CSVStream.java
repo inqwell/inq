@@ -549,6 +549,12 @@ public class CSVStream extends AbstractStream
 		if (d == null || (!(d instanceof BOTDescriptor)))
 			return;
 		
+		writeCell(d.getName().toString());
+		ps_.print(lineSeparator__);
+		ps_.flush();
+		cellsWritten_ = 0;
+
+		
 		Iter i = m.createIterator();
 		while (i.hasNext())
 		{
