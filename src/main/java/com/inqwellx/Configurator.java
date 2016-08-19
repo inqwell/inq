@@ -18,11 +18,11 @@ public class Configurator
 
   static private Any xyuser__     = AbstractValue.flyweightString("xy1");
   static private Any xypassword__ = AbstractValue.flyweightString("xy1");
-  static private Any xyurl__      = AbstractValue.flyweightString("jdbc:mysql://localhost/xydev");
+  static private Any xyurl__      = AbstractValue.flyweightString("jdbc:mysql://localhost/xydev?verifyServerCertificate=false&useSSL=false&requireSSL=false");
   
   static private Any inquser__     = AbstractValue.flyweightString("inq");
   static private Any inqpassword__ = AbstractValue.flyweightString("inq123");
-  static private Any inqurl__      = AbstractValue.flyweightString("jdbc:mysql://localhost/inq");
+  static private Any inqurl__      = AbstractValue.flyweightString("jdbc:mysql://localhost/inq?verifyServerCertificate=false&useSSL=false&requireSSL=false");
   
   static private Map mXylinqDb__;
   static private Map mInqDb__;
