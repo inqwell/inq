@@ -110,6 +110,54 @@ function storeCSV(any results, any test, any root, any base)
   close(c);
 }
 
+function adjustPrecision(any t, any atPath)
+{
+  // Possibly adjust the precision of the given value (typically
+  // a value under test) so that it is suitable for comparison
+  // with any expected (meaning "real world") value.
+  // Often, values held within the system are at greater precision
+  // than their real world representation (rates, dates) and
+  // are reduced when externalised.
+
+  // See if we have any formatters. This is what defines any reduction
+  if ($process.test.formatters)
+  {
+    // See if there is a formatter for the given path. If found
+    // use it to flatten the value under test to whatever that format is.
+    any f = $process.test.formatters.{atPath};
+    if (f)
+    {
+      any t1 = clone(t);
+      any ff = format(f, t);
+      parse(render(t, format=ff), ff, t1);
+      any t = t1;
+    }
+  }
+  
+  // Returns
+  t;
+}
+
+function compareSingle(any test, any expected, any paths)
+{
+  // Compare the value under test with its expected value by
+  // checking only those fields indicated by paths. Typically
+  // the paths will not include fields that alter between test
+  // runs, like IDs and LastUpdated fields.
+  
+  // Not equal then throw
+  foreach(paths)
+  {
+    any t = test.{$loop};  // Value under test
+    any e = expected.{$loop};  // Expected value
+ 
+    any t = call adjustPrecision(t, atPath = object p = path($this.{$loop}));
+ 
+    if (t != e)
+      throw(renderf("Expected {0} got {1} for field {2}\ntest {3}\nexpected {4}",
+                    e, t, $loop, test, expected));
+  }
+}
 
 function compareNodeSets(any results, any expected, any paths)
 {
@@ -127,25 +175,11 @@ function compareNodeSets(any results, any expected, any paths)
     any n = $loop;
     foreach(paths)
     {
-      any t = n.{$loop};
+      any t = n.{$loop};  // Value under test
+      any e = expected[c].{$loop};  // Expected value
       
-      // See if we have any formatters
-      if ($process.test.formatters)
-      {
-        // See if there is a formatter for the current path. If found
-        // use it to flatten the current value to whatever that format is.
-        object p = path($this.{$loop});
-        any f = $process.test.formatters.{p};
-        if (f)
-        {
-          any t1 = clone(t);
-          any ff = format(f, t);
-          parse(render(t, format=ff), ff, t1);
-          any t = t1;
-        }
-      }
-      
-      any e = expected[c].{$loop};
+      any t = call adjustPrecision(t, atPath = object p = path($this.{$loop}));
+ 
       if (t != e)
         throw(renderf("Expected {0} got {1} for field {2} ordinal {3}\nnode {4}\nexpected {5}",
                       e, t, $loop, c, n, expected[c]));
@@ -173,6 +207,8 @@ function runTests (any tests, any base)
   foreach(tests)
   {
     any test = exec($loop, base);
+    
+    int test.success=0;
   
     try
     {
