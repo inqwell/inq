@@ -199,7 +199,10 @@ public class ConstString extends AbstractValue
       // other values have their visitor in the base class. This one
       // should have too.  I'm a twit.
       //setString(a.toString());
-      value_ = a.toString();
+    	if (a instanceof Value && ((Value)a).isNull())
+    		setNull();
+    	else
+        value_ = a.toString();
     }
   }
 
