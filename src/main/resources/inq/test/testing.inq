@@ -192,7 +192,7 @@ function runTests (any tests, any base)
   int success = 0;
   int fail    = 0;
   
-  boolean record = if ($catalog.argsMap.record) true; else false;;
+  any record            = if ($catalog.argsMap.record) true; else false;;
   any $process.test.csv = if ($catalog.argsMap.csv) true; else false;;
   
   any durationFmt = format("HH:mm:ss@zone='GMT'@", any ss = getdate());
