@@ -198,11 +198,9 @@ function runTests (any tests, any base)
   any durationFmt = format("HH:mm:ss@zone='GMT'@", any ss = getdate());
   
   writeln ($catalog.system.out, "");
+  
   if (record)
-  {
-    writeln ($catalog.system.out, "Recording...");
-    writeln ($catalog.system.out, "");
-  }
+    writeln ($catalog.system.out, "Recording...\n");
 
   foreach(tests)
   {
