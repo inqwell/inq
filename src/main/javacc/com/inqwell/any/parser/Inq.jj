@@ -8349,23 +8349,6 @@ Any RetainAll() :
   }
 }
 
-/*
-Any Render() :
-{
-  RenderInfo r;
-  int        line;
-}
-{
-  "render" { line = token.beginLine; }
-  "(" r = AnyRenderInfo() ")"
-  {
-    Render rr = new Render(r);
-    rr.setLineNumber(line);
-    return rr;
-  }
-}
-*/
-
 Any Render() :
 {
   Any     a;
