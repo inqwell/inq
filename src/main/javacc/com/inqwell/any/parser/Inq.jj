@@ -2630,6 +2630,7 @@ SKIP :
 | < RIGHTSTRING:      "rightstring" >
 | < SERVERSOCKET:     "serversocket" >
 | < SETBLOB:          "setblob" >
+| < SETENTRYLOGGING:  "setentrylogging" >
 | < SETNULL:          "setnull" >
 | < SETNODESET:       "setnodeset" >
 | < SETUNIQUEKEY:     "setuniquekey" >
@@ -4129,6 +4130,7 @@ Any Operand() :
   | a = GetProperty()
   | a = SetBlob()
   | a = GetBlob()
+  | a = SetEntryLogging()
   | a = GetCurrentStack()
   | a = Xfunc()
   | a = SetExceptionHandler()
@@ -7697,6 +7699,62 @@ Any SetBlob() :
   }
 }
 
+Any SetEntryLogging() :
+{
+  String    entity;
+  String    special  = null;
+  Any       aSpecial = null;
+  String    packageOverride  = _package;
+  BooleanI  logged;
+  int       line;
+}
+{
+  "setentrylogging" { line = token.beginLine; }
+  "("
+  [LOOKAHEAD(Name() ":") (Name() { packageOverride = mapImport(token.image); } ":" )]
+  ( <IDENTIFIER> { entity = token.image; } )
+  ","
+  ( ( ( "construct"  { special = token.image; }
+      | "join"       { special = token.image; }
+      | "mutate"     { special = token.image; }
+      | "destroy"    { special = token.image; }
+      ) { aSpecial = AbstractValue.flyweightString(special); }
+      "," logged = BooleanLiteralAsAny()
+    )
+    |
+    logged = BooleanLiteralAsAny()
+  )
+  ")"
+  {
+    Any aEntity;
+    Any aPkg;
+
+    if (entity.equals("all"))
+      aEntity = AnyAlwaysEquals.instance();
+    else
+    {
+      if (aSpecial == null)
+        aEntity = AbstractValue.flyweightString(entity);
+      else
+        aEntity = aSpecial;
+    }
+    
+    if (packageOverride.equals("all"))
+      aPkg = AnyAlwaysEquals.instance();
+    else
+    {
+      if (aSpecial == null)
+        aPkg = AbstractValue.flyweightString(packageOverride);
+      else
+        aPkg = AbstractValue.flyweightString(packageOverride + ".types." + entity);
+    }
+    
+    SetEntryLogging s = new SetEntryLogging(aPkg, aEntity, logged.getValue());
+    s.setLineNumber(line);
+    return s;
+  }
+}
+
 Any Show() :
 { Any win; Any withResize = null; Any relativeTo = null; int line; }
 {
@@ -10179,7 +10237,9 @@ Any FunctionDeclaration() :
         case FUNCTION: nameSpace = ".exprs.";    break;
         case SERVICE:  nameSpace = ".services."; break;
       }
-      func.setFQName(new ConstString(packageOverride + ":" + _entity));
+      func.setPackage(AbstractValue.flyweightString(packageOverride));
+      func.setName(AbstractValue.flyweightString(_entity));
+      func.setFQName(AbstractValue.flyweightString(packageOverride + ":" + _entity));
       _entity = "";
       NodeSpecification path = new NodeSpecification(packageOverride + nameSpace + funcName);
       if (local)

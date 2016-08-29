@@ -14,6 +14,10 @@
 
 package com.inqwell.any.server;
 
+import java.util.logging.Level;
+import java.util.logging.LogManager;
+import java.util.logging.Logger;
+
 //import com.inqwell.any.io.AnyIOException;
 import com.inqwell.any.AbstractComposite;
 import com.inqwell.any.AbstractDescriptor;
@@ -103,6 +107,9 @@ public final class BOTDescriptor extends    AbstractDescriptor
   private static Descriptor Key__;
   private static Descriptor KeyField__;
 
+  private static     LogManager lm = LogManager.getLogManager();
+  private static     Logger     l  = lm.getLogger("inq");
+  
   // Some optimisations for checking whether we should allow
   // certain updates to BOT instance fields
   private Set   uniqueKeyFields_;
@@ -549,10 +556,10 @@ public final class BOTDescriptor extends    AbstractDescriptor
                         String fQName,
                         String inqPackage)
   {
-    this(new ConstString(name),
-				 new ConstString(alias),
-				 new ConstString(fQName),
-         new ConstString(inqPackage));
+    this(AbstractValue.flyweightString(name),
+    		 AbstractValue.flyweightString(alias),
+    		 AbstractValue.flyweightString(fQName),
+    		 AbstractValue.flyweightString(inqPackage));
   }
 
   public Any read (Process p, Map keyVal, int maxCount) throws AnyException
@@ -823,8 +830,16 @@ public final class BOTDescriptor extends    AbstractDescriptor
         se.setLineNumber(curLine);
         t.getCallStack().push(new Call.CallStackEntry(this.getBaseURL(), this.construct__));
         f.execFunc(m);
+        if (Call.isLogged(getFQName(), contructf__))
+  	    	l.log(Level.INFO, "Constructed {0} ", m);
+
         t.getCallStack().pop();
         t.setLineNumber(curLine);
+      }
+      else
+      {
+        if (Call.isLogged(getFQName(), contructf__))
+  	    	l.log(Level.INFO, "Constructed {0} ", m);
       }
       boolean exists = primary_.checkExists(m, t);
       if (!exists)
@@ -852,8 +867,15 @@ public final class BOTDescriptor extends    AbstractDescriptor
         se.setLineNumber(curLine);
         t.getCallStack().push(new Call.CallStackEntry(this.getBaseURL(), this.join__));
         f.execFunc(m);
+        if (Call.isLogged(getFQName(), joinf__))
+  	    	l.log(Level.INFO, "Joined {0} ", m);
         t.getCallStack().pop();
         t.setLineNumber(curLine);
+      }
+      else
+      {
+        if (Call.isLogged(getFQName(), joinf__))
+  	    	l.log(Level.INFO, "Joined {0} ", m);
       }
     }
     finally
@@ -884,8 +906,19 @@ public final class BOTDescriptor extends    AbstractDescriptor
         se.setLineNumber(t.getLineNumber());
 			  t.getCallStack().push(new Call.CallStackEntry(this.getBaseURL(), Descriptor.mutate__));
         f.execFunc(context);
+        if (Call.isLogged(getFQName(), mutatef__))
+  	    	l.log(Level.INFO, "Mutated {0} ", context);
         t.getCallStack().pop();
         se.setLineNumber(curLine);
+      }
+      else
+      {
+        if (Call.isLogged(getFQName(), mutatef__))
+        {
+          context.replaceItem(Descriptor.new__, newVal);
+          context.replaceItem(Descriptor.old__, oldVal);
+  	    	l.log(Level.INFO, "Mutated {0} ", context);
+        }
       }
     }
     finally
@@ -910,8 +943,15 @@ public final class BOTDescriptor extends    AbstractDescriptor
         se.setLineNumber(curLine);
 			  t.getCallStack().push(new Call.CallStackEntry(this.getBaseURL(), this.destroy__));
         f.execFunc(m);
+        if (Call.isLogged(getFQName(), destroyf__))
+  	    	l.log(Level.INFO, "Destroyed {0} ", m);
         t.getCallStack().pop();
         se.setLineNumber(curLine);
+      }
+      else
+      {
+        if (Call.isLogged(getFQName(), destroyf__))
+  	    	l.log(Level.INFO, "Destroyed {0} ", m);
       }
     }
     finally

@@ -20,7 +20,12 @@ public interface Descriptor extends Any
   public static final Any typedef__ = AbstractValue.flyweightString("typedef");
   public static final Any nodeset__ = AbstractValue.flyweightString("nodeset");
   
-	static final Any        descriptor__           = new ConstString("__descriptor");
+  public static final Any contructf__ = AbstractValue.flyweightString("construct");
+  public static final Any joinf__     = AbstractValue.flyweightString("join");
+  public static final Any mutatef__   = AbstractValue.flyweightString("mutate");
+  public static final Any destroyf__  = AbstractValue.flyweightString("destroy");
+
+  static final Any        descriptor__           = new ConstString("__descriptor");
 	static final Descriptor degenerateDescriptor__ = new DegenerateDescriptor();
 	
 	static final String label__     = "label";

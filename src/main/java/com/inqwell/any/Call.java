@@ -16,6 +16,10 @@
 
 package com.inqwell.any;
 
+import java.util.logging.Level;
+import java.util.logging.LogManager;
+import java.util.logging.Logger;
+
 import com.inqwell.any.util.CommandArgs;
 
 /**
@@ -43,6 +47,112 @@ public class Call extends    AbstractFunc
   static private Any    args__    = new ConstString("args");
   static private Any    arrays__  = new ConstString("arrays");
   //static private String none__  = new ConstString("none");
+
+  private static     LogManager lm = LogManager.getLogManager();
+  private static     Logger l = lm.getLogger("inq");
+  
+  private static     Map loggedPackages__;
+  
+  static
+  {
+  	synchronized(Call.class)
+  	{
+  		if (loggedPackages__ == null)
+  			loggedPackages__ = AbstractComposite.simpleMap();
+  	}
+  }
+  
+  /**
+   * Add a logged package. Packages are mapped to function or service
+   * names. Note these are separate name spaces so a function and
+   * a service with the same name will both be logged or not.
+   * 
+   * If the entity is AnyAlwaysEquals.instance() then all package
+   * entities will be logged.
+   * 
+   * Adding something to the logged list causes input arguments
+   * and return value to be logged to the "inq" logger.
+   * 
+   * @param pkg
+   * @param entity
+   */
+  static public void addLoggedEntity(Any pkg, Any entity)
+  {
+  	synchronized(loggedPackages__)
+  	{
+  		if (AnyAlwaysEquals.isAlwaysEquals(pkg))
+  		{
+  			loggedPackages__.empty();
+  			loggedPackages__.add(AnyAlwaysEquals.instance(), AnyAlwaysEquals.instance());
+  			return;
+  		}
+  		
+  		if (AnyAlwaysEquals.isAlwaysEquals(entity))
+  			loggedPackages__.replaceItem(pkg, entity);
+  		else
+  		{
+  			Any a = loggedPackages__.getIfContains(pkg);
+  			Set s = null;
+  			
+  			if (a instanceof Set)
+  				s = (Set)a;
+  			else
+  				loggedPackages__.remove(pkg);
+  			
+    		if (s == null)
+    		{
+    			s = AbstractComposite.set();
+      		s.add(entity);
+      		loggedPackages__.add(pkg, s);
+    		}
+    		else
+    		{
+    			if (!s.contains(entity))
+    				s.add(entity);
+    		}
+  		}
+  	}
+  }
+  
+  static public void removeLoggedEntity(Any pkg, Any entity)
+  {
+  	synchronized(loggedPackages__)
+  	{
+  		if (AnyAlwaysEquals.isAlwaysEquals(pkg))
+  			loggedPackages__.empty();
+  		else
+  		{
+    		if (AnyAlwaysEquals.isAlwaysEquals(entity))
+    			loggedPackages__.remove(pkg);
+    		else
+    		{
+    			Any a = loggedPackages__.getIfContains(pkg);
+    			Set s = null;
+    			
+    			if (a instanceof Set)
+    				s = (Set)a;
+
+      		if (s != null)
+      			s.remove(entity);
+      		else
+      			loggedPackages__.remove(pkg);
+    		}
+  		}
+   	}
+  }
+  
+  static public boolean isLogged(Any pkg, Any entity)
+  {
+  	// Not bothering to sync on read...
+  	Any e = loggedPackages__.getIfContains(pkg);
+  	if (e == null)
+  		return false;
+  	
+  	if (AnyAlwaysEquals.isAlwaysEquals(e))
+  		return true;
+  	
+  	return (((Set)e).contains(entity));
+  }
 
   static public Any call(Call c, Map args)
   {
@@ -84,7 +194,8 @@ public class Call extends    AbstractFunc
 													AbstractInputFunc        af,
                           AnyFuncHolder.FuncHolder fh) throws AnyException
 	{
-    Map stack = null;
+    Map stack      = null;
+    boolean logged = false;
     
     // If there are no args and no scripted function being called then
     // there's no need to create a new stack frame.  This allows
@@ -131,6 +242,14 @@ public class Call extends    AbstractFunc
         // Bit flakey but see LoginOK.init() for an explanation
         if (funcURL != null)
           t.setExecURL(funcURL);
+
+        logged = isLogged(af.getPackage(), af.getName());
+  	    if (logged)
+  	    {
+  	    	// Log args going in
+  	    	l.log(Level.INFO, "Entering {0} args: {1}", new Object[] {af.getFQName(), args});
+  	    }
+
       }
       else
       {
@@ -156,6 +275,12 @@ public class Call extends    AbstractFunc
 			if (af != null || fh != null)
       {
 			  t.getCallStack().pop();
+
+			  if (logged)
+  	    {
+  	    	// Log return coming out
+  	    	l.log(Level.INFO, "Leaving {0} ret: {1}", new Object[] {af.getFQName(), args});
+  	    }
       }
 		}
 		catch(ReturnException re)

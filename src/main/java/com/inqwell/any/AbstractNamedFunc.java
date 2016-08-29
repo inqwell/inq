@@ -11,7 +11,30 @@ public abstract class AbstractNamedFunc extends    AbstractFunc
                                         implements NamedFunc
 {
   private Any fqName_;
+  private Any package_;
+	private Any name_;
   
+
+  public Any getPackage()
+	{
+		return package_;
+	}
+
+	public void setPackage(Any pkg)
+	{
+		package_ = pkg;
+	}
+
+	public Any getName()
+	{
+		return name_;
+	}
+
+	public void setName(Any name)
+	{
+		name_ = name;
+	}
+
   public void setFQName(Any fqName)
   {
     fqName_ = fqName;
