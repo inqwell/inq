@@ -352,7 +352,23 @@ public abstract class AbstractTransaction extends    AbstractAny
       p.setExecURL(execUrl);
   }
   
-  public void setResolving(int resolving)
+  public void setExecFQName(Any execFQName)
+  {
+    Process p = getProcess();
+    if (p != null)
+      p.setExecFQName(execFQName);
+  }
+  
+  public Any  getExecFQName()
+  {
+    Process p = getProcess();
+    if (p != null)
+      return p.getExecFQName();
+    else
+      return null;
+  }
+  
+ public void setResolving(int resolving)
   {
     resolving_ = resolving;
   }

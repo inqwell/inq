@@ -431,6 +431,9 @@ public interface Transaction extends Any
 
   public Any  getExecURL();
   public void setExecURL(Any execUrl);
+  
+  public void setExecFQName(Any execFQName);
+  public Any  getExecFQName();
 
   public Stack getCallStack();
 

@@ -2631,6 +2631,8 @@ SKIP :
 | < SERVERSOCKET:     "serversocket" >
 | < SETBLOB:          "setblob" >
 | < SETENTRYLOGGING:  "setentrylogging" >
+| < SETLINELOGGING:   "setlinelogging" >
+| < CLEARLINELOGGING: "clearlinelogging" >
 | < SETNULL:          "setnull" >
 | < SETNODESET:       "setnodeset" >
 | < SETUNIQUEKEY:     "setuniquekey" >
@@ -4131,6 +4133,8 @@ Any Operand() :
   | a = SetBlob()
   | a = GetBlob()
   | a = SetEntryLogging()
+  | a = SetLineLogging()
+  | a = ClearLineLogging()
   | a = GetCurrentStack()
   | a = Xfunc()
   | a = SetExceptionHandler()
@@ -7752,6 +7756,55 @@ Any SetEntryLogging() :
     SetEntryLogging s = new SetEntryLogging(aPkg, aEntity, logged.getValue());
     s.setLineNumber(line);
     return s;
+  }
+}
+
+Any SetLineLogging() :
+{
+  String    entity;
+  String    packageOverride  = _package;
+  String    startLine;
+  String    endLine;
+  int       line;
+}
+{
+  "setlinelogging" { line = token.beginLine; }
+  "("
+  [LOOKAHEAD(Name() ":") (Name() { packageOverride = mapImport(token.image); } ":" )]
+  ( <IDENTIFIER> { entity = token.image; } )
+  ","
+  ( "start"
+    "="
+    <INTEGER_LITERAL> { startLine  = token.image; }
+  )
+  ","
+  ( "end"
+    "="
+    <INTEGER_LITERAL> { endLine  = token.image; }
+  )
+  ")"
+  {
+    int s = Integer.valueOf(startLine).intValue();
+    int e = Integer.valueOf(endLine).intValue();
+    Any execFQName = AbstractValue.flyweightString(packageOverride + ":" + entity);
+    SetLineLogging sll = new SetLineLogging(execFQName, s, e);
+    sll.setLineNumber(line);
+    return sll;
+  }
+}
+
+Any ClearLineLogging() :
+{
+  int       line;
+}
+{
+  "clearlinelogging" { line = token.beginLine; }
+  "("
+  ")"
+  {
+    ClearLineLogging cll = new ClearLineLogging();
+    cll.setLineNumber(line);
+    return cll;
   }
 }
 

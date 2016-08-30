@@ -30,6 +30,7 @@ public abstract class AbstractProcess extends    InstanceHierarchyMap
 	private Stack     callStack_ = AbstractComposite.callStack();
 
 	private Any       execUrl_;
+	private Any       execFQName_;
 
   public void setWaitingObject(Any a, long timeout)
   {
@@ -128,6 +129,8 @@ public abstract class AbstractProcess extends    InstanceHierarchyMap
   public int  getColumn()             { return columnNumber_; }
   public Any  getExecURL()            { return execUrl_;      }
   public void setExecURL(Any execUrl) { execUrl_ = execUrl;   }
+  public Any  getExecFQName()         { return execFQName_; }
+  public void setExecFQName(Any execFQName) { execFQName_ = execFQName;   }
 
   public Stack getCallStack()         { return callStack_;    }
   

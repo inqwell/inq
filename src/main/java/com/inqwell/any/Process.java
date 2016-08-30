@@ -206,6 +206,8 @@ public interface Process extends Map
   public int  getColumn();
   public Any  getExecURL();
   public void setExecURL(Any execUrl);
+  public Any  getExecFQName();
+  public void setExecFQName(Any execFQName);
   public Stack getCallStack();
   public Any getCurrentStack();
   

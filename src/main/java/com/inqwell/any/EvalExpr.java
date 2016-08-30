@@ -13,6 +13,13 @@
  */
 package com.inqwell.any;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.logging.Level;
+import java.util.logging.LogManager;
+import java.util.logging.Logger;
+
 /**
  * Contains a binary or unary mathematical operator and applies that operator
  * to the given structure.  Instances can be chained to build complex
@@ -67,6 +74,72 @@ public class EvalExpr extends    AbstractFunc
   private Any op1_;
   private Any op2_;
   private OperatorVisitor oper_;
+  
+  // Maps function/service FQ names to line numbers. If expressions
+  // are evaluated in a listed context their result will be logged.
+  private static final java.util.Map<Any, ArrayList<LineNumberRange>> loggedLines__
+                          = new java.util.HashMap<Any, ArrayList<LineNumberRange>>();
+  
+  private static     LogManager lm = LogManager.getLogManager();
+  private static     Logger l = lm.getLogger("inq");
+
+  private static boolean find(int line, ArrayList<LineNumberRange> al)
+  {
+  	for (LineNumberRange l : al)
+  	{
+  		if (line > l.end_)
+  		  break;
+  		
+  		if (line >= l.start_)
+  			return true;
+  	}
+  	return false;
+  }
+  
+  public static boolean isLogged(Any execFQName, int line)
+  {
+  	ArrayList<LineNumberRange> al = null;
+  	
+  	synchronized(loggedLines__)
+  	{
+  		al = loggedLines__.get(execFQName);
+  	}
+  	
+  	return (al != null && find(line, al));
+  }
+  
+  public static void clearLineLogging()
+  {
+  	synchronized(loggedLines__)
+  	{
+  		loggedLines__.clear();
+  	}
+  }
+  
+  public static void setLineLogging(Any execFQName, int start, int end)
+  {
+  	synchronized(loggedLines__)
+  	{
+  		if (start == 0 || end == 0)
+  			loggedLines__.remove(execFQName);
+  		else
+  		{
+    		ArrayList<LineNumberRange> al = loggedLines__.get(execFQName);
+    		
+    		if (al == null)
+    		{
+    			al = new ArrayList<LineNumberRange>();
+    			al.add(new LineNumberRange(start, end));
+    			loggedLines__.put(execFQName, al);
+    		}
+    		else
+    		{
+    			al.add(new LineNumberRange(start, end));
+    			Collections.sort(al);
+    		}
+  		}
+  	}
+  }
 
   /**
 	 * Evaluate a <code>Func</code> or derived until an instance
@@ -105,6 +178,8 @@ public class EvalExpr extends    AbstractFunc
 								 ("Specified execution class is not a Func" + execWhile));
 		}
 		
+    Any orig = a;
+    
     boolean nonFunc = true;
     
 		if (a != null)
@@ -141,7 +216,14 @@ public class EvalExpr extends    AbstractFunc
     if (nonFunc)
       t.resetResolving();
       
-		return a;
+    // Are we logging at this FQName/line number?
+    if (isLogged(t.getExecFQName(), t.getLineNumber()))
+		{
+    	l.log(Level.INFO, "Eval: {0}", orig);
+    	l.log(Level.INFO, "Expr: {0}", a);
+		}
+    
+    return a;
   }
   
   public static Any evalFunc(Transaction t, Any root, Any a, Class c) throws AnyException
@@ -338,4 +420,40 @@ public class EvalExpr extends    AbstractFunc
       return res1;
     }
 	}
+  
+  public static class LineNumberRange implements Comparable<LineNumberRange>
+  {
+    public final int start_;
+    public final int end_;
+    
+    public LineNumberRange(int s, int e)
+    {
+    	start_ = s;
+    	end_   = e;
+    }
+
+		@Override
+		public int compareTo(LineNumberRange other)
+		{
+			if (start_ < other.start_) return -1;
+			if (start_ > other.start_) return 1;
+			
+			if (end_ < other.end_) return -1;
+			if (end_ > other.end_) return 1;
+
+			return 0;
+		}
+		
+		public int hashCode()
+		{
+			return start_ * end_;
+		}
+		
+		public boolean equals(Object other)
+		{
+			LineNumberRange l = (LineNumberRange)other;
+			
+			return start_ == l.start_ && end_ == l.end_;
+		}
+  }
 }

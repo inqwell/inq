@@ -232,6 +232,9 @@ public class NullTransaction extends    AbstractAny
 
   public Any  getExecURL()            { return null;      }
   public void setExecURL(Any execUrl) { }
+  
+  public void setExecFQName(Any execFQName) {}
+  public Any  getExecFQName() { return null; }
 
   public Stack getCallStack()         { return null;      }
 

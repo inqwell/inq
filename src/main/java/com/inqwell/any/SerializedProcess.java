@@ -245,6 +245,16 @@ public class SerializedProcess extends    SimpleMap
   {
     throw new UnsupportedOperationException();
   }
+
+  public Any  getExecFQName()
+  {
+    throw new UnsupportedOperationException();
+  }
+  
+  public void setExecFQName(Any execFQName)
+  {
+  	throw new UnsupportedOperationException();
+  }
   
   public short getRealPrivilegeLevel()
   {

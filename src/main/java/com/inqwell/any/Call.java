@@ -224,6 +224,7 @@ public class Call extends    AbstractFunc
     int lineNumber = t.getLineNumber();
     int column     = t.getColumn();
     Any execURL    = t.getExecURL();
+    Any execFQName = t.getExecFQName();
     
 		try
 		{
@@ -242,6 +243,10 @@ public class Call extends    AbstractFunc
         // Bit flakey but see LoginOK.init() for an explanation
         if (funcURL != null)
           t.setExecURL(funcURL);
+        
+        Any funcFQName = af.getFQName();
+        if (funcFQName != null)
+        	t.setExecFQName(funcFQName);
 
         logged = isLogged(af.getPackage(), af.getName());
   	    if (logged)
@@ -271,6 +276,7 @@ public class Call extends    AbstractFunc
       t.setLineNumber(lineNumber);
       t.setColumn(column);
       t.setExecURL(execURL);
+      t.setExecFQName(execFQName);
       
 			if (af != null || fh != null)
       {
