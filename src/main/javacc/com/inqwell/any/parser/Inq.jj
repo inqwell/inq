@@ -7786,6 +7786,8 @@ Any SetLineLogging() :
   {
     int s = Integer.valueOf(startLine).intValue();
     int e = Integer.valueOf(endLine).intValue();
+    if (s > e)
+      throw new AnyRuntimeException("Starting line is beyond ending one");
     Any execFQName = AbstractValue.flyweightString(packageOverride + ":" + entity);
     SetLineLogging sll = new SetLineLogging(execFQName, s, e);
     sll.setLineNumber(line);
