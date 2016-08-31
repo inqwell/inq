@@ -429,6 +429,36 @@ public final class SoftCacheMap extends    AnyMap
   {
     loaded_ = loaded;
   }
+
+  public synchronized void empty()
+  {
+  	super.empty();
+  }
+  
+  public void retainAll(Composite c)
+  {
+  	throw new UnsupportedOperationException();
+  }
+  
+  public void replaceValue (Any key, Any value)
+  {
+  	throw new UnsupportedOperationException();
+  }
+  
+  public void replaceItem (Any key, Any item)
+  {
+  	throw new UnsupportedOperationException();
+  }
+  
+  public void removeAll(Composite c)
+  {
+  	throw new UnsupportedOperationException();
+  }
+  
+  public Any copyFrom (Any a)
+  {
+  	throw new UnsupportedOperationException();
+  }
   
 	protected boolean beforeAdd(Any key, Any value) { return true; }
 	protected void afterAdd(Any key, Any value) {}
