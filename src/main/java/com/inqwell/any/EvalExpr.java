@@ -87,8 +87,11 @@ public class EvalExpr extends    AbstractFunc
   {
   	for (LineNumberRange l : al)
   	{
+  		if (line < l.start_)
+  			break;
+  		
   		if (line > l.end_)
-  		  break;
+  		  continue;
   		
   		if (line >= l.start_)
   			return true;
