@@ -83,7 +83,9 @@ public class InqStreamHandlerFactory implements URLStreamHandlerFactory
   {
     // Check if its one of ours. This is repetition but just to avoid
     // creating a stream handler
-    if (protocol.equals("speakinq"))
+	  if (protocol.equals("gile"))
+      return true;
+	  else if (protocol.equals("speakinq"))
       return true;
     else if (protocol.equals("speakinqs"))
       return true;
@@ -131,7 +133,9 @@ public class InqStreamHandlerFactory implements URLStreamHandlerFactory
 	{
 		URLStreamHandler ret = null;
 		
-		if (protocol.equals("speakinq"))
+	  if (protocol.equals("gile"))
+	    ret = new GileStreamHandler();
+	  else if (protocol.equals("speakinq"))
 			ret = new SpeakInqStreamHandler();
 		else if (protocol.equals("speakinqs"))
 			ret = new SpeakInqsStreamHandler();

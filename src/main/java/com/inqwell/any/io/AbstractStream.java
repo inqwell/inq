@@ -39,6 +39,7 @@ import com.inqwell.any.Map;
 import com.inqwell.any.Process;
 import com.inqwell.any.PropertyAccessMap;
 import com.inqwell.any.RuntimeContainedException;
+import com.inqwell.any.net.GileURLConnection;
 import com.inqwell.any.net.PipedURLConnection;
 import com.inqwell.any.net.PlainSocketURLConnection;
 import com.inqwell.any.net.StreamURLConnection;
@@ -537,6 +538,8 @@ public abstract class AbstractStream extends    PropertyAccessMap
 		try
 		{
 			ret = new FileOutputStream(path, mode.equals(PhysicalIO.append__));
+			if (uc instanceof GileURLConnection)
+				ret = ((GileURLConnection)uc).getEncryptingOutputStream(ret);
 		}
 		catch(Exception e)
 		{

@@ -31,7 +31,8 @@ public class AnyURL extends    AnyObject
 
 	public static Any baseURLKey__ = new ConstString("__baseURL");
 	
-	private static AnyURL cwd__ = null;
+	private static AnyURL cwd__  = null;
+	private static AnyURL gcwd__ = null;
 
   // We sometimes keep the original string, for example
   // if the string was a relative URL and the URL proper
@@ -48,7 +49,8 @@ public class AnyURL extends    AnyObject
         {
           String cwd = System.getProperties().getProperty("user.dir");
           String fs  = System.getProperties().getProperty("file.separator");
-          cwd__ = new AnyURL("file:///" + cwd + fs + "dummy");
+          cwd__  = new AnyURL("file:///" + cwd + fs + "dummy");
+          gcwd__ = new AnyURL("gile:///" + cwd + fs + "dummy");
         }
       }
     }
@@ -112,7 +114,7 @@ public class AnyURL extends    AnyObject
 	  // this w.r.t the cwd
 	  if (bu.isRelative())
 	  {
-	    this.resolveToCwd();
+	    this.resolveToCwd(getProtocol(bu.toString()));
 	    return this.getURL();
 	  }
 	  
@@ -231,11 +233,19 @@ public class AnyURL extends    AnyObject
     return ret;
   }
   
-  public URL resolveToCwd()
+  public URL resolveToCwd(String baseProtocol)
   {
     if (this.isRelative())
-      this.setURL(getCwd().getURL(), this.toString());
-
+    {
+    	if (baseProtocol.equals("gile"))
+    	{
+        getCwd();
+        this.setURL(gcwd__.getURL(), this.toString());
+    	}
+    	else
+        this.setURL(getCwd().getURL(), this.toString());
+    }
+    
     return getURL();
   }
   
@@ -309,7 +319,7 @@ public class AnyURL extends    AnyObject
     return path;
   }
   
-  private String getProtocol(String s)
+  private static String getProtocol(String s)
   {
     String ret = null;
     int i;

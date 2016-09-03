@@ -1,0 +1,135 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2016 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+// Inq encryption and decryption tool. Uses the prevailing Inq
+// security properties to en/decrypt a set of files.
+
+local function usage()
+{
+  writeln($catalog.system.err, "usage: \i:");
+  writeln($catalog.system.err, "  -encrypt | -decrypt");
+  writeln($catalog.system.err, "  -file <file ...>");
+  writeln($catalog.system.err, "  -out <directory>");
+  exit(1);
+}
+
+// Must be one of enc or dec
+if (($catalog.argsMap.encrypt && $catalog.argsMap.decrypt)
+    || (!$catalog.argsMap.encrypt && !$catalog.argsMap.decrypt))
+
+// Must supply -out and -file command line arguments:
+// what we're encrypting and where to write the o/p
+if (!$catalog.argsMap.out || !$catalog.argsMap.file)
+  call usage();
+
+file outdir = $catalog.argsMap.out;
+any infiles = $catalog.argsMap.arrays.file;
+
+// Check outdir exists and is a directory
+if (!outdir.properties.exists || !outdir.properties.directory)
+{
+  writeln($catalog.system.err, outdir + "does not exist or not a directory");
+  exit(1);
+}
+
+local function encrypt(any infiles, any outdir)
+{
+  // Streams for the files. We're assuming text
+  ioPrint i;
+  ioPrint o;
+  
+  // Working file
+  file ifile;
+  
+  foreach(infiles)
+  {
+    writeln($catalog.system.out, $loop);
+  
+    ifile = $loop;
+    
+    // Open the inputs
+    if (!open(i, ifile, OPEN_READ))
+    {
+      writeln($catalog.system.err, "Can't open " + ifile);
+      continue;
+    }
+  
+    
+    // We can't make files of protocol "gile:", only file: is
+    // allowed there, but we can open URLs (which are only strings)
+    // with open()
+    file outfilef = absurl(ifile.properties.name, outdir);
+    any outfile = "gile:" + outfilef.properties.path;
+    
+    writeln($catalog.system.out, "Output file is " + outfile);
+  
+    // Open the output stream and write the input to it
+    open(o, outfile, OPEN_WRITE);
+    while(!isnull(any a = readstream(i)))
+      writeln(o, a);
+   
+    close(i);
+    close(o);
+
+    // Preserve mod time
+    outfilef.properties.lastModified =
+      ifile.properties.lastModified;
+  }
+}
+
+local function decrypt(any infiles, any outdir)
+{
+  // Streams for the files. We're assuming text
+  ioPrint i;
+  ioPrint o;
+  
+  // Working file
+  file ifilef;
+  
+  foreach(infiles)
+  {
+    writeln($catalog.system.out, $loop);
+  
+    ifilef = $loop;
+    
+    // We can't make files of protocol "gile:", only file: is
+    // allowed there, but we can open URLs (which are only strings)
+    // with open()
+    any infile = "gile:" + ifilef.properties.path;
+
+    // Open the inputs
+    if (!open(i, infile, OPEN_READ))
+    {
+      writeln($catalog.system.err, "Can't open " + ifile);
+      continue;
+    }
+  
+    file outfile = absurl(ifilef.properties.name, outdir);
+    
+    writeln($catalog.system.out, "Output file is " + outfile);
+  
+    // Open the output stream and write the input to it
+    open(o, outfile, OPEN_WRITE);
+    while(!isnull(any a = readstream(i)))
+      writeln(o, a);
+   
+    close(i);
+    close(o);
+    
+    // Preserve mod time
+    outfile.properties.lastModified =
+      ifilef.properties.lastModified;
+  }
+}
+
+if ($catalog.argsMap.encrypt)
+  call encrypt(infiles, outdir);
+else
+  call decrypt(infiles, outdir);
+  
