@@ -11,7 +11,18 @@
  * Load code for useful bundled services into the inq Server.
  */
 #include <{db}/inqIo.inq>
-
 #include <inqCommon.inq>
-#include <Unique.inq>
+#include <inqUnique.inq>
 #include <inqUniqueSrv.inq>
+#include <inqControl.inq>
+#include <inqPassword.inq>
+#include <inqUser.inq>
+#include <inqSession.inq>
+#include <inqSessionLog.inq>
+#include <inqRole.inq>
+#include <inqUserRole.inq>
+#include <inqPermission.inq>
+#include <inqPermRef.inq>
+#include <inqLoginSrv.inq>
+#include <inqBuildTreeSrv.inq>
+#include <inqUserSrv.inq>

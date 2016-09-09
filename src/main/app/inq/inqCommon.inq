@@ -1,18 +1,27 @@
-/**
- * Copyright (C) 2011 Inqwell Ltd
- *
- * You may distribute under the terms of the Artistic License, as specified in
- * the README file.
- */
-
 /*
- * Inqwell common definitions. Demonstrates the use of imports and
- * reusing common types (see jobcontrol where references are made)
+ * Inqwell Auth common definitions
+ *
+ * Private & Confidential Copyright © Inqwell Ltd 2004-2009.
+ * All rights reserved.
  */
 
-package inq.boot;
+package inq.auth;
+
+typedef string State label="State"
+(
+  ACTIVE    : "A" : "Active";
+  SUSPENDED : "S" : "Suspended";
+  INACTIVE  : "I" : "Inactive";
+)
+
+typedef string Enabled label="Enabled"
+(
+  Y : "Y" : "Enabled";
+  N : "N" : "Disabled";
+)
 
 typedef string UserName width=16 label="User Name";
+//typedef string User     width=16;
 typedef date   LastUpdated label="Last Updated";
 typedef string FullName width=20 label="Full Name";
 
