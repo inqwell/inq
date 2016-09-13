@@ -25,9 +25,12 @@
       <includes>
         <include>app/**</include>
         <include>etc/**</include>
+        <include>tools/**</include>
       </includes>
       <excludes>
         <exclude>**/.project</exclude>
+        <exclude>tools/dbmake.sh</exclude>
+        <exclude>app/inq/db/createdb.sh</exclude>
       </excludes>
       <fileMode>0644</fileMode>
       <directoryMode>0755</directoryMode>
@@ -66,6 +69,21 @@
       <includes>
         <!--  <include>bin/inq</include> -->
         <include>bin/adminpwd.inq</include>
+        <include>bin/crypt.inq</include>
+      </includes>
+      <excludes>
+        <exclude>**/.project</exclude>
+      </excludes>
+      <fileMode>0755</fileMode>
+      <directoryMode>0755</directoryMode>
+      <outputDirectory>/</outputDirectory>
+    </fileSet>
+
+    <fileSet>
+      <directory>src/main</directory>
+      <includes>
+        <include>tools/dbmake.sh</include>
+        <include>app/inq/db/createdb.sh</include>
       </includes>
       <excludes>
         <exclude>**/.project</exclude>
@@ -84,6 +102,7 @@
         <exclude>bin/inq</exclude>
         <exclude>bin/inq.bat</exclude>
         <exclude>bin/adminpwd.inq</exclude>
+        <exclude>bin/crypt.inq</exclude>
         <exclude>**/.project</exclude>
       </excludes>
       <fileMode>0644</fileMode>
@@ -95,6 +114,29 @@
       <directory>src/main</directory>
       <includes>
         <include>lib/endorsed/**</include>
+      </includes>
+      <excludes>
+        <exclude>lib/endorsed/*.jar</exclude>
+      </excludes>
+      <fileMode>0644</fileMode>
+      <directoryMode>0755</directoryMode>
+      <outputDirectory>/</outputDirectory>
+    </fileSet>
+
+    <fileSet>
+      <directory>src/main</directory>
+      <includes>
+        <include>keys/**</include>
+      </includes>
+      <fileMode>0644</fileMode>
+      <directoryMode>0755</directoryMode>
+      <outputDirectory>/</outputDirectory>
+    </fileSet>
+
+    <fileSet>
+      <directory>src/main</directory>
+      <includes>
+        <include>lib/endorsed/*.jar</include>
       </includes>
       <fileMode>0644</fileMode>
       <directoryMode>0755</directoryMode>
@@ -114,6 +156,7 @@
       <outputDirectory>documentation</outputDirectory>
     </fileSet>
 
+    <!--
     <fileSet>
       <directory>target</directory>
       <includes>
@@ -122,6 +165,7 @@
       <fileMode>0644</fileMode>
       <outputDirectory>/lib</outputDirectory>
     </fileSet>
+    -->
 
     <!--
     Create the empty log directory in the distro. Hmmm.
@@ -152,6 +196,17 @@
       <source>src/main/bin/inq.bat</source>
       <outputDirectory>/bin</outputDirectory>
       <filtered>true</filtered>
+    </file>
+
+    <!--
+    For the runtime jar, remove the version number. Makes it
+    easier to integrate with apps (OK I mean xylinq) 
+    -->
+    <file>
+      <source>target/${project.artifactId}-${project.version}-runtime.jar</source>
+      <outputDirectory>/lib</outputDirectory>
+      <destName>inq-runtime.jar</destName>
+      <fileMode>0644</fileMode>
     </file>
   </files>
 

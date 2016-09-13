@@ -1,0 +1,47 @@
+<?xml version="1.0" ?>
+<table name="inqPermission">
+An Authorisation Database
+Permission Table
+
+There can be several rows in table inqPermission for any given permission:
+- The default value row, for which "Name" is set to "MASTER"
+- Override rows for some users/roles, for which "Name" is set to the user/role name
+
+Associations between users/roles and permissions are in table inqPermRef.
+The permission rows referenced are the "MASTER" ones.
+
+Identifying permissions for a user/role works as follows:
+- Determine the permissions for which some values are defined for the user/role.
+  This is achieved by looking at table inqPermRef.
+- For each permission:
+  - Look for an override permission row in table inqPermission.
+  - If an override row exists use its value, otherwise use the default value (the one from the "MASTER" row).
+
+Private &amp; Confidential Copyright &#169; Xylinq Ltd 2004.
+All rights reserved.
+  <columns>
+    <column name="Permission" nullable="false" type="big_integer"/>
+    <column name="Name" nullable="false" type="var_char" type_precision_1="16">
+      Either a Role or User name, or the special "MASTER" that defines the default values
+    </column>
+    <column name="ThisElement" nullable="false" type="var_char" type_precision_1="16">
+      The readable name of this Permission
+    </column>
+    <column name="Parent" nullable="true" type="big_integer">
+      Parent, null if top-level
+    </column>
+    <column name="Value" nullable="true" type="blob">
+      Permission value, null if a branch
+    </column>
+    <column name="LastUpdated" nullable="false" type="date_time"/>
+    <column name="User" nullable="false" type="var_char" type_precision_1="16"/>
+  </columns>
+  <primary_key name="pk_inqPermission">
+    <column name="Permission"/>
+  </primary_key>
+  <foreign_keys>
+    <foreign_key name="fk_inqPermission_Parent" to="inqPermission">
+      <column name="Parent" to="Permission"/>
+    </foreign_key>
+  </foreign_keys>
+</table>

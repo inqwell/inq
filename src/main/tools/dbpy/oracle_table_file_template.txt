@@ -1,0 +1,24 @@
+${file_header}
+
+BEGIN
+    -- <create_table>
+${create_table}
+    -- </create_table>
+
+    -- <primary_key>
+${primary_key}
+    -- </primary_key>
+
+    -- <unique_keys>
+${unique_keys}
+    -- </unique_keys>
+
+    -- <foreign_keys>
+${foreign_keys}
+    -- </foreign_keys>
+
+    -- <indexes>
+${indexes}
+    -- </indexes>
+END;
+

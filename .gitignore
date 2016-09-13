@@ -7,3 +7,4 @@ src/main/forrest/build/
 src/main/forrest/src/documentation/content/xdocs/build/
 src/main/forrest/src/documentation/content/xdocs/samples/
 src/main/app/examples/petstore/web/
+*.pyc

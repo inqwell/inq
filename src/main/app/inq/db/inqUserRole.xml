@@ -1,0 +1,25 @@
+<?xml version="1.0" ?>
+<table name="inqUserRole">
+An Authorisation Database
+UserRole - Associate users (User) with role(s) (Role)
+
+Private &amp; Confidential Copyright &#169; Xylinq Ltd 2004.
+All rights reserved.
+  <columns>
+    <column name="UserName" nullable="false" type="var_char" type_precision_1="16"/>
+    <column name="Role" nullable="false" type="var_char" type_precision_1="16"/>
+    <column name="Ordinal" nullable="false" type="small_integer"/>
+  </columns>
+  <primary_key name="pk_inqUserRole">
+    <column name="UserName"/>
+    <column name="Role"/>
+  </primary_key>
+  <foreign_keys>
+    <foreign_key name="fk_inqUserRole_UserName" to="inqUser">
+      <column name="UserName" to="UserName"/>
+    </foreign_key>
+    <foreign_key name="fk_inqUserRole_Role" to="inqRole">
+      <column name="Role" to="Role"/>
+    </foreign_key>
+  </foreign_keys>
+</table>

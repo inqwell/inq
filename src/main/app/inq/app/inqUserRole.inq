@@ -1,0 +1,82 @@
+/**
+ * Inqwell Auth UserRole typedef
+ *
+ * Instances relate a User to a Role.  Inq code applies the referenced roles
+ * according to their ordinal.
+ *
+ * If we update any user's roles we set the LastUpdated/User fields in
+ * the User instance
+ *
+ * Private & Confidential Copyright © Inqwell Ltd 2004.
+ * All rights reserved.
+ */
+
+package inq.auth;
+
+import inq.boot as BOOT;
+
+typedef UserRole
+{
+	fields
+	(
+		User.UserName;
+		Role;
+		short            Ordinal;
+	)
+
+	construct ($this = $stack)
+
+	pkey
+	(
+		fields (UserName, Role)
+
+		#include <{db}/inqUserRole.pkey.sql>
+
+	)
+
+  // Just for integrity - we never use it for anything else
+	key RolesByUserOrdinal unique
+	(
+	  fields (UserName, Role, Ordinal)
+    auxcfg( map(
+		"prepared", true,
+		"read-sql",
+			"
+        {select-stmt}
+						where   UserName  = ?
+						and     Role      = ?
+						and     Ordinal   = ?
+			"
+		))
+	)
+
+	key RolesByUser
+	(
+		fields(UserName)
+    auxcfg( map(
+		"prepared", true,
+		"read-sql",
+			"
+        {select-stmt}
+						where   UserName  = ?
+			"
+		))
+	)
+
+	key UsersByRole
+	(
+		fields(Role)
+
+    auxcfg( map(
+		"prepared", true,
+		"read-sql",
+			"
+        {select-stmt}
+						where   Role  = ?
+			"
+		))
+	)
+
+	iobind (SimpleSqlIO, BOOT:inq)
+}
+

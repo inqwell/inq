@@ -1,0 +1,185 @@
+/**
+ * Inqwell
+ *
+ * Auth Permission typedef
+ *
+ * A Role or a User can have a any number of permission instances
+ * that are arranged as a tree of nodes.  The typedef (and persistent
+ * storage) representation of this tree is an instance that knows
+ * its own element name and the id of its parent.
+ *
+ * The Name field is either "MASTER" or in the case of a specific
+ * override, a UserName or a RoleName.  The top level Permission
+ * elements have Parent == NULL.
+ *
+ * The value of a node is held opaquely as a blob. If the value is NULL
+ * the node is a branch, otherwise it is a leaf.
+ * Values that are not leaf nodes because instances exist that
+ * specify them as a parent will cause an illegal structure request
+ * when the tree is built.
+ *
+ * Private & Confidential Copyright © Inqwell Ltd 2004-2009.
+ * All rights reserved.
+ */
+
+package inq.auth;
+
+import inq.boot as BOOT;
+import inq.util as UTIL;
+
+typedef Permission
+{
+	//alias Permission;
+
+	fields
+	(
+    int         Permission;   // Just a unique id
+		UserName    Name;         // "MASTER" or an override name when one has been created
+		string      ThisElement label="Permission";  // The name of this permission eg "maxSpread"
+		Permission  Parent;       // This permission's parent, or null if the root
+    blob:ioXML  Value;        // The value of this permission
+    //string      Format;     // TODO: questionable
+    date        LastUpdated;
+    UserName    User;
+	)
+
+	construct (
+	            {
+	              if (parent)
+	              {
+	                // Check parent is a branch node.  Should never throw but
+	                // this is a last-ditch trap
+	                if (call isLeaf(parent))
+	                  throw("Parent is not a branch");
+
+	                $this.Parent = parent.Permission;
+	              }
+	              else
+	              {
+	                // Disallow leaf values at the root level
+	                if (!isnull($this.Value))
+	                  throw("Top level Permissions cannot be values");
+	                setnull($this.Parent);
+                }
+
+	              $this.LastUpdated = getdate();
+	              $this.User       = $process.loginName;
+	              $this.Permission = call UTIL:getUniqueId(Name="PERM", onDemand=true);
+	            }
+	          )
+
+	mutate (
+	         {
+              $this.new.LastUpdated = getdate();
+              $this.new.User        = $process.loginName;
+	         }
+	       )
+
+	pkey
+	(
+		fields (Permission)
+
+		#include <{db}/inqPermission.pkey.sql>
+	)
+
+  // Retrieve the set of Permission elements for a given name and at a given
+  // level. Parent is null for the root level so key requires some special
+  // config.
+	key ByNameParent
+	(
+		fields(Name, Parent)
+
+		// can not inline since "Parent" is an oracle reserved word
+		#include <{db}/inqPermission.ByNameParent.sql>
+	)
+
+  // Retrieve the set of Branch Permission elements for a given name and at a given
+  // level. Parent is null for the root level.
+  // Implementation note (this and ByNameParentLeaf): the Value field does not
+  // participate in the usage of the key, instead it is constrained to NULL. This
+  // means we need an eligibility expression to ensure the cache is maintained.
+	key ByNameParentBranch
+	(
+		fields(Name, Parent)
+
+    eligible (
+      $this.instance.Name   == $this.key.Name &&
+      $this.instance.Parent == $this.key.Parent &&   // null == null is true in Inq
+      isnull($this.instance.Value)
+    )
+
+		// can not inline since "Parent" is an oracle reserved word
+		#include <{db}/inqPermission.ByNameParentBranch.sql>
+	)
+
+  // Retrieve the set of Leaf Permission elements for a given name and at a given
+  // level.
+  // See ByNameParentBranch for an implementation note reagrding this key.
+  // Furthermore, leaves are no permitted at the top level, so there is no
+  // need to take Parent == null into account in this case.
+	key ByNameParentLeaf
+	(
+		fields(Name, Parent)
+
+    eligible (
+      $this.instance.Name   == $this.key.Name &&
+      $this.instance.Parent == $this.key.Parent &&
+      !isnull($this.instance.Value)
+    )
+
+		// can not inline since "Parent" is an oracle reserved word
+		#include <{db}/inqPermission.ByNameParentLeaf.sql>
+	)
+
+	key TopLevelOverride
+	(
+		fields(ThisElement)
+
+    eligible (
+      $this.instance.Name        != "MASTER" &&
+      $this.instance.ThisElement ==  $this.key.ThisElement &&
+      isnull($this.instance.Parent)
+    )
+
+		// can not inline since "Parent" is an oracle reserved word
+		#include <{db}/inqPermission.TopLevelOverride.sql>
+	)
+
+  // Retrieve the Permission for the given Name and
+  // Parent (copied from Permission field of the parent object) and
+  // element name.
+  // Like Inq structures themselves, we constrain the children at
+  // any point to have unique element names.
+	key ByElementNameParent unique
+	(
+		fields(Name, ThisElement, Parent)
+
+		// can not inline since "Parent" is an oracle reserved word
+		#include <{db}/inqPermission.ByElementNameParent.sql>
+	)
+
+  // Retrieve the parent Permission for the given Name and
+  // Permission (copied from ParentId of the child object).
+  // Note that the Name field
+  // defines a universe of Permission objects and is thus used to
+  // constrain the result appropriately.
+  // There can only be one parent for a given child, so this key
+  // is unique.
+	key ByPermissionName unique
+	(
+		fields(Permission, Name)
+    auxcfg( map(
+		"prepared", true,
+		"read-sql",
+			"
+        {select-stmt}
+						where   Permission  = ?
+						and     Name        = ?
+			"
+		))
+	)
+
+	iobind (SimpleSqlIO, BOOT:inq)
+}
+
+any $catalog.auth.master = "MASTER";

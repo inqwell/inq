@@ -1,0 +1,1910 @@
+/**
+ * Inqwell Auth GUI
+ *
+ * Private & Confidential Copyright � Inqwell Ltd 2004-2007
+ * All rights reserved.
+ */
+
+package inq.auth;
+
+// Can't do this yet when logged in as admin/system.server because
+// of relative URL problems running "srctxt". To be fixed.
+//loadclient("inqPermsClient.inq");
+
+/**
+ * Build the authorisation GUI.  The parent is assumed to support
+ * the menuBar property (that is it must be a window) but it can
+ * be a gWindow or a gIWindow.
+ */
+local function authTreeGUI(any parent)
+{
+  gTab tab;
+	gEvent(tab, call authTabChanged());
+	gEvent(tab, call contextEstablished(), event=(gContext));
+
+  layout(., parent, "Column { Margin d:3 tab } ");
+  call userTab(parent=tab, name="users", menuName="User");
+  tab.users.properties.tabTitle = "Users";
+
+  call roleTab(context=parent, parent=tab, name="roles", menuName="Role");
+  tab.roles.properties.tabTitle = "Roles";
+
+  call permTab(parent=tab, name="perms", menuName="Permission", context=parent);
+  tab.perms.properties.tabTitle = "Permissions";
+
+  string parent.vars.tabSelect;
+  tab.properties.renderInfo = renderinfo($this.vars.tabSelect);
+
+}
+
+local function contextEstablished()
+{
+  call initUsers();
+  func $catalog.guiFuncs.certificateError = call passwordError();
+
+  // Listen for new permRefs being loaded so we can set up the
+  // new[Un]selected lists.
+  listen ($this,
+          func f = call permRefsLoaded(),
+          event = (add, replace),
+          path = $this.vars.permRefs);
+
+  listen ($this,
+          func f = call permRefsChanged(),
+          event = (add, remove, delete),
+          path = $this.vars.permRefs.permRefList.%.#);
+}
+
+local function passwordError(string  msg,
+		                         string  stackTrace,
+		                         boolean isUser,
+		                         any     exInfo,
+		                         date    exTime)
+{
+  // Some sort of validation error has occurred concerning the password.
+  // Select the password tab and show a message.
+  $this.vars.userTabSelect = "passwd";
+	call inq.gui.util:messageDialog(messageTitle = msg,
+        	                        icon         = $uidefaults.OptionPane.warningIcon,
+                                  messageText  = exInfo);
+  setfocus($this.detailsDialog.tfPasswd);
+}
+
+local function validateNew()
+{
+  call validatePwd();
+}
+
+local function validatePwd()
+{
+  string pwd     = $this.detailsDialog.tfPasswd.model.root;
+  string confPwd = $this.detailsDialog.tfConfirm.model.root;
+  string msg     = "Password Error";
+
+  if (length(pwd) == 0)
+  	throw(msg,
+  	      "Please set a password for the new user",
+  	      func f = call passwordError());
+
+  if (pwd != confPwd)
+  	throw(msg,
+  	      "Password and confirmation do not match",
+  	      func f = call passwordError());
+}
+
+local function authTabChanged()
+{
+  $this.fileNew.properties.text = "New " + $this.tab.{$this.tab.model.selection}.vars.menuName;
+}
+
+local function userTab(any parent, string name, string menuName)
+{
+  // An explicit box is used as the top-level GUI object for this
+  // sub-tree.
+  gBox   topBox;
+
+  any   topBox.vars.menuName = menuName;
+  cfunc topBox.vars.newFunc = call authNewUser();
+
+  gTable userTable;
+
+  layout(., parent, parent, name, "topBox { userTable }");
+
+  array userModel =
+  (
+    renderinfo(typedef=User.UserName),
+    renderinfo(typedef=User.FullName),
+    renderinfo(typedef=User.LastLogin),
+    renderinfo(typedef=User.CurSessions),
+    renderinfo(typedef=User.MaxSessions),
+    renderinfo(typedef=User.Expires),
+    renderinfo(typedef=User.LastUpdated, format="dd/MM/yyyy HH:mm:ss"),
+    renderinfo(typedef=User.User)
+  );
+
+  userTable.properties.columns = userModel;
+  userTable.properties.modelRoot = path($this.vars.userList);
+
+  // Setup double-click to launch user details
+  gEvent(userTable, call cbShowUserDetails(), event=(gMclicked), gModify=(count=2));
+  gEvent(userTable, call cbMaybeShowUserDetails(), event=(gKpressed), gModify=(keycode=VK_ENTER), consume=true);
+
+}
+
+local function authNewUser()
+{
+  call userDetails(isNew=true);
+}
+
+local function roleTab(any context, any parent, string name, string menuName)
+{
+  gSplit   topBox;
+  topBox.properties.axis = X_AXIS;
+  gSplit   viewPermsBox;
+
+  any   topBox.vars.menuName = menuName;
+  cfunc topBox.vars.newFunc = call authNewRole();
+
+  gTree roleTree;
+
+  gTree viewPermsTree;
+
+  gTextPane viewPermsVal;
+
+  layout(., parent, parent, name, "topBox { roleTree viewPermsBox { viewPermsTree viewPermsVal } } ");
+
+  string context.vars.permVal; // see cbViewPermSel
+  viewPermsVal.properties.renderInfo = renderinfo($this.vars.permVal);
+
+  //topBox.properties.proportionalLocation = 0.5d;
+
+  // Root element
+  roleTree.properties.renderInfo     = renderinfo("Role List");
+  roleTree.properties.selectionMode = SINGLE_TREE_SELECTION;
+  gEvent(viewPermsTree, call cbViewPermSel(), event=(gTreeselection));
+
+  viewPermsTree.properties.renderInfo     = renderinfo("Perms");
+  viewPermsTree.properties.selectionMode = SINGLE_TREE_SELECTION;
+
+  any level1.levelRoot     = path($this.vars.permViewTree);
+  any level1.renderInfo    = renderinfo(typedef=Permission.ThisElement);
+  cfunc permViewLeaf       = call permViewLeaf();
+  any level1.modelSort     = array a = ( path($loop.Permission.ThisElement) );
+  any level1.isLeaf        = permViewLeaf;
+  any level1.subRoot       = path($this.permTree);
+
+  viewPermsTree.properties.levels     = level1;
+
+  // Second level - users
+
+  any users.levelRoot  = path($this.users);
+  any users.renderInfo = renderinfo(typedef=User.FullName);
+  any users.modelSort     = array a = ( path($loop.User.FullName) );
+  any users.isLeaf     = true;
+
+  //roleTree.properties.levels     = path($this.vars.roleList);
+  any roles.levelRoot  = path($this.vars.roleList);
+  any roles.renderInfo = renderinfo(typedef=Role.FullName);
+  any roles.modelSort     = array a = ( path($loop.Role.FullName) );
+  any roles.nextLevel  = users;
+
+  roleTree.properties.levels     = roles;
+  gEvent(roleTree, call cbRoleTreeSel(), event=(gTreeselection));
+
+  // Setup the popup menu on the roles tree
+  gPopupMenu roleTreePopup;
+  gMenuButton pRTNewRole;
+  gMenuButton pRTDelRole;
+  //pClear.properties.text="Clear Channel";
+  //pClose.properties.text="Close Channel";
+  //gEvent(pClear, call clearChannelInContext());
+  //gEvent(pClose, call closeChannelInContext());
+  //layout($stack, topLevel, channelPopup, "pClear pClose");
+  //gPopup(chat, channelPopup);
+
+}
+
+local function cbRoleTreeSel()
+{
+  //writeln($catalog.system.out, @event);
+
+  if ($this.tab.roles.roleTree.model.selectCount == 1)
+  {
+    if ($this.tab.roles.roleTree.model.selection[0].Role)
+      send loadViewPerms($this.tab.roles.roleTree.model.selection[0].Role);
+    else if ($this.tab.roles.roleTree.model.selection[0].User)
+      send loadViewPerms($this.tab.roles.roleTree.model.selection[0].User);
+  }
+}
+
+local function authNewRole()
+{
+  call roleDetails(selected=new(Role), isEdit=true, isNew=true);
+}
+
+local function permTab(any parent, string name, string menuName, any context)
+{
+  // Make an empty Permission
+  any context.vars.empty.Permission = new(Permission);
+
+  //gBox   topBox;
+  gSplit topBox;
+  topBox.properties.axis = X_AXIS;
+  topBox.properties.focusable = false;
+
+  any   topBox.vars.menuName = menuName;
+  cfunc topBox.vars.newFunc = call authNewPerm();
+
+  gTree  permTree;
+  permTree.properties.selectionMode    = SINGLE_TREE_SELECTION;
+  permTree.properties.showsRootHandles = true;
+  gEvent(permTree, call cbPermTreeSel(), event=(gTreeselection));
+
+  gButton bPublish;
+  bPublish.properties.text = "Publish";
+  gEvent(bPublish, call cbAskPublish());
+
+  layout(., parent, parent, name, "topBox { Column
+                                            {
+                                              permTree
+                                              Geometry xy:vf bPublish
+                                            }
+                                          }");
+
+
+  // Setup the GUI for the leaf nodes of the branch node selected in the tree.
+  call permData(parent=topBox, context);
+
+  // Root element
+  permTree.properties.renderInfo = renderinfo("Permissions");
+  //permTree.properties.closedIcon = image("../images/16x16/Padlock.gif");
+
+  any level1.levelRoot     = path($this.vars.permTree);
+  any level1.renderInfo    = renderinfo(typedef=Permission.ThisElement);
+  func permLeaf            = call permLeaf();
+  any level1.isLeaf        = permLeaf;
+  any level1.modelSort     = array a = ( path($loop.Permission.ThisElement) );
+  boolean level1.recursive = true;
+
+  //array treeLevels               = (level1);
+  //permTree.properties.levels     = treeLevels;
+  permTree.properties.levels     = level1;
+}
+
+/**
+ * Create a table to display the editable data items of a permissions
+ * subset.
+ */
+local function permData(any parent, any context)
+{
+  gTable permTable;
+  gTable permRefTable;
+  //gToggle tPermEdit;
+  gButton bPermCancel;
+  gButton bPermApply;
+  gCheck  cRoles;
+  gCheck  cUsers;
+  gCheck  cSelectedOnly;
+  gCheck  cSelect;   // editor component
+
+  boolean context.vars.inputs.refUsers = true;
+  boolean context.vars.inputs.refRoles = true;
+  boolean context.vars.inputs.refSelected;
+  boolean context.vars.inputs.itemSelected;
+
+  //tPermEdit.properties.text   = "Edit";
+  bPermCancel.properties.text = "Cancel";
+  bPermApply.properties.text  = "Apply";
+
+  cSelect.properties.horizontalAlignment = gGuiConstant(CENTER);
+  cSelect.properties.renderInfo = renderinfo($this.vars.inputs.itemSelected);
+
+  cRoles.properties.renderInfo = renderinfo($this.vars.inputs.refRoles, label="Roles");
+  cUsers.properties.renderInfo = renderinfo($this.vars.inputs.refUsers, label="Users");
+  cSelectedOnly.properties.renderInfo = renderinfo($this.vars.inputs.refSelected, label="References (Selected Only)");
+
+  layout(., parent, "Column
+                     {
+                       Split
+                       {
+                         Caption \"Values\"; permTable
+                         Margin d:1 Component cSelectedOnly Column
+                         {
+                           permRefTable
+                           ~
+                           Geometry xy:vf Row
+                           {
+                             //Geometry d:f tPermEdit
+                             //~
+                             Geometry d:f cRoles
+                             ~
+                             Geometry d:f cUsers
+                             <>
+                             Geometry d:f bPermCancel
+                             ~
+                             Geometry d:f bPermApply
+                           }
+                         }
+                       }
+                     }");
+
+  array permModel =
+  (
+    renderinfo(typedef=Permission.ThisElement),
+    renderinfo(typedef=Permission.Value),
+    renderinfo(typedef=Permission.LastUpdated),
+    renderinfo(typedef=Permission.User)
+  );
+
+  omap permRefModel;
+
+  // Refer to User and Role instances as "Item" in the table
+  // structure so we can place them together if required.
+  // FullName is a common field in User and Role types. [May be
+  // this should be renamed to "DisplayName" or something?]
+  any permRefModel.user     = renderinfo($this.Item.FullName, label="User/Role", width=20);
+  any permRefModel.selected = renderinfo($this.flags.selected, label="Selected");
+
+  permTable.properties.columns = permModel;
+  permTable.properties.modelSort = array a = ( path($loop.Permission.ThisElement) );
+  permRefTable.properties.modelSort = array a = ( path($loop.Item.FullName) );
+  permRefTable.properties.columns = permRefModel;
+  permRefTable.properties.columns.selected.renderer.properties.style = func f = call renderPermRef();
+  permRefTable.properties.columns.selected.editor.properties.component = cSelect;
+  permRefTable.properties.columns.selected.editor.properties.clickCountToStart = 1;
+  permRefTable.properties.columns.selected.editor.properties.canStartEdit = func f = call canEditPermRef();
+  permRefTable.properties.columns.selected.editor.properties.onStopEdit = func f = call permRefSelectionChanged();
+
+  // Set up empty models initially
+  hmap context.vars.permList;
+  hmap context.vars.permRefs.permRefList;
+  permTable.properties.modelRoot = path($this.vars.permList);
+  permRefTable.properties.modelRoot = path($this.vars.permRefs.permRefList);
+
+  // Also set up some dummies for the permRef selected/unselected sets.
+  // If we don't do this before anything is requested then the
+  // property binding expressions for the apply/cancel buttons
+  // will throw
+  set context.vars.permRefs.selected;
+  set context.vars.permRefs.unselected;
+
+  // These versions are initialised when new permRefs are loaded and
+  // used to track the changes so that the apply/cancel buttons can
+  // be enabled/disabled
+  set context.vars.newSelected;
+  set context.vars.newUnselected;
+
+  // Property bindings
+  gProperty(bPermCancel, enabled, renderinfo($this.vars.permRefs.selected != $this.vars.newSelected));
+  gProperty(bPermApply, enabled, renderinfo($this.vars.permRefs.selected != $this.vars.newSelected));
+
+  // Event Handlers
+  gEvent(permTable, call editPermDetails(), event=(gMclicked), gModify=(count=2));
+  gEvent(cRoles, call maybeLoadRefs());
+  gEvent(cUsers, call maybeLoadRefs());
+  gEvent(cSelectedOnly, call maybeLoadRefs());
+  gEvent(bPermCancel, call permChangesCancel());
+  gEvent(bPermApply, call permChangesApply());
+
+  // popup menu
+  gPopupMenu 	permTablePopup;
+  gMenuButton mbPermEdit;
+  gMenuButton mbPermMkOver;
+  gMenuButton mbPermDelete;
+
+  mbPermEdit.properties.text   = "Edit...";
+  mbPermMkOver.properties.text = "Override in Role...";
+  mbPermDelete.properties.text = "Delete...";
+
+  gEvent(mbPermEdit, call editPermDetails());
+  gEvent(mbPermMkOver, call makeOverride());
+
+  layout(., permTablePopup, "mbPermEdit
+                             mbPermMkOver
+                             Separator
+                             mbPermDelete");
+
+  gPopup(permTable, permTablePopup);
+
+
+}
+
+local function permRefsLoaded()
+{
+  // writeln($catalog.system.out, "\e \l LLLLLLLLLLLLLLLLLLLL");
+  $this.vars.newSelected = $this.vars.permRefs.selected;
+  $this.vars.newUnselected = $this.vars.permRefs.unselected;
+}
+
+local function permRefsChanged()
+{
+  // TODO: Fix the current lists so we know about the added/removed instance
+  //writeln($catalog.system.out, "\e \l CCCCCCCCCCCCCCCCCCCCCC");
+  //writeln($catalog.system.out, "\e \l " + .);
+}
+
+local function permChangesCancel()
+{
+  // Easiest way is to reload them
+  call maybeLoadRefs();
+}
+
+local function permChangesApply()
+{
+  // Work out what has changed and send request
+
+  // Make new sets so we don't destroy the current client state, just
+  // in case anything goes wrong.
+  set toCreate;
+  toCreate = $this.vars.newSelected;
+  set toDelete;
+  toDelete = $this.vars.newUnselected;
+
+  // Then leave in each what is new
+  removeall(toCreate, $this.vars.permRefs.selected);
+  removeall(toDelete, $this.vars.permRefs.unselected);
+
+  send modifyPermRefs($this.tab.perms.permTree.model.selection[0].Permission,
+                      toCreate,
+                      toDelete);
+}
+
+local function maybeLoadRefs()
+{
+  if ($this.tab.perms.permTree.model.selectCount == 1 &&
+      $this.tab.perms.permTree.model.selection[0].Permission)
+    call loadRefs();
+}
+
+local function loadRefs()
+{
+  // Create an array containing the the ancestors. This allows us to
+  // check if there are references to ancestor permissions and
+  // to show these in the GUI at the selected level. While harmless,
+  // this allows us to preclude making unnecessary references to
+  // descendents.
+  array ancestors;
+  foreach($this.tab.perms.permTree.model.pathSelection[0])
+  {
+    // Don't put in the one we've selected. Array can be empty
+    // if the selected Permission is a root child.
+    if (@last)
+      break();
+
+    ancestors += $loop.Permission;
+  }
+
+  send loadRefs($this.tab.perms.permTree.model.selection[0].Permission,
+                ancestors,
+                $this.vars.inputs.refUsers,
+                $this.vars.inputs.refRoles,
+                $this.vars.inputs.refSelected);
+}
+
+local function makeOverride()
+{
+  if ($this.tab.perms.permTable.model.selectCount == 1)
+  {
+    any a = $this.tab.perms.permTable.model.selection[0];
+    call permDetails(selected=a.Permission, isNew=true, isOverride=true);
+  }
+}
+
+local function editPermDetails()
+{
+  if ($this.tab.perms.permTable.model.selectCount == 1)
+  {
+    // The selection node-set-child contains any overrides. Make a node-set
+    // structure of them
+    any a = $this.tab.perms.permTable.model.selection[0];
+
+    omap m;  // Not event-live, no multiple parent issues, must be orderable
+    foreach(a)
+    {
+      if (@name != "Permission")
+      {
+        //writeln($catalog.system.out, "\e \l " + @name);
+        any k = getuniquekey($loop);
+        any m.{k}.Permission = $loop;
+      }
+      else
+      {
+        // writeln($catalog.system.out, "\e \l Permission");
+        any default = $loop;
+      }
+    }
+
+    // combo list of these so the edit dialog only contains the relevant
+    // entries.
+    //any a = $this.tab.users.permTableTable.model.keySelection[0];
+    //writeln($catalog.system.out, "\e \l");
+    //writeln($catalog.system.out, default);
+    call permDetails(selected=default, orides = m);
+  }
+}
+
+local function checkOkPerm()
+{
+}
+
+/**
+ * Check if Permission node is a leaf.
+ * @return true if a leaf, false if a branch
+ */
+local function permLeaf(any node)
+{
+  //writeln($catalog.system.out, "NODE " + node);
+  //(node.Permission.Type != enum(Permission.Type, BRANCH));
+  false;
+}
+
+/**
+ * Returns whether the node parameter, passed by the tree model
+ * within the Inq environment, is a branch or a leaf.
+ */
+local function permViewLeaf(any node)
+{
+  node.Permission.Value != null;
+}
+
+local function cbAskPublish()
+{
+	call inq.gui.util:questionDialog(questionTitle = "Publish",
+                                   questionText  = "Publish to all users?",
+                                   okExpr = func f = send publishPerms() );
+}
+
+local function cbViewPermSel()
+{
+  // Converting to a string is a bit crude - to be enhanced.
+  if (@component.model.selectCount == 1 &&
+      @component.model.selection[0].Value)
+    $this.vars.permVal = @component.model.selection[0].Value.Value;
+  else
+    setnull($this.vars.permVal);
+}
+
+local function cbPermTreeSel()
+{
+  /*
+  writeln($catalog.system.out, "TREE SEL");
+  writeln($catalog.system.out, "SELECTION" + $this.tab.perms.permTree.model.selection);
+  writeln($catalog.system.out, "KEY SELECTION" + $this.tab.perms.permTree.model.keySelection);
+  writeln($catalog.system.out, "PATH SELECTION " + $this.tab.perms.permTree.model.pathSelection);
+  writeln($catalog.system.out, "PATH SET " + $this.tab.perms.permTree.model.pathSet);
+  */
+
+  //writeln($catalog.system.out, "SELECTION 1 " + $this.tab.perms.permTree.model.selection);
+  //writeln($catalog.system.out, $this.tab.perms.permTree.model.selection);
+
+  // Request the leaf permissions for the selected child.
+  // We check there is only one selected and that the selection
+  // refers to a permission.
+  if ($this.tab.perms.permTree.model.selectCount == 1 &&
+      $this.tab.perms.permTree.model.selection[0].Permission)
+  {
+    send loadLeaves(parent=$this.tab.perms.permTree.model.selection[0].Permission);
+
+    any p = call makePermPath(permArray = $this.tab.perms.permTree.model.pathSelection[0]);
+    $this.tab.perms.permTable.properties.caption = "Values at " + p;
+    $this.tab.perms.cSelectedOnly.properties.text = "References to " + p + " (Selected Only)";
+
+    // Load the PermRefs
+    call loadRefs();
+
+    // Test of path selection:
+    /*
+    foreach($this.tab.perms.permTree.model.pathSelection[0])
+      if ($loop.Permission)
+        writeln($catalog.system.out, $loop.Permission);
+      else
+        writeln($catalog.system.out, $loop);
+
+    writeln($catalog.system.out, count($this.tab.perms.permTree.model.pathSelection[0]));
+    */
+  }
+  else
+  {
+    send loadLeaves();
+    //empty($this.vars.permList);
+    //empty($this.vars.permRefs.permRefList);
+  }
+}
+
+local function authNewPerm()
+{
+  call permDetails(selected=$this.vars.empty.Permission, isNew=true);
+}
+
+local function cbShowUserDetails()
+{
+  any a = $this.tab.users.userTable.model.keySelection[0];
+  call userDetails(selected=$this.vars.userList.{a}.User, selKey=a);
+}
+
+local function cbMaybeShowUserDetails()
+{
+  if (count($this.tab.users.userTable.model.keySelection) == 1)
+    call cbShowUserDetails();
+}
+
+/**
+ * Build the authorisation menu bar.
+ * Creates a menu bar and within it lays out the menu components.
+ * Irrespective of the menu hierarchy, the Inq hierarchy is flat
+ * and placed under the given parent object.
+ *
+ * @param parent where the Inq objects will be placed
+ *
+ * @return: The menu bar (containing all its components)
+ */
+local function buildAuthMenu(any parent)
+{
+	gMenuBar menuBar;
+
+	gMenu fileMenu;
+	fileMenu.properties.text="File";
+
+	//gMenu helpMenu;
+	//helpMenu.properties.text="Help";
+
+	gMenuButton fileNew;
+	gEvent(fileNew, call cbAuthNew());
+
+	gMenuButton fileClose;
+	fileClose.properties.text="Close";
+	gEvent(fileClose, call cbAuthClose());
+
+  // Layout the menus
+  layout(., parent, menuBar, "fileMenu
+                            {
+                              fileNew
+                              Separator
+                              fileClose
+                            }
+                            ");
+  // Return value
+  menuBar;
+}
+
+
+/**
+ * Create (if not already done so) and display user details
+ * @param selected the object to render
+ * @param isEdit whether to edit an existing user
+ * @param isNew whether user is new (i.e. the username field is editable
+ */
+local function userDetails(any selected, any selKey, boolean isNew)
+{
+  // Save for OK call-back etc
+  $this.vars.isNew      = isNew;
+  any $this.vars.selKey = selKey;   // null when isNew, the User pk otherwise
+
+  if (!$this.detailsDialog)
+  {
+    // Create a working instances for the GUI to render.  This will
+    // be either copied from the user being modified or set to the
+    // last user to be created
+    any $this.vars.selected.User     = new(User);
+    any $this.vars.NewUser           = new(User);   // remains as defaults for initialisation
+    any $this.vars.EmptyPwd          = new(Password);
+    any $this.vars.selected.Password = new(Password);
+
+    // Logout message
+    string $this.vars.logoutMsg;
+
+    // Bound properties variables
+    boolean $this.props.canLogout;
+
+    gDialog($this) detailsDialog;
+
+    // Add now so context can propagate as components are added.
+    // Required for the labeling stuff to work.
+    add(detailsDialog, path($this.detailsDialog));
+    detailsDialog.properties.hideOnOk = false;
+    detailsDialog.properties.modality = MODAL_PARENT;
+
+    gTab tab;
+    gBox basic;
+    gBox roles;
+    gBox passwd;
+    gBox sessions;
+
+    gButton      ok;
+    gButton      cancel;
+
+    ok.properties.text     = "OK";
+    cancel.properties.text = "Cancel";
+
+    gEvent(cancel, gDialog=gDialogcancel);
+    gEvent(detailsDialog, gDialog=gDialogcancel, event=(gWclosing));
+    gEvent(ok, gDialog=gDialogok);
+    gEvent(detailsDialog, call cbUserDetailsOK(), event=(gDialogok));
+
+    layout(., detailsDialog, "Margin d:3 tab { basic roles passwd sessions }
+                              ~~~ <>
+                              Geometry xy:vf Margin d:3 Row { <> Geometry d:f Row { ok ~~ cancel } }
+                             ");
+
+    basic.properties.tabTitle  = "Basic";
+    roles.properties.tabTitle  = "Roles";
+    passwd.properties.tabTitle = "Password";
+    sessions.properties.tabTitle = "Sessions";
+
+    call detailsBasic(inqParent=detailsDialog, guiParent=basic);
+    call detailsRoles(inqParent=detailsDialog, guiParent=roles);
+    call detailsPassword(inqParent=detailsDialog, guiParent=passwd);
+    call detailsSessions(inqParent=detailsDialog, guiParent=sessions);
+
+    string $this.vars.userTabSelect;
+    tab.properties.renderInfo = renderinfo($this.vars.userTabSelect);
+  }
+
+  // Copy whatever was given to working instance
+  if (selected)
+  {
+    $this.vars.selected.User = selected;
+    $this.detailsDialog.properties.title = "User Details for " + $this.vars.selected.User.FullName;
+
+    // Send for the sessions data
+    send loadSessions($this.vars.selected.User, atPath=path($this.vars.sessionList));
+  }
+  else if(isNew)
+  {
+    $this.vars.selected.User = $this.vars.NewUser;
+    $this.detailsDialog.properties.title = "Create New User";
+  }
+
+  // Load the roles - will be all unselected if user is new
+  send loadUserRoles($this.vars.selected.User);
+
+  // We don't aggregate the password - set it up locally with the selected UserName
+  // and clear down everything else.
+  $this.vars.selected.Password = $this.vars.EmptyPwd;
+  $this.vars.selected.Password.UserName = $this.vars.selected.User.UserName;
+
+  // We don't render the pwd data, instead we access it directly in the components.
+  // Clear the GUI.
+  empty($this.detailsDialog.tfPasswd.model.root);
+  empty($this.detailsDialog.tfConfirm.model.root);
+
+  // Just in case the pwd fields were already empty
+  call checkReset();
+
+  $this.detailsDialog.ok.properties.enabled = true;
+  $this.detailsDialog.bApply.properties.enabled = false;
+  $this.detailsDialog.bMoveUp.properties.enabled =
+    $this.detailsDialog.bMoveDown.properties.enabled = false;
+
+  show($this.detailsDialog);
+}
+
+local function checkReset()
+{
+  string s =  $this.detailsDialog.tfPasswd.model.root;
+  string s1 = $this.detailsDialog.tfConfirm.model.root;
+
+  $this.detailsDialog.bReset.properties.enabled = !$this.vars.isNew && s && s1 == s;
+}
+
+/**
+ * Create the dialog's basic details components
+ */
+local function detailsBasic(any inqParent, any guiParent)
+{
+	gTextField   tfUserName;
+	gTextField   tfFullName;
+	gTextField   tfEmail;
+	gTextField   tfMaxSessions;
+  gComboBox    cbState;
+  gTextField   tfLastLogin;
+  gDateChooser tfExpires;
+  gTextField   tfAudit;
+
+
+  // Make one of the data text fields wide - the others will follow
+  tfUserName.properties.columns = 20;
+
+  tfAudit.properties.horizontalAlignment = gGuiConstant(CENTER);
+
+  tfUserName.properties.renderInfo =
+    renderinfo($this.vars.selected.User.UserName,
+               typedef=User.UserName,
+               editable=true);
+
+  tfFullName.properties.renderInfo =
+    renderinfo($this.vars.selected.User.FullName,
+               typedef=User.FullName,
+               editable=true);
+
+  tfEmail.properties.renderInfo =
+    renderinfo($this.vars.selected.User.Email,
+               typedef=User.Email,
+               editable=true);
+
+  tfMaxSessions.properties.renderInfo =
+    renderinfo($this.vars.selected.User.MaxSessions,
+               typedef=User.MaxSessions,
+               editable=true);
+
+  any stateListModel.internal       = renderinfo(typedef=User.State);
+  cbState.properties.model          = stateListModel;
+  cbState.properties.renderInfo     = renderinfo($this.vars.selected.User.State, typedef=User.State);
+
+
+  tfLastLogin.properties.renderInfo =
+    renderinfo($this.vars.selected.User.LastLogin,
+               typedef=User.LastLogin);
+
+  tfExpires.properties.renderInfo =
+    renderinfo($this.vars.selected.User.Expires,
+               typedef=User.Expires,
+               editable=true);
+
+/*
+  tfFailedAttempts.properties.renderInfo =
+   renderinfo($this.vars.selected.User.FailedAttempts,
+              typedef=User.FailedAttempts);
+*/
+
+  layout(., inqParent, guiParent,
+         "Margin d:3 Column
+          {
+            Row
+            {
+              Geometry xy:fv Column
+              {
+                Label lUserName tfUserName
+                Label lFullName tfFullName
+                Label lEmail    tfEmail
+                Label lMax      tfMaxSessions
+                Label           cbState
+                Label           tfLastLogin
+                Label           tfExpires
+              }
+              ~
+              Column
+              {
+                Row { Geometry xy:vf tfUserName }
+                ~
+                Row { Geometry xy:vf tfFullName }
+                ~
+                Row { Geometry xy:vf tfEmail }
+                ~
+                Row { Geometry xy:vf tfMaxSessions }
+                ~
+                Row { Geometry xy:vf cbState }
+                ~
+                Row { Geometry xy:vf tfLastLogin }
+                ~
+                Row { Geometry xy:vf tfExpires }
+              }
+            }
+            ~ <>
+            Geometry xy:vf tfAudit
+          }");
+
+  tfAudit.properties.renderInfo = renderinfo(
+     {
+       array lastUp = ("Last updated",
+                         $this.vars.selected.User.LastUpdated,
+                         $this.vars.selected.User.User);
+       render(lastUp, format="{0}: {1,time,dd/MM/yyyy HH:mm:ss} by {2}");
+     }, always=true);
+
+  tfMaxSessions.properties.validateInsert = $catalog.guiFuncs.numericInteger;
+  tfMaxSessions.properties.inputVerifier = $catalog.guiFuncs.validNumeric;
+
+  gProperty(tfUserName, editable, renderinfo($this.vars.isNew));
+
+}
+
+local function detailsRoles(any inqParent, any guiParent)
+{
+  gTable  tRoles;
+
+  gButton bMoveUp;
+  gButton bMoveDown;
+  gButton bApply;
+  //gButton bDiscard;
+  gCheck  cRoleSelect;
+  cRoleSelect.properties.horizontalAlignment = gGuiConstant(CENTER);
+
+  bMoveUp.properties.text  = "^";
+  bMoveDown.properties.text = "v";
+  bApply.properties.text  = "Apply";
+  //bDiscard.properties.text = "Discard";
+
+  boolean $this.vars.roleSelected;
+  cRoleSelect.properties.renderInfo = renderinfo($this.vars.roleSelected);
+
+  layout(., inqParent, guiParent,
+         "Margin d:3 Column
+         {
+           tRoles
+           ~
+           Geometry xy:vf Row
+           {
+             Geometry d:f bMoveUp
+             ~
+             Geometry d:f bMoveDown
+             <>
+             Geometry d:f bApply
+             //~
+             //Geometry d:f bDiscard
+           }
+         }
+        ");
+
+  omap model;
+  any model.Role = renderinfo(typedef=Role.FullName);
+  any model.Flags = renderinfo($this.flags.selected, label="Selected");
+  tRoles.properties.columns = model;
+  tRoles.properties.modelRoot = path($this.vars.myRoles);
+  tRoles.properties.modelSort = array a = (path($loop.flags.selected), path($loop.UserRole.Ordinal), path($loop.Role.Role));
+  tRoles.properties.columns.Flags.editor.properties.component = cRoleSelect;
+  tRoles.properties.columns.Flags.editor.properties.clickCountToStart = 1;
+  //tRoles.properties.columns.selected.editor.properties.onStopEdit = func f = call permRefSelectionChanged();
+
+  gEvent(bApply, call applyUserRoles());
+  gEvent(cRoleSelect, call applyUserRoles());
+  gEvent(bMoveUp, call moveUp(table=$this.detailsDialog.tRoles, modelAt = "vars.myRoles"));
+  gEvent(bMoveDown, call moveDown(table=$this.detailsDialog.tRoles, modelAt = "vars.myRoles"));
+  gEvent(tRoles, call tRolesSelected(), event=(gSelection));
+}
+
+/**
+ * Create the dialog's password details components
+ */
+local function detailsPassword(any inqParent, any guiParent)
+{
+  // Password Section
+  gPasswdField tfPasswd;
+  gPasswdField tfConfirm;
+
+  gLabel       lPasswd;
+  gLabel       lConfirm;
+
+  // If user is new then hide reset button and do on OK - TBD
+  gButton      bReset;
+
+  lPasswd.properties.text  = "New Password:";
+  lConfirm.properties.text = "Confirm:";
+  bReset.properties.text   = "Reset";
+  tfPasswd.properties.selectOnFocus  = true;
+  tfConfirm.properties.selectOnFocus = true;
+
+  // Account State Section
+  /*
+  gRadio    rActive;
+  gRadio    rSuspended;
+  gRadio    rInactive;
+
+  gButtonGroup bgStateGroup;
+  rActive.properties.buttonGroup    = bgStateGroup;
+  rSuspended.properties.buttonGroup = bgStateGroup;
+  rInactive.properties.buttonGroup  = bgStateGroup;
+
+  rActive.properties.text    = enumext(State, ACTIVE);
+  rSuspended.properties.text = enumext(State, SUSPENDED);
+  rInactive.properties.text  = enumext(State, INACTIVE);
+  rActive.properties.renderInfo    = renderinfo(enum(State, ACTIVE));
+  rSuspended.properties.renderInfo = renderinfo(enum(State, SUSPENDED));
+  rInactive.properties.renderInfo  = renderinfo(enum(State, INACTIVE));
+  bgStateGroup.properties.renderInfo = renderinfo($this.vars.selected.User.State);
+  */
+
+  layout(., inqParent, guiParent, "Row
+                                   {
+                                     Margin d:3 Caption \"Password\"; Column
+                                     {
+                                       Geometry xy:vf Row
+                                       {
+                                         Geometry xy:fv Column
+                                         {
+                                           lPasswd
+                                           lConfirm
+                                         }
+                                         ~
+                                         Column
+                                         {
+                                           Row { Geometry xy:vf tfPasswd }
+                                           ~
+                                           Row { Geometry xy:vf tfConfirm }
+                                         }
+                                       }
+                                       ~
+                                       Geometry xy:vf Row { <> Geometry d:f bReset }
+                                       <>
+                                    }
+                                    /*
+                                    Margin d:3 Caption \"Status\"; Column
+                                    {
+                                      rActive
+                                      rSuspended
+                                      rInactive
+                                      bgStateGroup
+                                    }
+                                    */
+                                  }");
+
+  gEvent(tfPasswd, call checkReset(), event=(gDocchange, gDocinsert, gDocremove));
+  gEvent(tfConfirm, call checkReset(), event=(gDocchange, gDocinsert, gDocremove));
+  gEvent(bReset, call cbPwdReset());
+  //gProperty(bReset, enabled, renderinfo(!$this.vars.isNew));
+
+}
+
+local function detailsSessions(any inqParent, any guiParent)
+{
+  gTable tableSessions;
+
+  gTextField tfMsg;
+  gButton    bLogout;
+  gButton    bSend;
+
+  bLogout.properties.text = "Logout";
+  bSend.properties.text   = "Send";
+
+  tfMsg.properties.renderInfo = renderinfo($this.vars.logoutMsg, label="Message:", editable=true);
+
+  layout(., inqParent, guiParent, "Margin d:3 Column
+                                   {
+                                     tableSessions
+                                     ~
+                                     Geometry xy:vf Row
+                                     {
+                                       Geometry d:f Label tfMsg ~ tfMsg
+                                     }
+                                     ~
+                                     Geometry xy:vf Row
+                                     {
+                                       <>
+                                       Geometry d:f bSend
+                                       ~
+                                       Geometry d:f bLogout
+                                     }
+                                   }");
+
+  array sessionModel =
+  (
+    renderinfo(typedef=Session.Session),
+    renderinfo(typedef=Session.IP),
+    renderinfo(typedef=Session.LocalHostName),
+    renderinfo(typedef=Session.HostName),
+    renderinfo(typedef=SessionLog.StartedAt)
+  );
+
+  tableSessions.properties.columns = sessionModel;
+  tableSessions.properties.modelRoot = path($this.vars.sessionList);
+
+  gProperty(bSend, enabled, renderinfo($this.props.canLogout && $this.vars.logoutMsg));
+  gProperty(bLogout, enabled, renderinfo($this.props.canLogout));
+
+  gEvent(bSend,   call sendAlert());
+  gEvent(bLogout, call sendLogoutAlert());
+	gEvent(tfMsg, firemodel = true, event=(gDocchange, gDocinsert, gDocremove));
+
+  gEvent(tableSessions, call sessionSelection(), event=(gSelection));
+
+}
+
+local function sendAlert()
+{
+  //writeln($catalog.system.out, $this.vars.logoutMsg);
+
+  foreach($this.detailsDialog.tableSessions.model.selection)
+    send logoutSession($loop.Session,
+                       delay = 0,
+                       message = $this.vars.logoutMsg);
+}
+
+local function sendLogoutAlert()
+{
+  foreach($this.detailsDialog.tableSessions.model.selection)
+    send logoutSession($loop.Session,
+                       message = $this.vars.logoutMsg);
+}
+
+local function sessionSelection()
+{
+  $this.props.canLogout = @component.model.selectCount != 0;
+}
+
+/**
+ * Create (if not already done so) and display role details
+ * @param selected the object to render
+ * @param isEdit whether to edit an existing role
+ * @param isNew whether role is new (i.e. the rolename field is editable
+ */
+local function roleDetails(any selected, boolean isEdit, boolean isNew)
+{
+  // Save for OK call-back
+  $this.vars.isNew = isNew;
+
+  if (!$this.roleDetailsDialog)
+  {
+    any $this.vars.selected.Role = new(Role);
+
+    gDialog($this) roleDetailsDialog;
+
+    // Add now so context can propagate as components are added.
+    // Required for the labeling stuff to work.
+    add(roleDetailsDialog, path($this.roleDetailsDialog));
+
+    gButton      ok;
+    gButton      cancel;
+
+    ok.properties.text     = "OK";
+    cancel.properties.text = "Cancel";
+
+    gEvent(cancel, gDialog=gDialogcancel);
+    gEvent(roleDetailsDialog, gDialog=gDialogcancel, event=(gWclosing));
+    gEvent(ok, gDialog=gDialogok);
+    gEvent(roleDetailsDialog, call cbRoleDetailsOK(), event=(gDialogok));
+
+		gTextField   tfRoleName;
+		gTextField   tfFullName;
+    gTextField   tfAudit;
+
+    boolean $this.props.okRole;
+    boolean $this.vars.defaultFullName;
+
+    // Make one of the data text fields wide - the others will follow
+    tfRoleName.properties.columns = 20;
+
+    tfAudit.properties.horizontalAlignment = gGuiConstant(CENTER);
+
+    tfRoleName.properties.renderInfo =
+      renderinfo($this.vars.selected.Role.Role,
+                 typedef=Role.Role,
+                 editable=true);
+
+    tfRoleName.properties.validateInsert = func f = call defaultFullName();
+
+    tfFullName.properties.renderInfo =
+      renderinfo($this.vars.selected.Role.FullName,
+                 typedef=Role.FullName,
+                 editable=true);
+
+    layout(., roleDetailsDialog,
+           "Margin d:3 Column
+            {
+              Row
+              {
+                Geometry xy:fv Column
+                {
+                  Label tfRoleName
+                  Label tfFullName
+                }
+                ~
+                Column
+                {
+                  Row { Geometry xy:vf tfRoleName }
+                  ~
+                  Row { Geometry xy:vf tfFullName }
+                }
+              }
+              ~ <>
+              Geometry xy:vf tfAudit
+              ~~~ <>
+              Row { <> Geometry d:f Row { ok ~ cancel } }
+            }");
+
+    tfAudit.properties.renderInfo = renderinfo(
+       {
+         array lastUp = ("Last updated",
+                           $this.vars.selected.Role.LastUpdated,
+                           $this.vars.selected.Role.User);
+         render(lastUp, format="{0}: {1,time,dd/MM/yyyy HH:mm:ss} by {2}");
+       });
+
+    gEvent(tfRoleName, call checkRoleOk(), event=(gDocchange, gDocinsert, gDocremove));
+    gEvent(tfFullName, call checkRoleOk(), event=(gDocchange, gDocinsert, gDocremove));
+
+    gProperty(ok, enabled, renderinfo($this.props.okRole));
+  }
+
+  if (selected)
+    $this.vars.selected.Role = selected;
+
+  // Setup editability etc
+  $this.roleDetailsDialog.tfRoleName.properties.editable = isNew;
+  $this.roleDetailsDialog.tfFullName.properties.editable = isEdit;
+
+  $this.vars.defaultFullName = isNew;
+
+  show($this.roleDetailsDialog);
+}
+
+/**
+ * Create (if not already done so) and display Permission details
+ * @param selected the object to render
+ * @param isEdit whether to edit an existing Permission
+ * @param isNew whether Permission is new (i.e. the xxx fields are editable)
+ */
+local function permDetails(any     selected,
+                           boolean isNew,
+                           boolean isOverride, // when creating a new override
+                           any     orides)
+{
+  // Save for call-backs
+  $this.vars.isNew      = isNew;
+  $this.vars.isOverride = isOverride;
+
+  if (!$this.permDetailsDialog)
+  {
+    any     $this.vars.selected.Permission = new(Permission);
+    string  $this.vars.status;
+    string  $this.vars.inputs.dataType;
+    string  $this.vars.inputs.dataValue;
+    string  $this.vars.inputs.inRole;
+    boolean $this.vars.inputs.isBranch;
+
+    // Where to put the value we create when making a leaf permission.
+    any     $this.vars.inputs.where = path($this.vars.createdValue);
+
+    regex   $this.vars.decRegex = "decimal:[0-9]+";
+    set     $this.vars.validTypes = ("int", "short", "long", "date", "byte", "double", "float");
+
+    gDialog($this) permDetailsDialog;
+    permDetailsDialog.properties.size = array a = (500, 285);
+
+    // We'll take over hiding on close
+    //permDetailsDialog.properties.defaultCloseOperation = DO_NOTHING_ON_CLOSE;
+    permDetailsDialog.properties.hideOnOk = false;
+
+    // Add now so context can propagate as components are added.
+    // Required for the labeling stuff to work.
+    add(permDetailsDialog, path($this.permDetailsDialog));
+
+    gButton      ok;
+    gButton      cancel;
+
+    ok.properties.text     = "OK";
+    cancel.properties.text = "Cancel";
+
+    gEvent(cancel, gDialog=gDialogcancel);
+    gEvent(permDetailsDialog, gDialog=gDialogcancel, event=(gWclosing));
+    gEvent(ok, gDialog=gDialogok);
+    gEvent(permDetailsDialog,
+           call cbPermDetailsOK(toHide=$this.permDetailsDialog, vars=$this.vars),
+           event=(gDialogok));
+    gEvent(permDetailsDialog,
+           call cbPermDetailsCancel(toHide=$this.permDetailsDialog, vars=$this.vars),
+           event=(gDialogcancel));
+
+		// Name is not rendered as it defines the universe within which this
+		// Permission resides, MASTER or named override.
+
+		gTextField   tfPermElement;
+		//gTextField   tfPermType;
+    gTextArea    taPermValue;
+    gTextField   tfAudit;
+    gCheck       cBranch;
+    gComboBox    cbRole;
+    gLabel       lStatus;
+
+
+    tfPermElement.properties.columns = 30;
+    //tfPermType.properties.columns = 30;
+
+    //tfAudit.properties.horizontalAlignment = gGuiConstant(CENTER);
+
+    tfPermElement.properties.renderInfo =
+      renderinfo($this.vars.selected.Permission.ThisElement,
+                 typedef=Permission.ThisElement,
+                 editable=true);
+
+//    tfPermType.properties.renderInfo =
+//      renderinfo($this.vars.inputs.dataType,
+//                 editable=true,
+//                 label="Type"); // TODO: i18n
+
+    taPermValue.properties.renderInfo =
+      renderinfo($this.vars.inputs.dataValue,
+                 typedef=Permission.Value,
+                 editable=true);
+
+    cBranch.properties.renderInfo =
+      renderinfo($this.vars.inputs.isBranch,
+                 typedef=Permission.Value,
+                 editable=true,
+                 label="Branch");  // TODO: label i18n
+
+    cbRole.properties.renderInfo =
+      renderinfo($this.vars.inputs.inRole,
+                 typedef=Role.Role);
+
+    cbRole.properties.nullText  = "Default";
+
+    layout(., permDetailsDialog,
+           "Margin d:3 Column
+            {
+              Geometry xy:vf Row { Geometry d:f cBranch <> }
+              ~
+              Geometry xy:vf Row
+              {
+             	  Geometry d:f Column
+             	  {
+                  Label tfPermElement #
+                  Geometry xy:vf tfPermElement
+                }
+                ~
+             	  Geometry d:f Column
+             	  {
+                  Label cbRole #
+                  Geometry xy:vf cbRole
+                }
+                ~~~
+//             	  Geometry d:f Column
+//             	  {
+//                  Label tfPermType #
+//                  Geometry xy:vf tfPermType
+//                }
+                <>
+              }
+              ~
+           	  Column
+           	  {
+                Geometry xy:vf Label taPermValue #
+                taPermValue
+              }
+              ~
+              Geometry xy:vf lStatus
+              ~~
+              Geometry xy:vf Row { <> Geometry d:f ok Geometry d:f cancel } }
+              ~
+              Margin d:3 Geometry xy:vf tfAudit
+            }");
+
+    tfAudit.properties.renderInfo = renderinfo(
+       {
+         array lastUp = ("Last updated",
+                           $this.vars.selected.Permission.LastUpdated,
+                           $this.vars.selected.Permission.User);
+         render(lastUp, format="{0}: {1,time,dd/MM/yyyy HH:mm:ss} by {2}");
+       });
+
+    gEvent(cBranch, firemodel=true);
+
+    gEvent(cbRole, call orideSelected());
+
+    gProperty(taPermValue, editable, renderinfo(!$this.vars.inputs.isBranch));
+    gProperty(taPermValue, background, renderinfo($this.vars.inputs.isBranch
+                                               ? $uidefaults.TextField.inactiveBackground
+                                               : $uidefaults.TextArea.background));
+
+//    tfPermType.properties.inputVerifier = func f =
+//      call validateType($this.vars.decRegex,
+//                        $this.vars.validTypes,
+//                        $this.vars.where);
+
+//    taPermValue.properties.inputVerifier = func f =
+//      call validateValue($this.vars);
+
+    lStatus.properties.renderInfo = renderinfo($this.vars.status);
+
+  }
+
+  if (selected)
+  {
+    $this.vars.selected.Permission = selected;
+    $this.vars.inputs.dataValue = selected.Value;
+  }
+
+  if (isNew && !isOverride)
+  {
+    $this.permDetailsDialog.cBranch.properties.enabled = true;
+
+    $this.permDetailsDialog.cbRole.properties.showNull = true;
+    $this.permDetailsDialog.cbRole.properties.enabled = false;
+    $this.permDetailsDialog.cbRole.properties.selectedIndex = 0;
+  }
+  else if (isNew && isOverride)
+  {
+    $this.vars.inputs.isBranch = false;
+    $this.permDetailsDialog.cBranch.properties.enabled = false;
+    $this.vars.inputs.dataValue = null;
+
+    $this.permDetailsDialog.cbRole.properties.showNull = false;
+    $this.permDetailsDialog.cbRole.properties.enabled = true;
+
+    // Clear the sort first or Inq will throw when it cannot resolve
+    // the paths
+  	$this.permDetailsDialog.cbRole.properties.modelSort = null;
+
+    any roleModel.internal = renderinfo(typedef = Role.Role);
+    any roleModel.external = renderinfo(typedef = Role.FullName);
+    $this.permDetailsDialog.cbRole.properties.model     = roleModel;
+    $this.permDetailsDialog.cbRole.properties.modelRoot = path($this.vars.roleList);
+  	$this.permDetailsDialog.cbRole.properties.modelSort = array a = (path($loop.Role.FullName));
+
+  }
+  else if (!isNew)
+  {
+    // Editing an existing value. Only callable from the table (i.e.
+    // for values, not branches)
+    $this.vars.inputs.isBranch = false;
+    $this.permDetailsDialog.cBranch.properties.enabled = false;
+    $this.permDetailsDialog.cbRole.properties.enabled = true;
+    $this.permDetailsDialog.cbRole.properties.showNull = true;
+
+    // Clear the sort first or Inq will throw when it cannot resolve
+    // the paths
+  	$this.permDetailsDialog.cbRole.properties.modelSort = null;
+
+    // Place the overrides at the combo box's modelRoot. The list is non-live
+    // so using add() is not important. The combo box re-resolves the list
+    // when the modelRoot property is set, so doing this now makes sure it
+    // has the new list.
+    any $this.vars.orideList = orides;
+    any orideModel.internal = renderinfo(typedef = Permission.Name);
+    $this.permDetailsDialog.cbRole.properties.model     = orideModel;
+    $this.permDetailsDialog.cbRole.properties.modelRoot = path($this.vars.orideList);
+  	$this.permDetailsDialog.cbRole.properties.modelSort = array a = (path($loop.Permission.Name));
+    $this.permDetailsDialog.cbRole.properties.selectedIndex = 0;
+
+    // alias the permission in the node space - it is the default
+    any $this.vars.default = selected;
+  }
+
+  setnull($this.vars.status);
+
+  show($this.permDetailsDialog);
+}
+
+local function orideSelected()
+{
+  // Are we editing an existing Permission/Override?
+  //
+  if ($this.vars.default)
+  {
+    if ($this.vars.inputs.inRole == null)
+      $this.vars.selected.Permission = $this.vars.default;
+    else
+      $this.vars.selected.Permission = @component.model.selection.Permission;
+
+    $this.vars.inputs.dataValue = $this.vars.selected.Permission.Value;
+  }
+  else if ($this.vars.isOverride)
+  {
+    // Creating a new override. Actually the server sets the Name
+    // as well so...
+    $this.vars.selected.Permission.Name = $this.vars.inputs.inRole;
+
+    any $this.vars.entity = @component.model.selection.Role;
+    //writeln($catalog.system.out, $this.vars.entity);
+
+  }
+
+}
+
+local function cbPermDetailsOK(any toHide, any vars)
+{
+  try
+  {
+    //writeln($catalog.system.out, value);
+    //writeln($catalog.system.out, .);
+    if (vars.inputs.isBranch)
+      setblob(vars.selected.Permission.Value, null);
+    else
+    {
+      any a = compile("string://vars.inputs.dataValue");
+      setnull(vars.status);
+
+      setblob(vars.selected.Permission.Value, vars.inputs.dataValue);
+    }
+
+    hide(toHide);
+
+    if ($this.vars.isNew && !$this.vars.isOverride)
+      send newPerm(obj    = $this.vars.selected.Permission,
+                   parent = $this.tab.perms.permTree.model.selection[0].Permission);
+    else if ($this.vars.isNew && $this.vars.isOverride)
+      send newOverride($this.tab.perms.permTable.model.selection[0].Permission,
+                       override = $this.vars.selected.Permission,
+                       entity   = $this.vars.entity);
+    else
+      send updatePerm(obj = $this.vars.selected.Permission);
+
+    // Remove any default we remembered
+    any $this.vars.default = null;
+    any $this.vars.entity  = null;
+  }
+  catch
+  {
+    vars.status = @exmsg;
+  }
+
+}
+
+local function cbPermDetailsCancel(any toHide, any vars)
+{
+  // Remove any default we rememberes
+  any $this.vars.default = null;
+  hide(toHide);
+}
+
+local function cbRoleDetailsOK()
+{
+  if ($this.vars.isNew)
+    send newObject(obj = $this.vars.selected.Role);
+
+  $this.vars.defaultFullName = false;
+
+}
+
+local function cbUserDetailsOK()
+{
+  if ($this.vars.isNew)
+  {
+    call validateNew(); // throws if there is an error
+
+    string pwd = $this.detailsDialog.tfPasswd.model.root;
+    $this.vars.selected.Password.Password = crypt(pwd);
+
+    send newUser(obj        = $this.vars.selected.User,
+                 pwdObj     = $this.vars.selected.Password,
+                 okCallback = func fok = call updOk());
+  }
+  else
+  {
+    if ($this.vars.selected.User != $this.vars.userList.{$this.vars.selKey}.User)
+    {
+      send updateObject(obj = $this.vars.selected.User,
+                        okCallback   = func fok = call updOk(),
+                        errorHandler = func fer = call updError());
+
+      // Make sure we can't OK twice as hiding of the dialog in this
+      // case is done via +ve ack from server.
+      $this.detailsDialog.ok.properties.enabled = false;
+    }
+    else
+    {
+      //writeln($catalog.system.out, "NO CHANGE");
+      hide($this.detailsDialog);
+    }
+  }
+}
+
+// Scan the UserRoles and determine what to create, delete or update.
+// If anything comes of it then notify the server.
+local function applyUserRoles(any @component)
+{
+  // Create some arrays - ordering is important in the case of updates
+  array toCreate;
+  array toDelete;
+  array toUpdate;
+
+  // Keep track of a suitable ordinal number
+  short counter = 0;
+
+  // To check the list:-
+  // creation: in the server we have created dummy UserRole instances
+  //           where there isn't one for that role. UserRole.Ordinal
+  //           will be null for these so if we have selected them they
+  //           should be created.
+  // deletion: conversely, if the UserRole has an ordinal and we have
+  //           unselected it then it will be deleted.
+  // updates:  we keep track of the number of UserRole instances that
+  //           are or will be in existence; anything that is and was
+  //           selected has its ordinal number assigned to the current
+  //           count.
+  foreach($this.vars.myRoles)
+  {
+    if ($loop.flags.selected && isnull($loop.orig.Ordinal))
+    {
+      // If the user is being created for the first time (that is a new user)
+      // then the UserName field of the UserRole instances will be null.
+      // Assign it now.
+      $loop.UserRole.UserName = $this.vars.selected.User.UserName;
+      toCreate += $loop.UserRole;
+      $loop.UserRole.Ordinal = ++counter;
+    }
+    else if (!($loop.flags.selected || isnull($loop.orig.Ordinal)))
+    {
+      toDelete += $loop.UserRole;
+      // Obviously we don't count the ones we are deleting
+    }
+    else if ($loop.flags.selected)
+    {
+      $loop.UserRole.Ordinal = ++counter;
+      if ($loop.UserRole != $loop.orig)
+        toUpdate += $loop.UserRole;
+    }
+  }
+
+  if (@component == $this.detailsDialog.bApply)
+  {
+    // If there is something to send then send it
+    if (count(toCreate) || count(toDelete) || count(toUpdate))
+      send applyUserRoles($this.vars.selected.User, toCreate, toDelete, toUpdate);
+  }
+  else
+    $this.detailsDialog.bApply.properties.enabled = count(toCreate) || count(toDelete) || count(toUpdate);
+}
+
+// This ( and moveDown) below are generic sp can be reused by other
+// applications requiring this functionality
+local function moveUp(any table, any modelAt)
+{
+  any itemSelection  = table.properties.itemSelection;
+  any indexSelection = table.properties.indexSelection;
+
+  // Move selected rows up by one
+  foreach(itemSelection)
+  {
+    if (@first && indexSelection[0] == 0)
+      continue;  // can't move item at row zero up any more
+
+    // We are iterating over the itemSelection Array, so $loop is an
+    // array element, which is a row key.
+
+    //writeln($catalog.system.out, $loop);
+    //writeln($catalog.system.out, $this.vars.contracts.{$loop});
+    // Remove current item (generates an event to the table)
+    any row = remove($this.{modelAt}.{$loop});
+
+    // Add the removed item back in at its previous index position - 1
+    any i = indexSelection[@count] - 1;
+    any m = $this.{modelAt};
+    add(row, path(m[i]));   // generates an event to table
+    //add(row, path($this.{modelAt}.[i]));   // generates an event to table
+  }
+
+  // Reselect the row(s)
+  table.properties.itemSelection = itemSelection;
+}
+
+local function moveDown(any table, any modelAt)
+{
+  any itemSelection  = table.properties.itemSelection;
+  any indexSelection = table.properties.indexSelection;
+  any maxRow         = count($this.{modelAt}) - 1;
+
+  // Move selected rows down by one
+  reverse(itemSelection);
+  reverse(indexSelection);
+  foreach(itemSelection)
+  {
+    if (@first && indexSelection[0] == maxRow)
+      continue;  // can't move item in last row down any more
+
+    // We are iterating over the itemSelection Array, so $loop is an
+    // array element, which is a row key.
+
+    //writeln($catalog.system.out, $loop);
+    //writeln($catalog.system.out, $this.vars.contracts.{$loop});
+    // Remove current item (generates an event to the table)
+    any row = remove($this.{modelAt}.{$loop});
+
+    // Add the removed item back in at its previous index position + 1
+    any i = indexSelection[@count] + 1;
+    // Inq bug? Need to alias this out first
+    any m = $this.{modelAt};
+    add(row, path(m[i]));   // generates an event to table
+    //add(row, path($this.{modelAt}[i]));   // as-was
+  }
+
+  // Reselect the row(s)
+  table.properties.itemSelection = itemSelection;
+}
+
+local function tRolesSelected()
+{
+  $this.detailsDialog.bMoveUp.properties.enabled =
+  $this.detailsDialog.bMoveDown.properties.enabled = @component.model.selectCount != 0;
+  //call applyUserRoles(@component);
+}
+
+// An inputVerifier function to validate the contents of tfPermType.
+// It is valid if:
+//   empty - we assume string
+//   one of int, short, long, date, decimal:n n zero or +ve
+//          byte, double or float
+//   matches the form <package>:<type>[.<field]
+local function validateType(string text,
+                            any    value,
+                            any    validTypes,
+                            any    decRegex,
+                            any    where)
+{
+  // Zero length - OK.
+  boolean b = length(value) == 0;
+
+  if (!b)
+  {
+    b = contains(validTypes, value);
+
+    if (!b)
+    {
+    }
+
+  }
+
+  b;
+}
+
+// Make a string of the form aaa.bbb.ccc that represents a path
+// through the permissions tree. The permArray argument is an
+// array of node-set child nodes within the permissions tree, as
+// delivered by the tree selection
+local function makePermPath(any permArray)
+{
+  string ret;
+
+  foreach(permArray)
+  {
+    if (@last)
+      ret += $loop.Permission.ThisElement;
+    else
+      ret += $loop.Permission.ThisElement + ".";
+  }
+
+  ret;
+}
+
+local function renderPermRef(any component,
+                             any parent,
+                             any value,
+                             any formatter,
+                             any isMouseCell,
+                             any row,
+                             any rowRoot,
+                             any columnName)
+{
+  //writeln($catalog.system.out, "\e \l " + .);
+  component.properties.enabled = rowRoot.flags.thisLevel;
+  null;
+}
+
+local function canEditPermRef(any component,
+                              any parent,
+                              any value,
+                              any row,
+                              any rowRoot,
+                              any columnName)
+{
+  rowRoot.flags.thisLevel;
+}
+
+local function permRefSelectionChanged(any isUser,
+                                       any after,
+                                       any rowRoot,
+                                       any columnName,
+                                       any row,
+                                       any column,
+                                       any value,
+                                       any newValue)
+{
+  //writeln($catalog.system.out, "\e");
+  // Maintain the list of selected contracts
+  //writeln($catalog.system.out, $this.vars.newSelected);
+  //writeln($catalog.system.out, $this.vars.newUnselected);
+
+  if (newValue)
+  {
+    // Item was selected. Move it from the unselected list to the selected list
+    $this.vars.newUnselected -= rowRoot.Item;
+    $this.vars.newSelected   += rowRoot.Item;
+  }
+  else
+  {
+    // Item was deselected
+    $this.vars.newUnselected += rowRoot.Item;
+    $this.vars.newSelected   -= rowRoot.Item;
+  }
+}
+
+local function checkRoleOk()
+{
+  if (@component == $this.roleDetailsDialog.tfRoleName && $this.vars.defaultFullName)
+    $this.vars.selected.Role.FullName = $this.vars.selected.Role.Role;
+
+  $this.props.okRole = $this.vars.selected.Role.Role && $this.vars.selected.Role.FullName;
+}
+
+local function defaultFullName(any component, any text)
+{
+  // writeln($catalog.system.out, .);
+  $this.vars.defaultFullName = $this.vars.selected.Role.Role == $this.vars.selected.Role.FullName;
+  if (text == " ")  // Better a regex
+    null;
+  else
+    text;
+}
+
+local function updOk()
+{
+  hide($this.detailsDialog);
+}
+
+local function updError(string  msg,
+                        string  stackTrace,
+                        boolean isUser,
+                        any     exInfo)
+{
+  // exInfo is the current object. Show error and...
+  call inq.gui.util:messageDialog(messageTitle = "Update Error",
+                                  messageText  = msg);
+
+	// ...update local non-live copy
+	$this.vars.selected.User = exInfo;
+	hide($this.detailsDialog);
+}
+
+local function cbPwdReset()
+{
+  // Resetting the user's password because its been forgotten
+  call validatePwd();
+  string pwd = $this.detailsDialog.tfPasswd.model.root;
+  $this.vars.selected.Password.Password = crypt(pwd);
+  send forcePwdChange(pwd = $this.vars.selected.Password);
+}
+
+local function cbAuthClose()
+{
+  // If we logged in as this package then exit, otherwise just hide (or dispose?)
+  if ($process.package == "\p")
+    exit();
+  else
+    hide($this);
+}
+
+local function initUsers()
+{
+  send initUsers();
+}
+
+service initResponse(any icons)
+{
+  any $this.vars.icons = icons;
+}
+
+local function cbAuthNew()
+{
+  xfunc($this.tab.{$this.tab.model.selection}.vars.newFunc);
+}
+
+local function userMain()
+{
+  if ($this.userMain)
+    remove($this.userMain);
+
+  if (!$this.userMain)
+  {
+    gWindow userMain;
+    userMain.properties.contextNode = true;
+    userMain.properties.title       = "Security";
+    userMain.properties.size        = array size = (600,300);
+    userMain.properties.menuBar     = call buildAuthMenu(parent=userMain);
+    gEvent(userMain, call cbAuthClose(), event=(gWclosing));
+
+    // Long-lived vars for property bindings etc
+    boolean userMain.vars.isNew;
+    boolean userMain.vars.isOverride;
+
+    add(userMain, path($this.userMain));
+
+    call authTreeGUI(parent=userMain);
+  }
+
+  $this.userMain.vars.tabSelect = "users";
+  call inq.gui.util:createMessageDialogAt(parent = $this.userMain);
+  call inq.gui.util:createQuestionDialogAt(parent = $this.userMain);
+  show($this.userMain);
+
+}
+
+// Load the message dialog code
+exec("classpath:///inq/gui/messagedialog.inq");
+exec("classpath:///inq/gui/questiondialog.inq");
+
+// If we log in as this package (and use this file as the initial URL)
+// then this test will be true and we will execute the immediate code
+// to create the initial auth GUI and show it in a top-level window.
+if ($process.package == "\p")
+{
+  call userMain();
+}

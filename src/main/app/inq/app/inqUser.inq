@@ -1,0 +1,80 @@
+/**
+ * Inqwell Auth User typedef
+ *
+ * Private & Confidential Copyright © Inqwell Ltd 2004.
+ * All rights reserved.
+ */
+
+package inq.auth;
+
+import inq.boot as BOOT;
+
+typedef User
+{
+	fields
+	(
+		UserName;
+		FullName;
+		string      Email           width=48;
+    State       State;
+    date        LastLogin       label="Last Login" format="dd/MM/yyyy HH:mm:ss" width=20;
+    date        Expires                            format="dd/MM/yyyy";
+    short       CurSessions = 0;
+    short       MaxSessions;
+    short       PrivLevel;
+    date        LastUpdated;
+    UserName    User;
+	)
+
+	construct (
+	           {
+               $this = obj;
+
+               setnull($this.LastLogin);
+               $this.PrivLevel   = 128;
+               $this.LastUpdated = getdate();
+               $this.User      = $process.loginName;
+
+               any newPwd = clone(pwdObj);
+               newPwd.UserName = $this.UserName;
+               //writeln($catalog.system.out, "NEW PWD 1 ", newPwd);
+               create(newPwd);
+
+             }
+            )
+
+	mutate    (
+	           {
+	             if ($this.new.State == enum(State, ACTIVE) && $this.old.State == enum(State, SUSPENDED))
+	             {
+	               aggregate(Password, $this.new);
+	               //writeln($catalog.system.out, $this);
+	               $this.Password.FailedAttempts = 0;
+	             }
+               $this.new.LastUpdated = getdate();
+               $this.new.User      = $process.loginName;
+             }
+            )
+
+
+	pkey
+	(
+		fields (UserName)
+
+		#include <{db}/inqUser.pkey.sql>
+	)
+
+	key All
+	(
+		fields()
+
+    auxcfg( map(
+		"read-sql",
+			"{select-stmt}
+			"
+		))
+	)
+
+	iobind (SimpleSqlIO, BOOT:inq)
+}
+

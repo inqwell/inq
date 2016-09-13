@@ -1,0 +1,32 @@
+<?xml version="1.0" ?>
+<table name="inqControl">
+An Authorisation Database
+
+Private &amp; Confidential Copyright &#169; Xylinq Ltd 2004.
+All rights reserved.
+  <columns>
+    <column name="System" nullable="false" type="var_char" type_precision_1="16">
+      System Name == "inq" assuming auth is global
+    </column>
+    <column name="AgeingEnabled" nullable="false" type="char" type_precision_1="1">
+      Whether pwds age or not - 'Y' or 'N'
+    </column>
+    <column name="AgeDays" nullable="false" type="small_integer">
+      Pwd age period in days, say 90
+    </column>
+    <column name="WarnDays" nullable="false" type="small_integer">
+      Days of advance warning of pwd expiry, say 14
+    </column>
+    <column name="PrevPwds" nullable="false" type="small_integer">
+      Number of remembered pwds user cannot reuse
+    </column>
+    <column name="MaxAttempts" nullable="false" type="small_integer">
+      Max number of login attempts before acct is suspended
+    </column>
+    <column name="LastUpdated" nullable="false" type="date_time"/>
+    <column name="User" nullable="false" type="var_char" type_precision_1="16"/>
+  </columns>
+  <primary_key name="pk_inqControl">
+    <column name="System"/>
+  </primary_key>
+</table>

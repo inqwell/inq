@@ -4,7 +4,7 @@
   <groupId>com.inqwell</groupId>
   <artifactId>inq</artifactId>
   <packaging>jar</packaging>
-  <version>1.2.1-SNAPSHOT</version>
+  <version>1.2.1</version>
   <name>inq</name>
   <url>http://www.inqwell.com</url>
 

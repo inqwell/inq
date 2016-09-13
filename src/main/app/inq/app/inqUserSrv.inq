@@ -1,0 +1,1110 @@
+/**
+ * Auth
+ *
+ * User related services and functions
+ *
+ * Copyright c Xylinq Ltd 2004-2009
+ */
+
+package inq.auth;
+
+service initUsers()
+{
+  //writeln($catalog.system.out, "*** initUsers " + $path);
+  // Setup some event listeners for creation events on the types of interest.
+  // Save these for subsequent removal, if required.
+  // NOTE - use a simple map or the any returned by listen will be listened to
+  // by the hmap.
+  smap $this.listeners;
+
+  any $this.listeners.User       = listen ($catalog,
+		                                       func f = call newUserCreated(User = @eventData),
+                                           event=(create),
+                                           typedef=User);
+
+  any $this.listeners.Role       = listen ($catalog,
+		                                       func f = call newRoleCreated(Role = @eventData),
+                                           event=(create),
+                                           typedef=Role);
+
+  any $this.listeners.UserRole   = listen ($catalog,
+		                                       func f = call newUserRoleCreated(UserRole = @eventData),
+                                           event=(create),
+                                           typedef=UserRole);
+
+  any $this.listeners.Permission = listen ($catalog,
+		                                       func f = call newPermissionCreated(Permission = @eventData),
+                                           event=(create),
+                                           typedef=Permission);
+
+  //listen ($catalog, service=newTask, event=(create), typedef=Role);
+
+  any icons.win       = image("images/padlock.gif");
+  any icons.win       = image("images/user.gif");
+
+  call registerPermissions();
+
+  // Initialise selected leaves key
+  any $this.vars.activeList = null;
+
+  // Send back the response
+  send initResponse(icons);
+
+  call loadAllUsers();
+  call loadRolesTree();
+  call loadPermsTree();
+}
+
+service loadSessions(any User, any atPath)
+{
+  hmap list;
+
+  any k = new(Session.ByUserName, User);
+  read(Session, k, target=list, setname="sessions");
+  aggregate(SessionLog, list.sessions[first].Session);
+
+  add(remove(list.sessions), atPath);
+}
+
+service closeUsers()
+{
+  unlisten($catalog, $this.listeners.User);
+  unlisten($catalog, $this.listeners.Role);
+  unlisten($catalog, $this.listeners.UserRole);
+  unlisten($catalog, $this.listeners.Permission);
+  remove($this);
+}
+
+local function newUserCreated(any User)
+{
+  any k = getuniquekey(User);
+
+  add(User, path($this.vars.userList.{k}.User));
+}
+
+local function newRoleCreated(any Role)
+{
+  any k = getuniquekey(Role);
+
+  add(Role, path($this.vars.roleList.{k}.Role));
+
+  // Prepare the node set for users to be added to this role...
+  // This stresses the tree event dispatching in the client!! :
+  //  1) Above, we are adding the Role instance, not its node-set-child container
+  //  2) Below, we are adding the sub-level node set (and generating an event on it)
+  // Amazingly, tree dispatching all works just fine!
+  // This is not a good example, so best not to copy it but I wanted to try it
+  // just the same!!
+  hmap m;
+  setnodeset(m, typedef(UserRole));
+  add(m, path($this.vars.roleList.{k}.users));
+}
+
+local function newUserRoleCreated(any UserRole)
+{
+  // Read the role this UserRole refers to so we can navigate the Roles tree
+  read(Role, UserRole);
+
+  // Find the users list beneath the appropriate Role
+  any k = getuniquekey(Role);
+  any users = $this.vars.roleList.{k}.users;
+
+  // Add to the list
+  hmap m;
+  any k = getuniquekey(UserRole);
+  any m.UserRole = UserRole;
+  aggregate(User, m.UserRole);
+  add(m, path(users.{k}));
+}
+
+local function newPermissionCreated(any Permission)
+{
+  //writeln($catalog.system.out, "\e \l");
+  //writeln($catalog.system.out, Permission);
+  if (call isBranch(Permission))
+  {
+    any node = call findPermNode(Permission,
+                                 root = $this.vars.permTree,
+                                 Parent = null);
+
+  //writeln($catalog.system.out, "\e \l");
+  //writeln($catalog.system.out, node);
+
+    if (node)
+    {
+      // Add branches to the tree
+      if (Permission.Name == "MASTER")
+      {
+        any uk = getuniquekey(Permission);
+        hmap m;
+        any m.Permission = Permission;
+        //writeln($catalog.system.out, "\e \l");
+        add(m, path(node.{uk}));
+
+        // place a node-set root at the new node-set-child we've
+        // just created in preparation for new children of this branch
+        hmap m;
+        setnodeset(m, typedef(Permission));
+        any node.{uk}.permTree = m;
+      }
+      else
+      {
+        //writeln($catalog.system.out, "\e \l at ");
+        //writeln($catalog.system.out, node);
+        add(Permission, path(node.{Permission.Name}));
+        //writeln($catalog.system.out, "\e \l after ");
+        //writeln($catalog.system.out, node);
+      }
+    }
+  }
+  else
+  {
+    // Fetch the parent permission
+    any k = new(Permission.unique);
+    k.Permission = Permission.Parent;
+    read(Permission, k, alias="parent");
+
+    if (Permission.Name != "MASTER")
+    {
+      // If not a master then we need to find the corresponding master
+      // in the structure. Hunt down the override parent to do that
+
+      any node = call findPermNode(Permission = parent,
+                                   root = $this.vars.permTree,
+                                   Parent = null);
+      if (node)
+        any parent = node.Permission;
+    }
+
+    // Check if the current leaf set is applicable to the newly created
+    // permission. We've remembered the master key.
+    any k = new(Permission.ByNameParentLeaf);
+    k.Name   = "MASTER";
+    k.Parent = parent.Permission;
+
+//  writeln($catalog.system.out, "\e \l");
+//  writeln($catalog.system.out, k);
+//  writeln($catalog.system.out, $this.vars.activeList);
+
+    // If applicable then add it
+    if (k == $this.vars.activeList)
+    {
+      if (Permission.Name == "MASTER")
+      {
+        // Add as a new node-set-child
+        any keyVal = getuniquekey(Permission);
+        hmap m;
+        any m.Permission = Permission;
+        add(m, path($this.vars.permList.{keyVal}));
+      }
+      else
+      {
+        // Find appropriate node-set-child and add it there
+        foreach($this.vars.permList)
+          if ($loop.Permission.ThisElement == Permission.ThisElement)
+          {
+            add(Permission, path($loop.{Permission.Name}));
+            break();
+          }
+      }
+    }
+  }
+}
+
+/**
+ * Place a newly created permission object at the appropriate place in
+ * the permission tree hierarchy.
+ */
+local function scanForParent(any level, any Permission, any keyVal, any aliasVal)
+{
+  foreach(level)
+  {
+    //writeln($catalog.system.out, "\e \l " + $loop);
+
+    if ($loop.{aliasVal}.Permission == Permission.Parent)
+    {
+      // In fact, we only add branch permissions as per the design
+      // of the Permissions structures.
+      if (call isBranch(Permission))
+        add(Permission, path($loop.permTree.{keyVal}.{aliasVal}));
+
+      any ret = $loop.permTree.{keyVal};
+    }
+    else
+      call scanForParent(level=$loop.permTree, Permission, keyVal, aliasVal);
+  }
+
+  // Unresolved if we didn't find the node-set child appropriate to
+  // the given Permission
+  ret;
+}
+
+// If the given Permission is a MASTER then find the node set root
+// within which it either does (already exists) or would (newly created)
+// reside. If it is an override then find the node-set-child where
+// it either does (already exists) or would (newly created) reside.
+local function findPermNode(any Permission, any root, any Parent)
+{
+  /*
+  writeln($catalog.system.out, "\e \l");
+  writeln($catalog.system.out, Permission);
+  writeln($catalog.system.out, Parent);
+  */
+
+  if (Permission.Parent == Parent)
+  {
+    // Found it.
+    // If it is a MASTER then return the root, otherwise scan
+    // it and look for the node-set-child whose ThisElement is the
+    // same as Permission.ThisElement
+    if (Permission.Name == "MASTER")
+      any ret = root;
+    else
+    {
+      foreach(root)
+      {
+        if ($loop.Permission.ThisElement == Permission.ThisElement)
+          break(any ret = $loop);
+      }
+    }
+  }
+  else
+  {
+    // Recurse to next level. As we do that, if the given Permission
+    // is an override we need to use the one at the current level that
+    // is its ancestor or we'll never locate its parent. If it is
+    // the MASTER then the node is called "Permission"
+    foreach(root)
+    {
+      if (Permission.Name == "MASTER")
+      {
+        any ret = call findPermNode(Permission, root = $loop.permTree, Parent = $loop.Permission.Permission);
+        if (ret)
+          break(ret);
+      }
+      else
+      {
+        //writeln($catalog.system.out, "\e \l Descending ");
+        //writeln($catalog.system.out, $loop);
+        // In the override case, there might not be an instance going down
+        // the current branch. If this is the case we can skip it.
+        if ($loop.{Permission.Name})
+        {
+          any ret = call findPermNode(Permission, root = $loop.permTree, Parent = $loop.{Permission.Name}.Permission);
+          //writeln($catalog.system.out, "\e \l Descend Result ");
+          //writeln($catalog.system.out, ret);
+          if (ret)
+            break(ret);
+        }
+        else
+          continue;
+        /*
+        any nsc = $loop;   // keep for nested foreach
+        // Find appropriate parent
+        foreach($loop)
+          if ($loop.Permission.ThisElement == Permission.ThisElement)
+          {
+            any ret = call findPermNode(Permission, root = nsc.permTree, Parent = $loop.{Permission.Name}.Permission);
+            if (ret)
+              break(ret);
+          }
+        if (ret)
+          break(ret);
+        */
+      }
+    }
+  }
+  ret;
+}
+
+/**
+ * Create a list of all users.  This structure underpins the "Users" tab on
+ * that part of the admin GUI.
+ */
+local function loadAllUsers()
+{
+  hmap nodeSet;   // hmap means structure will be event-live
+  read (User, ., keyname="All", target=nodeSet, setname="userList");
+  add(remove(nodeSet.userList), path($this.vars.userList));
+}
+
+/**
+ * Load all the roles and aggregate with them the UserRole instances
+ * for the given user
+ */
+local function loadUserRoles(any User)
+{
+  hmap nodeSet;
+  any k = new(Role.All);
+  read(Role, k, target=nodeSet, setname="list");
+
+  any k = new(UserRole.unique);
+  k.UserName = User.UserName;
+  aggregate(UserRole, nodeSet.list[first].Role,
+            key = cfunc f = {
+                              k.Role = $loop.Role.Role;
+                              k;
+                            },
+            foreach = cfunc ff = {
+                                   // Make sure there is a candidate UserRole
+                                   // for all those that don't join. The GUI
+                                   // sorts by ordinal so this must always
+                                   // resolve. We later identify UserRoles for
+                                   // creation by fact that their Ordinal is
+                                   // currently null. As well, place a copy of
+                                   // the UserRole (whether candidate or real) in
+                                   // the node-set child to help the GUI track
+                                   // changes.
+                                   if ($loop.UserRole)
+                                   {
+                                     boolean $loop.flags.selected = true;
+                                     any $loop.orig = new(UserRole, $loop.UserRole);
+                                    }
+                                   else
+                                   {
+                                     boolean $loop.flags.selected = false;
+                                     any $loop.UserRole          = new(UserRole);
+                                     any $loop.orig              = new(UserRole);
+
+                                     // Note - in any case UserName may be null
+                                     // when the user is being created (new user
+                                     // in GUI).
+                                     $loop.UserRole.UserName = User.UserName;
+                                     $loop.UserRole.Role     = $loop.Role.Role;
+                                   }
+                                 }
+           );
+
+  add(remove(nodeSet.list), path($this.vars.myRoles));
+}
+
+/**
+ * Create a structure showing the available Roles and the Users within
+ * those Roles as a sub-aggregation   This structure underpins the "Roles" tab on
+ * that part of the admin GUI.
+ */
+local function loadRolesTree()
+{
+  hmap nodeSet;
+
+  read (Role, ., keyname="All", target=nodeSet, setname="roleList");
+  aggregate(UserRole,
+            nodeSet.roleList[first].Role,
+            keyname="UsersByRole",
+            setname="users",
+            foreach = cfunc f = {
+                                  // Add the User for GUI rendering
+                                  aggregate(User, $loop.users[first].UserRole);
+                                }
+           );
+
+  add(remove(nodeSet.roleList), path($this.vars.roleList));
+}
+
+/**
+ * Create a structure showing the task tree.  This structure underpins the "Perms"
+ * tab on that part of the admin GUI.
+ * @param Name the name of the Permission objects set that will be used to build
+ * the tree.
+ * @param branchOnly true builds only the branch nodes; false builds branch and leaf
+ * nodes.
+ */
+local function loadPermsTree(boolean branchOnly=true)
+{
+  add(call buildRenderAuthTree(), path($this.vars.permTree));
+}
+
+/**
+ * Aggregate from the Permission objects in the given list.  Creates
+ * the next level list in forming the tree structure of Permission
+ * objects and recurses as long as there is an expansion result,
+ * to build the complete tree.
+ * <p>
+ * Each sucessive level's node set is given the
+ *
+ * @param list the current level's node set.
+ * @param setName the name to give the next level's list
+ */
+local function loadNextLevel(any list, string setName)
+{
+  aggregate(Permission,
+            list[first].Permission,
+            keyname=childKeyName,
+            setname=setName,
+            map=keyMap);
+  foreach(list)
+    if ($loop.{setName}[first].Permission)
+      call loadNextLevel(list=$loop.{setName}, setName, keyMap, childKeyName);
+}
+
+/**
+ * Load the leaf Permission children (if any) of the specified parent
+ * and place them at the model location for the Permissions tab leaf table.
+ */
+service loadLeaves(any parent)
+{
+  if (parent)
+    call loadLeaves(parent);
+  else
+  {
+    any $this.vars.activeList = null;
+
+    if ($this.vars.permList)
+      empty($this.vars.permList);
+    if ($this.vars.permRefs.permRefList)
+      empty($this.vars.permRefs.permRefList);
+  }
+
+}
+
+service loadUserRoles(any User)
+{
+  call loadUserRoles(User);
+}
+
+service loadViewPerms(any User, any Role)
+{
+  any permViewTree = call buildRenderViewTree(User, Role);
+
+  add(permViewTree, path($this.vars.permViewTree));
+}
+
+/**
+ * Read the references to the given Permission for roles, users or roles and
+ * users, according to the given flags.
+ *
+ * If the refSelected flag is true then only existing references are
+ * collected (for a more collapsed list, though from which only existing
+ * references can be removed), otherwise all roles and/or users are
+ * included (and if there is no reference from that role/user there is
+ * no PermRef instance at that point).
+ *
+ */
+service loadRefs(any Permission,
+                 any ancestors,
+                 boolean refUsers, boolean refRoles, boolean refSelected)
+{
+  hmap m; // seed hmap
+
+  // Event live. Also, make the list now in case both flags are false and
+  // we create nothing.
+  hmap m.permRefs.permRefList;
+
+  // Two sets for the selected and unselected Item aliases in the
+  // list we are building
+  set m.permRefs.selected;
+  set m.permRefs.unselected;
+
+  if (refSelected)
+  {
+    if (refRoles || refUsers)
+    {
+      // Only those PermRefs that exist, so start from there.
+      any k = new(PermRef.ByPermission, Permission);
+      read(PermRef, k, target=m.permRefs, setname="permRefList");
+
+      // Merge in any ancestors. In fact, this merge will
+      // only add to the existing set as the PermRef set
+      // will always be different
+      foreach(ancestors)
+      {
+        k.Permission = $loop.Permission;
+        read(PermRef, k, target=m.permRefs, setname="permRefList", merge=true);
+      }
+
+      if (refUsers)
+      {
+        // Add Users. Slip in the flags and set up the selected set
+        // at the same time. The boolean flags.thisLevel determines
+        // whether the child is an ancestor or not.
+        any ku = new(User.unique);
+        aggregate(User, m.permRefs.permRefList[first].PermRef,
+                  alias = "Item",
+                  key = cfunc f = {
+                                    ku.UserName = $loop.PermRef.Name;
+                                    ku;
+                                  },
+                  foreach = cfunc ff = {
+                                         boolean $loop.flags.selected = true;
+                                         boolean $loop.flags.thisLevel = $loop.PermRef.Permission == Permission.Permission;
+                                         // Actually only really if thisLevel is
+                                         // true but the GUI prevents these
+                                         // from being edited if not true. Revisit
+                                         // if a problem
+                                         if ($loop.Item)
+                                           m.permRefs.selected += $loop.Item;
+                                       }
+                 );
+      }
+
+      if (refRoles)
+      {
+        // Add Roles.
+        any kr = new(Role.unique);
+        aggregate(Role, m.permRefs.permRefList[first].PermRef,
+                  alias = "Item",
+                  key = cfunc f = {
+                                    kr.Role = $loop.PermRef.Name;
+                                    kr;
+                                  },
+                  foreach = cfunc ff = {
+                                        boolean $loop.flags.selected = true;
+                                        boolean $loop.flags.thisLevel = $loop.PermRef.Permission == Permission.Permission;
+                                        if ($loop.Item)
+                                          m.permRefs.selected += $loop.Item;
+                                      }
+                 );
+      }
+
+      // If we excluded roles or users then remove the PermRefs that were
+      // represented by them (that we didn't aggregate from)
+      if (!(refRoles && refUsers))
+        foreach(m.permRefs.permRefList)
+          if (!$loop.Item)
+            removeiter();
+    }
+  }
+  else
+  {
+    // Show all Roles and/or users. Start from the Role or User in that case.
+    any k = new(Role.All);  // Key is called "All" in both cases
+    if (refRoles)
+      read(Role, k, target=m.permRefs, alias="Item", setname="permRefList");
+
+    if (refUsers)
+      read(User, k, target=m.permRefs, alias="Item", setname="permRefList", merge=true);
+
+    // Use the alternative node-set primary indication of the child
+    // name instead of the typedef. Then if the User or Role (whatever it
+    // is) gets deleted the node-set child is removed.
+    setnodeset(m.permRefs.permRefList, "Item");
+
+    any k = new(PermRef.unique);
+    aggregate(PermRef, m.permRefs.permRefList[first].Item,
+              key = cfunc f = {
+                               //writeln($catalog.system.out, "\e \l " + $loop);
+                               k.Permission = Permission.Permission;
+                               k.Name = ($loop.Item.UserName ? $loop.Item.UserName
+                                                             : $loop.Item.Role);
+                               k;
+                             },
+              foreach = cfunc ff = {
+                                    // Set the selected flag according to whether
+                                    // we found a PermRef for the given permission
+                                    // If we didn't then check the ancestors
+                                    if ($loop.PermRef)
+                                    {
+                                      boolean $loop.flags.selected  = true;
+                                      boolean $loop.flags.thisLevel = true;
+                                      m.permRefs.selected += $loop.Item;
+                                    }
+                                    else
+                                    {
+                                      boolean $loop.flags.selected  = false;
+                                      boolean $loop.flags.thisLevel = true;
+
+                                      // Again (see above) this only really applies
+                                      // when there is no selection at all, not just
+                                      // at this level. However because we can only
+                                      // edit the selection at the actual level, this
+                                      // doesn't matter
+                                      m.permRefs.unselected += $loop.Item;
+                                      any context = $loop;  // nested foreach
+                                      foreach(ancestors)
+                                      {
+                                        k.Permission = $loop.Permission;
+                                        if (read(PermRef, k, target=context))
+                                        {
+                                          context.flags.thisLevel = false;
+                                          context.flags.selected = true;
+                                        }
+                                      }
+                                    }
+                                  }
+              );
+  }
+
+  add(remove(m.permRefs), path($this.vars.permRefs));
+}
+
+// Load the leaves of the given parent.
+local function loadLeaves(any parent)
+{
+  // Note - the node supplied must always be a MASTER node
+
+  // Read the master child leaves of the given parent
+  any k = new(Permission.ByNameParentLeaf);
+  k.Name   = parent.Name;
+  k.Parent = parent.Permission;
+
+  hmap nodeSet;   // hmap means structure will be event-live
+
+  read (Permission, k, target=nodeSet, setname="permList");
+
+  // Having read the list of masters, find the parent in the
+  // tree structure so we know what overrides to get
+  any node = call findPermNode(Permission = parent,
+                               root = $this.vars.permTree,
+                               Parent = null);
+  set orideParents;
+  //writeln($catalog.system.out, "\e \l node");
+  //writeln($catalog.system.out, node);
+  if (node)
+  {
+    // Move down to the node-set child and build the set of override parents
+    any uk = getuniquekey(parent);
+    //writeln($catalog.system.out, "\e \l NSC");
+    any nsc = node.{uk};
+    //writeln($catalog.system.out, nsc);
+    foreach(nsc)
+    {
+      // Avoid any sub-level permTree and the MASTER node
+      if ($loop.Name && $loop.Name != "MASTER")
+      {
+        orideParents += $loop;
+      }
+    }
+  }
+
+  //writeln($catalog.system.out, "oride parents " + orideParents);
+  // Add any overrides to each child in the set
+  any k1 = new(Permission.ByElementNameParent);
+  foreach(nodeSet.permList)
+  {
+    any context = $loop;  // nested foreach
+    any leaf    = $loop.Permission;
+    foreach(orideParents)
+    {
+      k1.Name = $loop.Name;
+      k1.Parent = $loop.Permission;
+      k1.ThisElement = leaf.ThisElement;
+      read(Permission, k1, target=context, alias = $loop.Name);
+      //writeln($catalog.system.out, "\e \l READING " + k1);
+      //if (read(Permission, k1, target=context, alias = $loop.Name))
+        //writeln($catalog.system.out, "\e \l READ " + context.{$loop.Name});
+    }
+  }
+
+  add(remove(nodeSet.permList), path($this.vars.permList));
+
+  // Return the key to its MASTER value and leave it behind so we
+  // can test for new leaf permissions being added to the current list.
+  k.Name = "MASTER";
+  k.Parent = parent.Permission;
+  any $this.vars.activeList = k;
+}
+
+function getControl(Control.System = "inq")
+{
+  read(Control, .);
+  Control;
+}
+
+function canonicalPasswd(any passwd)
+{
+  // The max length of encrypted pwds is 48
+  if (length(passwd) > 48)
+    leftstring(passwd, 48);
+  else
+    passwd;
+}
+
+function resetUsers()
+{
+  read (User, ., keyname="All", setname="userList");
+  any k = new(Session.ByUserName);
+  foreach(userList)
+  {
+    $loop.User.CurSessions = 0;
+    k.UserName = $loop.User.UserName;
+    read (Session, k, setname="sessionList");
+    foreach(sessionList)
+      delete($loop.Session);
+  }
+}
+
+/**
+ * Register with the permissions system.
+ * Build the user's runtime auth tree and store it under $root
+ * as $root.perms; send the client an executed version and
+ * register a listener for when perms are republished
+ */
+function registerPermissions()
+{
+  // This function only needs to be called once, however various
+  // applications may get loaded into the same session and each
+  // may initialise permissions, so guard against this.
+  if (!$root.perms)
+  {
+    any ku = new(User.unique);
+    ku.UserName = $process.loginName;
+
+    if (read(User, ku))
+    {
+      // Register a listener for when new permissions are published.
+      // Use a cfunc - we are particularly not interested in preserving
+      // the current context.
+      any $root.permsListener = listen(unlisten($catalog, $root.permsListener),
+                                       cfunc f = call newPermissions(),
+                                       event  = (complete),
+                                       exec   = publishPerms);
+
+//writeln($catalog.system.out,"\e \l");
+      call newPermissions();
+    }
+    else
+    {
+      // Hmmm.. If we log in as admin:system.server then there is no
+      // user etc. Should this not be the case? For now, ignore
+      if ($process.loginName != "admin")
+        throw("No user or session for " + $process);
+    }
+  }
+}
+
+function unregisterPermissions(int token)
+{
+  unlisten($catalog, $root.permsListener);
+}
+
+function getPermission(any perm, boolean notNull = true)
+{
+  // Did we ever register?
+  if (!$root.perms)
+    throw("Permissions not initialised");
+
+  // Place the permissions on the stack, in case they are
+  // referenced as such within themselves
+  any perms = $root.perms;
+
+  any ret = perms.{perm};
+
+  if (notNull && isnull(ret))
+    throw("Null value not permitted for " + perm);
+
+  ret;
+}
+
+local function publishPerms() raises (any)
+{
+  // Only here to raise an event
+}
+
+local function newPermissions()
+{
+//writeln($catalog.system.out,"\e \l");
+  any k = new(User.unique);
+  k.UserName = $process.loginName;
+  if (read(User, k))
+  {
+
+    // Fetch an unexecuted perms tree
+    any perms = call buildUserAuthTree(User);
+
+//writeln($catalog.system.out,"\e \l");
+    // By placing the perms under $root we save them for future use
+    // We don't want an event because these are unexecuted permissions
+    // whose values will be evaluated every time the permissions are
+    // accessed. They are therefore useless in the client (unresolved
+    // functions and the like)
+    any $root.perms = perms;
+//writeln($catalog.system.out,"\e \l");
+
+    // Send the client its permissions
+    call clientPermissions(User);
+//writeln($catalog.system.out,"\e \l");
+  }
+}
+
+local function clientPermissions(any User)
+{
+  // Fetch an unexecuted perms tree
+//writeln($catalog.system.out,"\e \l");
+  any perms = call buildUserAuthTree(User);
+
+  // Execute it to resolve the values - then it is suitable for
+  // consumption in the client
+//writeln($catalog.system.out,"\e \l");
+  call execPermTree(perms, subRoot = perms, runtime=true);
+
+  // Lodge in the nodespace to effectively send to the
+  // client (or should we respond on a service?)
+//writeln($catalog.system.out,"\e \l");
+  send newPermissions(perms, @syncgui = true);
+}
+
+service publishPerms()
+{
+  call publishPerms();
+}
+
+/**
+ * Utility service to create any new object.  The new object will be of the
+ * same type as the given argument and, notwithstanding any specific
+ * constructor expression, will be initialised to its values.
+ *
+ * @param obj A prototype of the object we want to create
+ */
+service newObject(any obj, any okCallback)
+{
+  transaction
+  {
+    any newOne = new(typeof(obj), obj);
+    //writeln($catalog.system.out, "NEW " + obj);
+    create(newOne);
+  }
+
+	if (okCallback)
+	{
+	  send system.client:updateOk(obj, okCallback);
+	}
+}
+
+service updateObject(any obj, func okCallback, func errorHandler)
+{
+  read(typeof(obj), obj, alias="upd");
+
+  // Check if user's object is stale. Because the representative client-side
+  // data is live the window is small but where the client takes its own
+  // working copy, modifies it and sends that there is a possibility.
+  // Assumes a LastUpdated field!
+	if (upd.LastUpdated > obj.LastUpdated)
+	{
+		// Invoke any error handler returning the latest version. If no error handler
+		// was supplied then the default handler in the client will be used.
+    throw ("Data is stale, please review and try again",
+           upd,
+           errorHandler);
+	}
+
+  transaction
+  {
+    upd = obj;
+  }
+
+	if (okCallback)
+	{
+	  send system.client:updateOk(obj, okCallback);
+	}
+}
+
+service newUser(any obj, any pwdObj, any okCallback)
+{
+  transaction
+  {
+    //writeln($catalog.system.out, "\e \l " + .);
+    any newOne = new(typeof(obj), obj);
+    create(newOne);
+  }
+
+	if (okCallback)
+	{
+	  send system.client:updateOk(obj, okCallback);
+	}
+}
+
+service forcePwdChange(any pwd)
+{
+  // Forces a password change (typically for use by administrators)
+  // Does not set current pwd into previous pwds. Sets expiry to now so
+  // when user next logs in he is forced to change it himself.
+  read(typeof(pwd), pwd, alias="upd");
+
+  any newPwd = call canonicalPasswd(passwd = pwd.Password);
+  upd.Password = newPwd;
+  upd.Expires  = getdate();
+  //writeln($catalog.system.out, "PWD " + upd);
+}
+
+service userPwdChange(any  UserName,
+                      any  curPwd,
+                      any  newPwd,
+                      func okCallback,
+                      func errorHandler)
+{
+  read(Password, ., alias="upd");
+  any Control = call getControl();
+
+  any curPwd = call canonicalPasswd(passwd = curPwd);
+  any newPwd = call canonicalPasswd(passwd = newPwd);
+
+  // Is current pwd valid
+  if (upd.Password != curPwd)
+    throw ("Password Error",   // i18n
+           "Invalid password",
+           errorHandler);
+
+  // Is new pwd same as current and prev pwds check enabled
+  if (upd.Password == newPwd && Control.PrevPwds > 0)
+    throw ("Password Error",   // i18n
+           "New password must differ from current one",
+           errorHandler);
+
+  // Is new pwd same as any previous?
+  if (!isnull(upd.PrevPwds) &&  Control.PrevPwds > 0)
+  {
+    // PrevPwds is readable as a line-based stream. Loop through and
+    // check them against new pwd
+    ioPrint p;
+    any prevPwds = getblob(upd.PrevPwds);
+    open(p, "string://prevPwds", OPEN_READ);
+    // Please Note: blank lines convert to boolean false, hence use isnull()
+    while(!isnull(any s = readstream(p)))
+    {
+      if (newPwd == s)
+      {
+        array msg = ("New password must differ from previous",
+                     Control.PrevPwds);
+        any msg = render(msg, format="{0} {1,number,integer}");
+        throw ("Password Error",
+               msg,
+               errorHandler);
+      }
+    }
+    close(p);
+  }
+
+  // All OK - change pwd, set up its expiry and roll current into
+  // previous, if enabled
+  string curPwd   = upd.Password;   // overwrites stack arg - OK
+  string prevPwds = upd.PrevPwds;   // take a copy to read from
+  upd.Password    = newPwd;         // update current pwd
+
+  // Ageing
+  if (Control.AgeingEnabled == enum(Enabled, Y))
+    upd.Expires     = dateadd(DAY, Control.AgeDays, getdate());
+  else
+    setnull(upd.Expires);
+
+  // Previous pwds
+  if (Control.PrevPwds > 1)
+  {
+    // If per chance the administrator sets user's password to one of those
+    // already in the prev blob it would get duplicated. Guard against this.
+    set prevPwdsUnique;
+    any pwdCount = Control.PrevPwds - 2;  // The number of pwds we retain from prevPwds
+    string newPrevPwds;
+    ioPrint pNewPwds;
+    open(pNewPwds, "string://newPrevPwds", OPEN_WRITE);
+    //writeln(pNewPwds, curPwd);   // current outgoing pwd
+    if (pwdCount > 0)
+    {
+      ioPrint p;
+      open(p, "string://prevPwds", OPEN_READ);
+      while (!isnull(any s = readstream(p)) && pwdCount-- > 0)
+      {
+        if (!contains(prevPwdsUnique, s))
+        {
+          //writeln(pNewPwds, s);
+          prevPwdsUnique += s;
+        }
+      }
+      close(p);
+    }
+    close(pNewPwds);
+    setblob(upd.PrevPwds, newPrevPwds);
+  }
+  else
+    setnull(upd.PrevPwds);
+
+  send system.client:updateOk(okCallback);
+}
+
+/**
+ * Create a new MASTER Permission.
+ * @param obj the new Permission being created
+ * @param parent the Permission that will be the parent of obj (if any).
+ */
+service newPerm(any obj, any parent)
+{
+  //writeln($catalog.system.out, "\e \l " + .);
+  //writeln($catalog.system.out, typeof(obj));
+
+  if (isnull(obj.Name))
+    obj.Name = "MASTER";
+  any newOne = new(typeof(obj), obj);
+  //writeln($catalog.system.out, "NEW " + obj);
+  create(newOne);
+}
+
+/**
+ * Create and delete according to the supplied sets of Items (Users or Roles)
+ * their reference to the given Permission
+ */
+service modifyPermRefs(any Permission, any toCreate, any toDelete)
+{
+  transaction
+  {
+    //writeln($catalog.system.out, "toCreate " + toCreate);
+    //writeln($catalog.system.out, "toDelete " + toDelete);
+    any k = new(PermRef.unique);
+    foreach(toDelete)
+    {
+      k.Permission = Permission.Permission;
+      k.Name       = ($loop.UserName ? $loop.UserName
+                                     : $loop.Role);
+
+      read(PermRef, k);
+      //writeln($catalog.system.out, "deleting " + PermRef);
+
+      delete(PermRef);
+    }
+
+    any permRef = new(PermRef);
+    foreach(toCreate)
+    {
+      permRef.Permission = Permission.Permission;
+      permRef.Name       = ($loop.UserName ? $loop.UserName
+                                           : $loop.Role);
+
+      create(permRef);
+    }
+  }
+}
+
+service applyUserRoles(any User, any toCreate, any toDelete, any toUpdate)
+{
+  transaction
+  {
+    // deletions
+    foreach(toDelete)
+    {
+      read(UserRole, $loop);
+
+      // The GUI is such that we could ask to delete something which
+      // doesn't exist (if the user flicks a toggle) so check for it
+      if (UserRole)
+        delete(UserRole);
+    }
+
+    // creations
+    any userRole = new(UserRole);
+    foreach(toCreate)
+    {
+      userRole = $loop;
+      create(userRole);
+    }
+
+    // updates - may or may not change ordinal
+    foreach(toUpdate)
+    {
+      read(UserRole, $loop);
+      UserRole = $loop;
+    }
+  }
+
+  // TODO: send ack?
+}
+
+service newOverride(any Permission, any override, any entity)
+{
+  call createOverride(Permission, override, entity);
+}
+
+service updatePerm(any obj)
+{
+  any perm = read(typeof(obj), obj);
+  perm = obj;
+
+  // TODO : transaction/notifuy OK ?
+}

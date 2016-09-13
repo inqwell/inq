@@ -1,0 +1,67 @@
+/**
+ * Inqwell Auth PermRef typedef
+ *
+ * Private & Confidential Copyright © Inqwell Ltd 2004.
+ * All rights reserved.
+ */
+
+package inq.auth;
+
+import inq.boot as BOOT;
+import inq.util as UTIL;
+
+
+typedef PermRef
+{
+	//alias PermRef;
+
+	fields
+	(
+    Permission;
+		string      Name;   // A User or Role name
+
+    //--------------------------------------------------------------------------
+    // Non-business keys to satisfy Tool Junkies
+    int         PermRef;
+    //--------------------------------------------------------------------------    
+	)
+
+  construct ({
+    $this.PermRef = call UTIL:getUniqueId(Name="INQPERMREF", onDemand=true);
+  })
+
+	pkey
+	(
+		fields (Permission, Name)
+
+		#include <{db}/inqPermRef.pkey.sql>
+	)
+
+	key ByName
+	(
+		fields(Name)
+
+    auxcfg( map(
+	  "prepared", true,
+		"read-sql",
+			"{select-stmt}
+						where		Name = ?
+			"
+		))
+	)
+
+	key ByPermission
+	(
+		fields(Permission)
+
+    auxcfg( map(
+	  "prepared", true,
+		"read-sql",
+			"{select-stmt}
+						where		Permission = ?
+			"
+		))
+	)
+
+	iobind (SimpleSqlIO, BOOT:inq)
+}

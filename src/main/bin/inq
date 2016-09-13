@@ -19,11 +19,14 @@ LAUNCHER=java
 if [ "$JAVAHOME" != "" ]
 then
   LAUNCHER=$JAVAHOME/bin/java
+elif [ "$JAVA_HOME" != "" ]
+then
+  LAUNCHER=$JAVA_HOME/bin/java
 fi
 
-# Set up the class path. $INQHOME/lib/inq-<filtered>.jar plus everything
+# Set up the class path. $INQHOME/lib/inq-runtime.jar plus anything
 # in $INQHOME/lib/endorsed
-CLASSPATH=$INQHOME/lib/${project.artifactId}-${project.version}-runtime.jar
+CLASSPATH=$INQHOME/lib/inq-runtime.jar
 if test -d $INQHOME/lib/endorsed
 then
   for i in $INQHOME/lib/endorsed/*.jar
@@ -46,10 +49,10 @@ INQCOMMONARGS="-Dinq.home=$INQHOME -Djava.util.logging.manager=com.inqwell.any.A
 # VM args to the server. Use whatever you wish
 if [ "$INQSERVERARGS" = "" ]
 then
-  INQSERVERARGS="-server -Xmx512m"
+  INQSERVERARGS="-Xmx512m"
 fi
-# Add the headless and logging config system properties
-INQSERVERARGS="$INQSERVERARGS -Djava.awt.headless=true -Djava.util.logging.config.file=$INQHOME/etc/server.log.properties"
+# Add the headless and logging config system properties. Mandatory.
+INQSERVERARGS="$INQSERVERARGS -server -Djava.awt.headless=true -Djava.util.logging.config.file=$INQHOME/etc/server.log.properties"
 
 # If you use ioXMLX to produce a DOM tree then Inq needs to know
 # the class to instantiate for the root Document node. This
@@ -84,7 +87,7 @@ then
   then
     SSL="-Djavax.net.ssl.keyStore=$INQHOME/ssl/inqstore -Djavax.net.ssl.keyStorePassword=$INQKEYPASSWD"
   fi
-  $LAUNCHER $INQSERVERARGS $INQCOMMONARGS $INQJDBCARGS $SSL com.inqwell.any.server.Server $*
+  $LAUNCHER -Dinq_rsa.pub=$INQHOME/keys/public.der $INQSERVERARGS $INQCOMMONARGS $INQJDBCARGS $SSL com.inqwell.any.server.Server $*
 elif [ "$1" = "-client" ]
 then
   # Launch Inq client
@@ -97,5 +100,5 @@ then
   $LAUNCHER $INQCOMMONARGS com.inqwell.any.tools.Inqs $*
 else
   # Assume interactive mode
-  $LAUNCHER $INQCLIENTARGS $INQCOMMONARGS com.inqwell.any.parser.Inq $*
+  $LAUNCHER -Dinq_rsa.pub=$INQHOME/keys/public.der $INQCLIENTARGS $INQCOMMONARGS com.inqwell.any.parser.Inq $*
 fi

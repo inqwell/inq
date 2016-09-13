@@ -1,0 +1,59 @@
+/**
+ * Inqwell Auth User typedef
+ *
+ * Private & Confidential Copyright © Inqwell Ltd 2004.
+ * All rights reserved.
+ */
+
+package inq.auth;
+
+import inq.util as UTIL;
+import inq.boot as BOOT;
+
+typedef SessionLog
+{
+	fields
+	(
+	  int            SessionLog;
+	  User.UserName;
+    Session.IP;
+    Session.HostName;
+    Session.LocalHostName;
+    date           StartedAt      format="dd/MM/yyyy HH:mm:ss" width=20;
+    date           EndedAt        format="dd/MM/yyyy HH:mm:ss" width=20;
+ 	)
+
+	construct (
+	           {
+               $this.SessionLog   = call UTIL:getUniqueId(Name="SESSION", onDemand=true);
+               $this.UserName  = $process.loginName;
+	             $this.StartedAt = getdate();
+             }
+            )
+
+	pkey
+	(
+		fields (SessionLog)
+
+		#include <{db}/inqSessionLog.pkey.sql>
+	)
+
+	key ByUserName
+	(
+		fields(UserName)
+
+		// #include <{db}/inqSessionLog.ByUserName.sql>
+    auxcfg( map(
+	  "prepared", true,
+		"read-sql",
+			"{select-stmt}
+			where UserName = ?
+			"
+		))
+
+	)
+
+	iobind (SimpleSqlIO, BOOT:inq)
+}
+
+//writeln($catalog.system.out, new(User));

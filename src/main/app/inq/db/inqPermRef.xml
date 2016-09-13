@@ -1,0 +1,33 @@
+<?xml version="1.0" ?>
+<table name="inqPermRef">
+An Authorisation Database
+PermRef - Associate Role or User with an individual permission
+
+See the description of table inqPermission for more info.
+
+Private &amp; Confidential Copyright &#169; Xylinq Ltd 2004.
+All rights reserved.
+  <columns>
+    <column name="Permission" nullable="false" type="big_integer"/>
+    <column name="Name" nullable="false" type="var_char" type_precision_1="16">
+      Either a Role or User name
+    </column>
+
+    <!-- Non-business cols -->
+    <column name="PermRef" nullable="false" type="big_integer"/>
+  </columns>
+  <primary_key name="pk_inqPermRef">
+    <column name="Permission"/>
+    <column name="Name"/>
+  </primary_key>
+  <unique_keys>
+    <unique_key name="uk_inqPermRef">
+      <column name="PermRef"/>
+    </unique_key>
+  </unique_keys>
+  <foreign_keys>
+    <foreign_key name="fk_inqPermRef_Perm" to="inqPermission">
+      <column name="Permission" to="Permission"/>
+    </foreign_key>
+  </foreign_keys>
+</table>

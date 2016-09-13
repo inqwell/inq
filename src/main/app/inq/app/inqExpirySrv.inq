@@ -1,0 +1,12 @@
+/**
+ * Inqwell Auth
+ *
+ * Expire the User typedef 
+ *
+ * Private & Confidential Copyright © Inqwell Ltd 2004. 
+ * All rights reserved.
+ */
+package inq.auth;
+
+expire(User);
+

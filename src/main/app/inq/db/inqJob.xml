@@ -1,0 +1,54 @@
+<?xml version="1.0" ?>
+<table name="inqJob">
+Inqwell Job Table.
+
+Private &amp; Confidential Copyright &#169; Xylinq Ltd 2004-2009
+All rights reserved.
+  <columns>
+    <column name="Job" nullable="false" type="big_integer">
+      Job id - internally generated
+    </column>
+    <column name="ShortName" nullable="false" type="var_char" type_precision_1="32"/>
+    <column name="Description" nullable="true" type="var_char" type_precision_1="64"/>
+    <column name="TimerExpr" nullable="true" type="blob">
+      An expression that yields the inq timer for this job
+    </column>
+    <column name="FunctionExpr" nullable="true" type="blob">
+      The expression called to run the job. Null implies Box
+    </column>
+    <column name="JobOrder" nullable="false" type="integer"/>
+    <column name="Active" nullable="false" type="char" type_precision_1="1"/>
+    <column name="ContinueOnError" nullable="false" type="char" type_precision_1="1"/>
+    <column name="BoxType" nullable="false" type="char" type_precision_1="1"/>
+    <column name="ExitStatus" nullable="false" type="integer">
+      Last exit status of job
+    </column>
+    <column name="LastRan" nullable="true" type="date_time">
+      Time of last execution, or null if never run
+    </column>
+    <column name="NextRuns" nullable="true" type="date_time">
+      Time of next execution, when last evaluated
+    </column>
+    <column name="LastDuration" nullable="true" type="big_integer">
+      Duration of last execution in milliseconds, or null if never run
+    </column>
+    <column name="ParentJob" nullable="true" type="big_integer">
+      The box this job is in. Null if not boxed or a top-level box
+    </column>
+    <column name="LastUpdated" nullable="false" type="date_time"/>
+    <column name="User" nullable="false" type="var_char" type_precision_1="16"/>
+  </columns>
+  <primary_key name="pk_inqJob">
+    <column name="Job"/>
+  </primary_key>
+  <foreign_keys>
+    <foreign_key name="fk_inqJob_Parent" to="inqJob">
+      <column name="ParentJob" to="Job"/>
+    </foreign_key>
+  </foreign_keys>
+  <indexes>
+    <index name="inqJob_ShortName">
+      <column name="ShortName"/>
+    </index>
+  </indexes>
+</table>

@@ -1,0 +1,53 @@
+/**
+ * Inqwell Auth Control typedef
+ *
+ * Private & Confidential Copyright © Inqwell Ltd 2004.
+ * All rights reserved.
+ */
+
+package inq.auth;
+
+import inq.boot as BOOT;
+
+typedef Control
+{
+	fields
+	(
+	  string   System;
+	  Enabled  AgeingEnabled;
+	  short    AgeDays;         // How long a password lasts
+	  short    WarnDays;        // Number of days advance warning of pwd expiry
+	  short    PrevPwds;        // The number of previous passwords recorded
+	  short    MaxAttempts;     // Max login attempts before an account is suspended
+	  date     LastUpdated;
+	  UserName User;
+	)
+
+	construct (
+	           {
+               throw("Auth Control object is predefined");
+             }
+            )
+
+	mutate    (
+	           {
+               $this.new.LastUpdated = getdate();
+               $this.new.User      = $process.loginName;
+             }
+            )
+
+	destroy   (
+	           {
+               throw("Auth Control object is predefined");
+             }
+            )
+
+	pkey
+	(
+		fields (System)
+
+		#include <{db}/inqControl.pkey.sql>
+	)
+
+	iobind (SimpleSqlIO, BOOT:inq)
+}

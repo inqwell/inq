@@ -1,0 +1,94 @@
+/**
+ * Inqwell Auth User typedef
+ *
+ * Private & Confidential Copyright © Inqwell Ltd 2004.
+ * All rights reserved.
+ */
+
+package inq.auth;
+
+import inq.boot as BOOT;
+
+typedef Session
+{
+	fields
+	(
+	  int            Session;        // In fact, the process id
+	  int            SessionLog;
+	  User.UserName;
+    string         IP width = 15;
+    string         HostName width = 30;
+    string         LocalHostName;
+    blob:ioXML     Data;           // Per-session opaque data that anyone can use
+ 	)
+
+	construct (
+	           {
+               $this.Session       = $process.properties.id;
+               $this.UserName      = $process.loginName;
+               $this.IP            = $process.address.properties.hostAddress;
+               $this.HostName      = $process.address.properties.canonicalHostName;
+               $this.LocalHostName = $process.localhostname;
+
+	             any SessionLog = new(SessionLog);
+	             SessionLog.IP       = $this.IP;
+	             SessionLog.HostName = $this.HostName;
+	             SessionLog.LocalHostName = $this.LocalHostName;
+	             create(SessionLog);
+
+               // Once SessionLog.construct has run place it's uk in $this
+               // so we can retrieve it on destroy to set it's EndedAt time.
+               $this.SessionLog    = SessionLog.SessionLog;
+             }
+            )
+
+	destroy   (
+	           {
+	             // We should find one
+	             any kk = new(SessionLog.unique);
+	             kk.SessionLog = $this.SessionLog;
+	             if (read(SessionLog, kk))
+	               SessionLog.EndedAt = getdate();
+	           }
+	          )
+
+	pkey
+	(
+		fields (Session)
+
+		#include <{db}/inqSession.pkey.sql>
+	)
+
+	key ByUserName
+	(
+		fields(UserName)
+
+		// #include <{db}/inqSession.ByUserName.sql>
+    auxcfg( map(
+	  "prepared", true,
+		"read-sql",
+			"{select-stmt}
+			where UserName = ?
+			"
+		))
+	)
+
+	key All
+	(
+		fields()
+
+		// #include <{db}/inqSession.All.sql>
+    auxcfg( map(
+	  "prepared", true,
+		"read-sql",
+			"{select-stmt}
+			"
+		))
+
+
+	)
+
+	iobind (SimpleSqlIO, BOOT:inq)
+}
+
+//writeln($catalog.system.out, new(User));

@@ -1,0 +1,69 @@
+/**
+ * Inqwell Auth Role typedef
+ *
+ * Defines a role within the authorisation/permissions system.
+ * Users are granted the permissions represented by a Role when
+ * a UserRole instance is created.  The Role, in turn, references
+ * one or more PermRef objects by that typedef's Name field.
+ *
+ * Private & Confidential Copyright © Inqwell Ltd 2004.
+ * All rights reserved.
+ */
+
+package inq.auth;
+
+import inq.boot as BOOT;
+import inq.util as UTIL;
+
+
+typedef Role
+{
+	//alias Role;
+
+	fields
+	(
+		string      Role label="Role Name";
+		FullName;
+    date        LastUpdated;
+    UserName    User;
+	)
+
+	construct (
+	           {
+	             //$this = $stack;
+	             //writeln($catalog.system.out, $this);
+	             $this.LastUpdated = getdate();
+	             $this.User      = $process.loginName;
+	           }
+	          )
+
+	mutate(
+	       {
+	         // Dependent objects TBD
+	         $this.new.LastUpdated = getdate();
+	         $this.new.User      = $process.loginName;
+	       }
+	      )
+	// destroy TBD
+
+	pkey
+	(
+		fields (Role)
+
+		#include <{db}/inqRole.pkey.sql>
+	)
+
+	key All
+	(
+		fields()
+
+    auxcfg( map(
+		"read-sql",
+			"{select-stmt}
+			"
+		))
+	)
+
+	iobind (SimpleSqlIO, BOOT:inq)
+}
+

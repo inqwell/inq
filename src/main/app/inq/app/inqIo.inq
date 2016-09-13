@@ -1,22 +1,18 @@
 /**
  * Inqwell
  *
- * Private & Confidential Copyright © Inqwell Ltd 2004.
+ * Private & Confidential Copyright © Inqwell Ltd 2004. 
  * All rights reserved.
  */
-
 package inq.boot;
 
 /*
  * Auth database resources
  */
-
-any dbcfg = callmethod("getDatabaseLogin", class=$catalog.configurator, $catalog.argsMap, "inq");
-
 resource inq	(	sqlserver, 50,
-							map(	"user", dbcfg.user,
-										"password", dbcfg.password,
-										"url", dbcfg.url,
+							map(	"user", "inq",
+										"password", "inq123",
+										"url", "jdbc:mysql://localhost/inq",
 										"null", map(date.class, "NULL",
 										            string.class, "NULL",
 										            int.class, "NULL",

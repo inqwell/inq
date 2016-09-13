@@ -1,0 +1,32 @@
+<?xml version="1.0" ?>
+<table name="inqSession">
+An Authorisation Database
+Session Table
+
+Private &amp; Confidential Copyright &#169; Xylinq Ltd 2004.
+All rights reserved.
+  <columns>
+    <column name="Session" nullable="false" type="big_integer">
+      In fact, the process id
+    </column>
+    <column name="SessionLog" nullable="false" type="big_integer"/>
+    <column name="UserName" nullable="false" type="var_char" type_precision_1="16"/>
+    <column name="IP" nullable="false" type="var_char" type_precision_1="64"/>
+    <column name="HostName" nullable="false" type="var_char" type_precision_1="128"/>
+    <column name="LocalHostName" nullable="false" type="var_char" type_precision_1="32"/>
+    <column name="Data" nullable="true" type="blob">
+      Per-session opaque data that anyone can use
+    </column>
+  </columns>
+  <primary_key name="pk_inqSession">
+    <column name="Session"/>
+  </primary_key>
+  <foreign_keys>
+    <foreign_key name="fk_inqSession_UserName" to="inqUser">
+      <column name="UserName" to="UserName"/>
+    </foreign_key>
+    <foreign_key name="fk_inqSession_Log" to="inqSessionLog">
+      <column name="SessionLog" to="SessionLog"/>
+    </foreign_key>
+  </foreign_keys>
+</table>

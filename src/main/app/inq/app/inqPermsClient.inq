@@ -1,0 +1,42 @@
+/**
+ * Auth
+ *
+ * Client support for the Permissions system
+ * Copyright c Xylinq Ltd 2009
+ */
+
+package inq.auth;
+
+syncgui service newPermissions(any perms) raises(any)
+{
+  any $root.perms = perms;
+}
+
+/**
+ * Initialise the Permissions system in the client. This function
+ * may be called by any client context that wishes to be notified
+ * when new permissions arrive. It creates a listener for when
+ * new permissions are received and returns it for management
+ * by the caller.
+ */
+function initialisePermClient(any callback)
+{
+  // Listen to the service for the arrival of new Permissions
+  any listener = listen ($catalog,
+                         callback,
+                         event  = (complete),
+                         exec   = newPermissions);
+}
+
+function closePermClient(any listener)
+{
+  unlisten($catalog, listener);
+}
+
+function getPermission(any perms, any perm)
+{
+  // Just reference the permission. If it is a complex statement it
+  // can access $stack.perms  - TS: All perms are evaluated so no internal refs reqd
+  $root.perms.{perm};
+}
+

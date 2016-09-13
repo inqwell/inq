@@ -1,0 +1,1105 @@
+/**
+ * Auth
+ *
+ * Build a user's working or literal authorisation tree
+ *
+ * Private & Confidential Copyright � Inqwell Ltd 2004.
+ * All rights reserved.
+ */
+
+package inq.auth;
+
+/**
+ * Build a user's or role permission tree.  This tree is a straightforward
+ * Inq structure such as can be navigated by normal paths of the
+ * form <code>a.b.c.d</code>. This function process the network of object
+ * instances that define a user's (or role's) permission tree and transforms
+ * them into this structure.
+ *
+ * @param the User instance for whom we will build the tree. Mutually exclusive
+ * with Role
+ * @param the Role instance for whom we will build the tree. Mutually exclusive
+ * with User
+ * @return the root of the permissions tree.
+ */
+function buildUserAuthTree(any User, any Role)
+{
+  // Create the root of the tree we will build
+  hmap permRoot;
+
+  if (User)
+	  any userRoles = call readRoles(User);
+	else
+	  any userRoles.x.UserRole = Role;  // I know, but we only want the Role field
+
+  foreach(userRoles)
+  {
+    call createSubTree(root=permRoot, Name=$loop.UserRole.Role);
+
+    call applyOverrides(root=permRoot, Name = $loop.UserRole.Role);
+  }
+
+	if (User)
+	{
+    call createSubTree(root=permRoot, Name=User.UserName);
+    call applyOverrides(root=permRoot, Name = User.UserName);
+  }
+
+  // Traverse the tree parsing the expressions
+  call evaluatePermTree(subRoot = permRoot, root = permRoot);
+
+  // return value
+  permRoot;
+}
+
+/**
+ * Apply any overrides that are set up for the given Role or User.
+ * Reads the root level Permission children for that Role/User and
+ * walks down the tree built from the MASTER Permissions.
+ */
+local function applyOverrides(any root, any Name)
+{
+  any k = new(Permission.ByNameParent);
+  k.Parent = null;
+  k.Name   = Name;
+  smap nodeSet;
+
+  // Load the root Permission override instances
+  read (Permission, k, target=nodeSet, setname="overrides");
+
+  foreach(nodeSet.overrides)
+    call descendLevel(subRoot    = root.{$loop.Permission.ThisElement},
+                      Permission = $loop.Permission);
+
+//god, dad is a computer brainbox. i will disown him for making me do cello AND maths.8/1/05!!!!!
+}
+
+local function applyViewOverrides(any root, any Name)
+{
+  //writeln($catalog.system.out, "\e \l " + Name);
+  any k = new(Permission.ByNameParent);
+  k.Parent = null;
+  k.Name   = Name;
+  smap nodeSet;
+
+  // Load the root Permission override instances
+  read (Permission, k, target=nodeSet, setname="overrides");
+
+  foreach(nodeSet.overrides)
+  {
+    //writeln($catalog.system.out, "\e \l " + $loop.Permission);
+    call descendViewLevel(subRoot = call findViewChild(root, $loop.Permission),
+                          $loop.Permission);
+  }
+}
+
+local function descendViewLevel(any subRoot, any Permission)
+{
+  any k = new(Permission.ByNameParent);
+  k.Name = Permission.Name;
+  k.Parent = Permission.Permission;
+
+  read(Permission, k, setname="children");
+
+  foreach(children)
+  {
+    // We only call this function to place the overrides into the
+    // already-built view tree and overrides can only be
+    // leaves (revocations TODO)
+    if (call isBranch($loop.Permission))
+    {
+      call descendViewLevel(subRoot = call findViewChild(root = subRoot.permTree,
+                                                         $loop.Permission),
+                            $loop.Permission);
+    }
+    else
+    {
+      // Overriding a leaf child of the given permission. Find it
+      // in the structure and replace.
+//      writeln($catalog.system.out, "\e \l  " + subRoot.permTree);
+//      writeln($catalog.system.out, "\e \l  " + subRoot);
+//      writeln($catalog.system.out, "\e \l  " + Permission);
+      any m = call findViewChild(root = subRoot.permTree,
+                                 $loop.Permission);
+
+//      writeln($catalog.system.out, "APPLYING OVERRIDE " + Permission);
+//      writeln($catalog.system.out, "AT " + m);
+      any m.Permission = $loop.Permission;
+    }
+  }
+}
+
+/**
+ * Reads the PermRef objects for the given Role or User name
+ * and for each builds the permissions subtree the reference
+ * implies.  The root of each subtree need not be a direct
+ * child of the overall permisisons root, so each is
+ * connected as necessary by navigating the parent Permisisons
+ * objects.
+ */
+local function createSubTree(any root, string Name)
+{
+  read(PermRef, ., keyname="ByName", setname="permRefs");
+
+  // Read each Permission object referenced by the PermRefs.  Its an error
+  // if there is no Permission for a PermRef
+  // Not strictly necessary to use the ByPermissionName key as we only
+  // require Permission.Permission == PermRef.Permission and that these
+  // are the MASTER set is implicit.
+  any k = new(Permission.ByPermissionName);
+  k.Name = "MASTER";
+
+  foreach(permRefs)
+  {
+    k.Permission = $loop.PermRef.Permission;
+    if (read(Permission, k))   // else log
+      call connectToRoot(root,
+                         Permission,
+                         subRoot = call descendPerm(Permission));
+  }
+}
+
+/**
+ * Creates the permission tree node referenced by the given Permission instance
+ * and any child nodes beneath that Permission.
+ *
+ * @param Permission a Permission instance
+ * @return The root of the subtree this Permission represents.  Could be just
+ * a leaf node.
+ */
+local function descendPerm(any Permission)
+{
+  if (call isBranch(Permission))
+  {
+    hmap subNode;
+    call descendLevel(subRoot = subNode, Permission);
+  }
+  else
+    throw("References to a permission leaf are not allowed");
+
+  // return value
+  subNode;
+}
+
+/**
+ * Build, under the given subRoot, all children of the given Permission.
+ * If any of the children are, themselves, branch nodes, recurse to build
+ * the children of those.
+ *
+ * @param subRoot the node representing the given Permission
+ * @param Permission the Permission that gave rise to the given
+ * subRoot, the children of which, if any, will be processed.
+ */
+local function descendLevel(any subRoot, any Permission)
+{
+  // Again (see createSubTree() ) not strictly necessary to include the Name
+  // attribute but we do it anyway.
+  // Set the Parent field to the given Permission.Permission
+  any k = new(Permission.ByNameParent);
+  k.Name = Permission.Name;
+  k.Parent = Permission.Permission;
+
+  read(Permission, k, setname="children");
+
+  //writeln($catalog.system.out, "CHILDREN " + children);
+  foreach(children)
+  {
+    any isBranch = call isBranch($loop.Permission);
+
+    // Remove any existing leaf, leave existing branch unless
+    // its a revocation (revocations TBD and don't descend in this case)
+    if (contains(subRoot, $loop.Permission.ThisElement))
+    {
+      if (isBranch)
+      {
+        // Walking the same tree area because of override or a PermRef that
+        // references a child node of one already processed.  Pick up the
+        // existing node in this case.   (Revocations TBD)
+        any subNode = subRoot.{$loop.Permission.ThisElement};
+      }
+      else
+      {
+        // We must be overriding a leaf. Remove the old one and add the new
+        remove(subRoot, false, $loop.Permission.ThisElement);
+        any subNode = $loop.Permission.Value;
+        add(subNode, path(subRoot.{$loop.Permission.ThisElement}), false);
+      }
+    }
+    else
+    {
+      // Here when building the MASTER set
+      if (isBranch)
+        hmap subNode;
+      else
+        any subNode = $loop.Permission.Value;
+
+      //writeln($catalog.system.out, "ADDING PERM " + $loop.Permission);
+      add(subNode, path(subRoot.{$loop.Permission.ThisElement}), false);
+    }
+
+    // descend if a branch (and not revocation override, TBD)
+    if (isBranch)
+      call descendLevel(subRoot=subNode,
+                        $loop.Permission);
+  }
+}
+
+/**
+ * Connect the given subRoot to the permissions root.
+ *
+ * @param root The permissions root node.
+ * @param subRoot The subtree created by the given Permission instance
+ * @param Permission The Permission instance that created the subRoot
+ */
+local function connectToRoot(any root, any Permission, any subRoot)
+{
+  string fromRoot = Permission.ThisElement;
+
+  any k = new(Permission.ByPermissionName);
+  k.Name = Permission.Name;
+
+  // Navigate from the given Permission to the root, creating the path
+  // as we go.
+  while(!isnull(Permission.Parent))
+  {
+    k.Permission = Permission.Parent;
+    if (read(Permission, k)) // else log
+      fromRoot = Permission.ThisElement + "." + fromRoot;
+  }
+
+  // If the Permission is a branch and it's already in the tree then
+  // leave alone in case we have already processed a PermRef to a
+  // deeper node.
+  //if (!root.{fromRoot})  Actually no, we only waste time by referencing
+  // children of other references. Either we'll replace a subset we already
+  // have (process deeper latest) or recreate such a subset (potentially
+  // adding others as well) (process deeper earliest)
+    any root.{fromRoot} = subRoot;
+}
+
+/**
+ * Create the given override object as an override to the given Permission,
+ * which must be a MASTER Permission instance.
+ * This function copies ThisElement from
+ * the master instance and traverses the master's parent objects to the root
+ * to create the same path to the override.
+ * @param Permission the Permission that is being overridden
+ * @param override the permission to be created
+ * @param entity the instance of Role or User that the override is being
+ * created on behalf of.
+ */
+function createOverride(any Permission, any override, any entity)
+{
+  //writeln($catalog.system.out, .);
+
+  if (Permission.Name != $catalog.auth.master)
+    throw("Overridden Permission not a " + $catalog.auth.master);
+
+  if (call isBranch(Permission))
+    throw("Overridden Permission not a leaf");
+
+  override.Name = entity.UserName ? entity.UserName : entity.Role;
+  override.ThisElement = Permission.ThisElement;
+
+  // Assume top-level to start with
+  setnull(override.Parent);
+
+  any k = new(Permission.ByPermissionName);
+  k.Name = Permission.Name;
+
+  // Build the path of objects from the given Permission to the root.
+  array rootPath;
+
+  while (!isnull(Permission.Parent))
+  {
+    k.Permission   = Permission.Parent;
+
+    //writeln($catalog.system.out, "\e \l READING " + k);
+
+    if (!read(Permission, k))
+      throw ("No root path available for " + Permission);
+
+    //writeln($catalog.system.out, "\e \l READ " + Permission);
+    add(Permission, path(rootPath[0]));
+  }
+
+  // For each path element to the root (if any) create (if necessary) a
+  // corresponding entry in the override Name tree
+  any k1 = new(Permission.ByElementNameParent);
+  k1.Name = override.Name;
+
+  setnull(k1.Parent);    // Initially null for top-level
+  boolean createToLeaf;  // Helper flag
+
+  //writeln($catalog.system.out, rootPath);
+  //return();
+
+  foreach(rootPath)
+  {
+    k1.ThisElement = $loop.ThisElement;
+    if (createToLeaf || !read(Permission, k1))
+    {
+      createToLeaf = true;  // there won't be any more so don't waste time reading
+
+      // Create a new one
+      any newPerm = new(Permission);
+      newPerm.Name = override.Name;
+      newPerm.ThisElement = $loop.ThisElement;
+      create(newPerm);
+
+      // Make the Permission we just created the parent of the next one (if any)
+      // See Permission.construct
+      any parent = newPerm;
+    }
+    else
+    {
+      k1.Parent = Permission.Permission;
+      any parent = Permission; // leave last Permission as parent
+    }
+  }
+
+  // Make the override
+  create(override);
+}
+
+local function readRoles(any User)
+{
+  // Read out this user's roles. Want to sort them so target at an omap
+  omap m;
+  any k = new(UserRole.RolesByUser);
+  k.UserName = User.UserName;
+  read(UserRole, k, setname="userRoles", target=m);
+
+  // Sort them in reverse order so that the lowest ordinal is processed last
+  // and thus takes priority over higher ordinals (GUI list is ordered ascending
+  // and users are told that items higher in the list take priority over
+  // those lower).
+	sort (m.userRoles, $loop.UserRole.Ordinal, descending=true);
+
+	// Return ordered roles
+	m.userRoles;
+}
+
+function evaluatePermTree(any subRoot, any root)
+{
+  foreach(subRoot, true)
+    if (count($loop) < 0)
+      call compileLeaf(parent=subRoot, leaf=$loop, name=@name);
+    else
+      call evaluatePermTree(subRoot = $loop, root);
+}
+
+local function compileLeaf(any parent, any leaf, any name)
+{
+  any url = "string://leaf";
+  compile(url, path(parent.{name}));
+}
+
+/**
+ * Execute the given permissions tree replacing the expressions therein
+ * with their result.
+ */
+function execPermTree(any perms, any subRoot, string nodePath, boolean runtime)
+{
+  foreach(subRoot, true)
+  {
+    // The leaves, when we encounter them, are naked expressions,
+    // so they will be evaluated as they are referred to here. In this
+    // case, $loop will be the leaf itself and $stack will contain
+    // perms as passed in above, which the leav expression may reference
+    // Furthermore, the argument $stack.runtime indicates whether the
+    // tree is being built for runtime use or for rendering. Expressions
+    // may choose to return differing structures in each case, for example
+    // a *set* of Cpty.Cpty (using xylinq as an example) for use during
+    // runtime and a _node set_ of Cpty instances for rendering
+    //
+    // If the current node is a branch then accessing $loop has no effect.
+    //
+    // Because we may be manipulating the structure we are iterating
+    // over (other than by just removeiter()), we use the concurrent-safe
+    // flag on foreach() [that's what ^^ true ^^ means].
+    if (@name)
+    {
+      // Protect with try/catch so if an error occurs (say unresolved
+      // function call) we can give an error message indicating the
+      // path
+      try
+      {
+        //stacktrace();
+        any subRoot.{@name} = $loop;
+      }
+      catch
+      {
+        // rethrow with path of error
+        //writeln($catalog.system.out, "CATCH");
+        throw(@exmsg + " at " + nodePath + "." + @name);
+      }
+      // Recurse down the structure. If the expression returned some
+      // sort of collection (like a list of something) then we will
+      // navigate it but this is inconsequential. The test above
+      // safeguards when iterating over sets and arrays (that have no @name)
+      call execPermTree(perms, subRoot = $loop, nodePath = nodePath + "." + @name);
+    }
+    else
+      call execPermTree(perms, subRoot = $loop, nodePath);
+  }
+}
+
+/**
+ * Build a tree in renderable form that represents the resulting
+ * permissions for a Role or a User. The User and Role arguments
+ * are mutually exclusive.
+ * <p>
+ * @param User the user to build the tree for
+ * @param Role the role to build the tree for
+ */
+function buildRenderViewTree(any User, any Role)
+{
+  hmap permTree;
+
+  if (User)
+	  any userRoles = call readRoles(User);
+	else
+	  any userRoles.x.UserRole = Role;  // I know, but we only want the Role field
+
+	foreach(userRoles)
+	{
+    call createViewSubTree(permTree, Name=$loop.UserRole.Role);
+
+    call applyViewOverrides(root = permTree, Name = $loop.UserRole.Role);
+	}
+
+	if (User)
+	{
+	  // Handle any references/overrides for the user himself
+    call createViewSubTree(permTree, Name=User.UserName);
+    call applyViewOverrides(root = permTree, Name = User.UserName);
+  }
+
+  // In order to be able to display the evaluated values, build the
+  // run time structure, evaluating it as renderable values
+  any permTreeValues = call buildUserAuthTree(User, Role);
+  call execPermTree(perms = permTreeValues, subRoot = permTreeValues, runtime=false);
+  call addValuesToRenderTree(rendered = permTree, values = permTreeValues);
+
+
+
+  // Return the built tree
+	permTree;
+}
+
+function buildRenderAuthTree()
+{
+  hmap root;
+
+  any k = new(Permission.ByNameParentBranch);
+  k.Name = "MASTER";
+
+  // Read the top level perms
+  read(Permission, k, target=root, setname="permTree");
+
+  // Add any overrides as siblings. There is (as yet) no foreach argument
+  // to read() so we loop over them explicitly. Not so bad as the root
+  // children are a special case - there is even a special key defined
+  // for it.
+  any k1 = new(Permission.TopLevelOverride);
+  set orideNames;   // Remember all the override names we find for help later
+
+  any k2 = new(Permission.ByElementNameParent); // also for use later
+  foreach(root.permTree)
+  {
+    k1.ThisElement = $loop.Permission.ThisElement;
+    read(Permission, k1, setname="orides");
+    any context = $loop;
+    foreach(orides)
+    {
+      // Place overrides into the nodeset alongside the MASTER Permission
+      any context.{$loop.Permission.Name} = $loop.Permission;
+
+      // Remember all the override Name values found. This list can only
+      // get smaller as we progress down the tree.
+      orideNames += $loop.Permission.Name;
+      //writeln($catalog.system.out, "\e \l " + orideNames);
+    }
+    call descendRenderLevel(subRoot = $loop, k, k2, orideNames);
+  }
+
+  // return the unencumbered root of the perms tree
+  any a = remove(root.permTree);
+  //writeln($catalog.system.out, "\e \l " + a);
+  a;
+}
+
+local function descendRenderLevel(any subRoot, any k, any k2, any orideNames)
+{
+  // Read the MASTER children to create the node set at this level
+  k.Parent = subRoot.Permission.Permission;
+  read(Permission, k, target=subRoot, setname="permTree");
+
+  // For all those read at this level, read any children of overrides
+  // at the level above, then descend to the next level
+  foreach(subRoot.permTree)
+  {
+    k2.ThisElement = $loop.Permission.ThisElement;
+    any context = $loop;   // Remember $loop for nested foreach
+    foreach(orideNames)
+    {
+      k2.Name = $loop;
+      if (subRoot.{$loop})
+      {
+        k2.Parent = subRoot.{$loop}.Permission;
+        //writeln($catalog.system.out, "READING " + k2);
+        read(Permission, k2, target=context, alias=$loop);
+        //writeln($catalog.system.out, context.{k2.Name});
+      }
+    }
+
+    call descendRenderLevel(subRoot = $loop, k, k2, orideNames);
+  }
+}
+
+local function createViewSubTree(any permTree, any Name)
+{
+  // Read out this Role (or User's) PermRefs
+  read(PermRef, ., keyname="ByName", setname="permRefs");
+
+  // Prepare a key to read the MASTER permissions referenced
+  any k = new(Permission.ByPermissionName);
+  k.Name = "MASTER";
+
+  foreach(permRefs)
+  {
+    //writeln($catalog.system.out, "\e \l " + $loop.PermRef);
+    k.Permission = $loop.PermRef.Permission;
+    if (read(Permission, k))   // else log
+    {
+      any childRoot = call connectViewToRoot(permTree, Permission);
+      //writeln($catalog.system.out, "\e \l");
+      //writeln($catalog.system.out, childRoot);
+      call addViewChildren(childRoot);
+    }
+  }
+}
+
+// Make a well-formed node structure to the permTree root containing the given
+// Permission.
+// Returns the node-set root where children can be added.
+local function connectViewToRoot(any permTree, any Permission)
+{
+  any atStart = path(p[0]);
+
+  // Ultimate path element is "Permission"
+  // We must clone the result of the path() expression. Otherwise these are
+  // defined as read-only and we want to manipulate this path
+  any p = clone(path($this.Permission));
+
+  // Prepend the {uk} of the given element
+  any k = getuniquekey(Permission);
+  add(k, atStart);
+
+  // Prepend the node-set root
+  add("permTree", atStart);
+
+  // Prepare a key to navigate up the parents
+  any kp = new(Permission.ByPermissionName);
+  kp.Name = Permission.Name;
+
+  // Navigate from the given Permission to the root, creating the path
+  // as we go.
+  // Keep original Permission instance, of course.
+  any perm = Permission;
+  while(!isnull(perm.Parent))
+  {
+    //writeln($catalog.system.out, "\e \l " + Permission.Parent);
+    kp.Permission = perm.Parent;
+    if (read(Permission, kp, alias="perm")) // else log
+    {
+      any k = getuniquekey(perm);
+      add(k, atStart);
+      add("permTree", atStart);
+    }
+  }
+
+  // We pased the root of the permTree as a stack arg
+  add("$stack", atStart);
+
+  //writeln($catalog.system.out, "\e \l " + p);
+  // Plug it all in!
+  add(Permission, p);
+  //writeln($catalog.system.out, "\e \l");
+
+  // Make a node-set root that would hold any children of the given node.
+  // This is the return value, so we carry on using it to add those children
+
+  // 1. Remove the ultimate path, leaving us at the node-set child
+  remove(p[last]);
+
+  // 2. Walk back down the path adding any missing Permission instances
+  //    at each node-set-child level and setting the nodeset data of the
+  //    nodeset roots.
+  any node = .;
+  foreach(p)
+  {
+//    writeln($catalog.system.out, "\e \l " + $loop);
+//    writeln($catalog.system.out, "\e \l " + @first);
+//    writeln($catalog.system.out, "\e \l " + @count);
+    if (@first)
+      continue;   // skip the stack
+
+    // Get the current node
+    any node = node.{$loop};
+    //writeln($catalog.system.out, identity(node));
+    if ($loop == "permTree")
+      setnodeset(node, typedef(Permission));
+    else // must be a node-set child and $loop is the pk
+      if (!node.Permission)
+        read(Permission, $loop, target=node);
+  }
+
+  // Return it
+  {p};
+
+}
+
+// Create a tree of permissions below that contained in the given root.
+// Recurses to build the entire child tree, including the leaves
+local function addViewChildren(any childRoot)
+{
+  //writeln($catalog.system.out, "\e \l " + childRoot);
+  aggregate(Permission, childRoot.Permission, setname="permTree",
+            key = cfunc f = { any k = new(Permission.ByNameParent);
+                              k.Name = $loop.Permission.Name;
+                              k.Parent = $loop.Permission.Permission;
+                              //writeln($catalog.system.out, "\e \l " + k);
+                              k;
+                            });
+
+  //writeln($catalog.system.out, "\e \l " + childRoot);
+  foreach(childRoot.permTree)
+    call addViewChildren(childRoot = $loop);
+}
+
+// Find the given Permission within the given root that has the same ThisElement
+// value. Note that this function does not recurse. The permission is expected to
+// be found within the root directly.
+local function findViewChild(any root, any Permission)
+{
+  //writeln($catalog.system.out, "\e \l " + .);
+  foreach(root)
+  {
+    //writeln($catalog.system.out, "\e \l " + @name);
+    //writeln($catalog.system.out, "\e \l " + $loop);
+    //writeln($catalog.system.out, "\e \l " + Permission);
+    if ($loop.Permission.ThisElement == Permission.ThisElement)
+      break(any ret = $loop);
+  }
+
+//  if (ret)
+//    writeln($catalog.system.out, "\e \l FOUND " + ret);
+
+  ret;
+}
+
+function isLeaf(any Permission)
+{
+  !isnull(Permission.Value);
+}
+
+function isBranch(any Permission)
+{
+  isnull(Permission.Value);
+}
+
+/**
+ * Make, if not already exists, the specified Role.
+ * If verbose is true then throw if the Role already
+ * exists.
+ */
+function makeRole(Role.Role, Role.FullName, boolean verbose)
+{
+  // See if there is one
+  any k = new(Role.unique, $stack);
+
+  if (!read(Role, k))
+  {
+    // Make it
+    any r = new(Role, $stack);
+    create(r);
+  }
+  else
+    if(verbose)
+      throw("No such role " + Role);
+}
+
+function deleteAllRoles()
+{
+  read(Role, ., keyname="All", setname="roles");
+  // (Note - deleteRole is declared with Role.Role so we can write
+  // command-line friendly tools in future)
+  foreach(roles)
+    call deleteRole($loop.Role.Role);
+}
+
+/**
+ * Deletes a specified role and removes any references to that
+ * Role.
+ */
+function deleteRole(Role.Role)
+{
+  // See if Role exists
+  any k = new(Role.unique, $stack);
+  if (read(Role, k))
+  {
+    any kk = new(UserRole.UsersByRole, Role);
+    read(UserRole, kk, setname="users");
+    foreach(users)
+      delete($loop.UserRole);
+
+    delete(Role);
+  }
+}
+
+function makeUserRole(User.UserName, Role.Role, UserRole.Ordinal = 0)
+{
+	any UserRole = new(UserRole);
+	UserRole.Ordinal = Ordinal;
+	create(UserRole);
+}
+
+/**
+ * Make (if not already existing) the reference to the permission
+ * identified by atPath.
+ * The entity must be an existing Role or User
+ */
+function makePermRef(any atPath, any Name)
+{
+  call validatePath(atPath);
+  any Permission = call parsePath(atPath, fetchLast = true);
+
+  // Assume its a role first
+  any k = new(Role.unique);
+  any r = new(Role);
+  k.Role = Name;
+  r.Role = Name;
+  if (!(read(Role, k) || iscreating(r)))
+  {
+    any k = new(User.unique);
+    k.UserName = Name;
+    if (!read(User, k))
+      throw("No User or Role called " + Name);
+  }
+
+  any PermRef = new(PermRef);
+  PermRef.Name = Name;
+  PermRef.Permission = Permission.Permission;
+  create(PermRef);
+}
+
+/**
+ * Make (if not already existing) the permission identified by atPath.
+ * If entity is supplied then the permission will be an override for
+ * that User or Role. In this case there must already be a value
+ * at the same path in the MASTER set. If entity is not provided
+ * then the permission is created in the MASTER set.
+ * If the permission already exists then this function does
+ * nothing.
+ * Note - if there is no MASTER and we call this function with
+ * an entity then the master and entity have the same value.
+ */
+function makePermValue(any atPath, any Name, any value)
+{
+  // Validate the value by compiling it. If it throws then too bad.
+  compile("string://value");
+
+  call validatePath(atPath);
+
+  /*
+  if (entity)
+    any Name = entity.UserName ? entity.UserName : entity.Role;
+  else
+    any Name = "MASTER";
+  */
+
+  any pathElems = call parsePath(atPath);
+
+  // Because we are creating a leaf, there must be at least
+  // two elements in the path (that is leaves are not permitted
+  // as children of the root)
+  if (count(pathElems) < 2)
+    throw("Bad path " + atPath);
+
+  // Need an identity function because pkey is manufactured
+  // Transaction state is managed using the ByElementNameParent
+  // key values.
+  any d = typedef(Permission);
+  d.properties.identity = func f =
+    {
+      new(Permission.ByElementNameParent, $this);
+    };
+
+  if (Name)
+  {
+    if(Name != "MASTER")
+    {
+      //call makeToPath(pathElems, value, Name="MASTER");
+      call verifyMaster(pathElems);
+      if (count(Name) < 0)
+        call makeToPath(pathElems, value, Name);
+      else
+      {
+        // Expected an array of override names
+        foreach(Name)
+          call makeToPath(pathElems, value, Name=$loop);
+      }
+    }
+    else
+      call makeToPath(pathElems, value, Name);
+  }
+  else
+    call makeToPath(pathElems, value, Name="MASTER");
+}
+
+/**
+ * Delete a permission at the specified path.
+ * Specifying a branch deletes that node and its
+ * children. Specifying the master path deletes
+ * any overrides at the same path and deletes
+ * any references to anywhere along the path.
+ * So there, use with caution!!
+ */
+function deletePerm(any atPath, any Name)
+{
+  call validatePath(atPath);
+
+  any pathElems = call parsePath(atPath);
+  //writeln($catalog.system.out, pathElems);
+
+  if (Name == "MASTER")  // Safer if we force name must be passed
+  {
+    // When deleting a master delete all the overrides too.
+    // Find all the override names, if any.
+    any k = new(Permission.TopLevelOverride);
+    k.ThisElement = pathElems[0];
+    read(Permission, k, setname="orides");
+    //writeln($catalog.system.out, orides);
+    foreach(orides)
+    {
+      call deleteNamedPath(pathElems, oride=$loop.Permission);
+    }
+    // Then clear out master set
+    call deleteNamedPath(pathElems);
+  }
+  else
+    call deleteNamedPath(pathElems);
+}
+
+// Delete the path described by pathElems. If oride is
+// given then an override path is being removed. Otherwise
+// the MASTER path is removed and so are any references
+// to any nodes in the path.
+local function deleteNamedPath(any pathElems, any oride)
+{
+  array perms;
+
+  // Find all the Permission instances to delete. These are
+  // the node at the end of the specified path and all
+  // that node's children.
+
+  // First, find the last path element by stepping down
+  any k = new(Permission.ByElementNameParent);
+  k.Name = oride ? oride.Name : "MASTER";
+  if (foreach(pathElems)
+      {
+        k.ThisElement = $loop;
+        if (!read(Permission, k))
+          break(false);  // path navigation failed
+
+        k.Parent = Permission.Permission;
+      })
+  {
+    call deleteBottomUp(Permission, k);
+  }
+}
+
+local function deleteBottomUp(any Permission)
+{
+  // Does a depth-first traversal deleting Permission instances
+  // from the botton upwards together with any references.
+  if (call isBranch(Permission))
+  {
+    // Find any children
+    any k = new(Permission.ByNameParent, Permission);
+    k.Parent = Permission.Permission;
+    read(Permission, k, setname="children");
+    foreach(children)
+      call deleteBottomUp($loop.Permission);
+    call deletePermRef(Permission);
+  }
+  delete(Permission);
+}
+
+local function deletePermRef(any Permission)
+{
+  // Delete any references to the given Permission
+
+  if (Permission.Name == "MASTER")
+  {
+    any k = new(PermRef.ByPermission, Permission);
+    read(PermRef, k, setname="permRefs");
+    foreach(permRefs)
+      delete($loop.PermRef);
+  }
+}
+
+local function makeToPath(any pathElems, any value, any Name)
+{
+  // Step down the path creating branches where necessary
+  // in the given set (there must always be a master for any
+  // given override).
+  any k = new(Permission.ByElementNameParent);
+  k.Name = Name;
+  k.Parent = null;
+  any p = new(Permission);  // candidate Permission
+  p.Name = Name;
+  boolean makeToLeaf = false;
+  foreach(pathElems)
+  {
+    k.ThisElement = $loop;
+    p.ThisElement = $loop;
+    if (makeToLeaf || !(read(Permission, k) || (any Permission = iscreating(p))))
+    {
+      // At the first point of failure stop trying to
+      // read/check and make the new Permission.
+      makeToLeaf = true;
+      if (@last)
+        setblob(p.Value, value);  // the leaf
+
+      create(p);
+
+      // Save current instance as the parent for the next time
+      any parent = p; // for ctor, if there is a parent
+      k.Parent = parent.Permission;
+      p.Parent = parent.Permission;
+    }
+    else
+    {
+      k.Parent = Permission.Permission;
+      p.Parent = Permission.Permission;
+      any parent = Permission; // for ctor
+    }
+  }
+}
+
+local function verifyMaster(any pathElems)
+{
+  // Check there is (or in creation) a MASTER permission at the
+  // specified path. If there isn't then throw
+
+  any k = new(Permission.ByElementNameParent);
+  k.Name = "MASTER";
+
+  any p = new(Permission);  // candidate Permission
+  p.Name = "MASTER";
+
+  string s;
+
+  foreach(pathElems)
+  {
+    if (@first)
+    {
+      s = $loop;
+    }
+    else
+    {
+      s += "." + $loop;
+    }
+
+    k.ThisElement = $loop;
+    p.ThisElement = $loop;
+    if ((read(Permission, k) || (any Permission = iscreating(p))))
+    {
+      k.Parent = Permission.Permission;
+      p.Parent = Permission.Permission;
+    }
+    else
+      throw("No MASTER found at " + s);
+  }
+}
+
+local function validatePath(any atPath)
+{
+  // Validate the path using a regex
+  regex rePath;
+  rePath.properties.pattern  = "([a-z,A-Z]+[a-z,A-Z,0-9]*\\.)*([a-z,A-Z]+[a-z,A-Z,0-9]*)$";
+  rePath.properties.sequence = atPath;
+  if (!(rePath.properties.find))
+    throw("Illegal path syntax " + atPath);
+}
+
+local function parsePath(any atPath, boolean fetchLast)
+{
+  array  pathElems;
+
+  // Parse the path into its constituent elements
+  regex rePath;
+  rePath.properties.pattern  = "([a-z,A-Z]+[a-z,A-Z,0-9]*)";
+  rePath.properties.sequence = atPath;
+  while(rePath.properties.find)
+  {
+    string s = rePath.properties.group;
+    pathElems += s;
+  }
+
+  if (fetchLast)
+  {
+    any k = new(Permission.ByElementNameParent);
+    k.Name = "MASTER";
+
+    any p = new(Permission);  // candidate Permission
+    p.Name = "MASTER";
+
+    if (!foreach(pathElems)
+         {
+           k.ThisElement = $loop;
+           p.ThisElement = $loop;
+           if (!(read(Permission, k) || (any Permission = iscreating(p))))
+             break(false);  // path navigation failed
+
+           k.Parent = Permission.Permission;
+           p.Parent = Permission.Permission;
+         })
+    {
+      throw("Failed to find Permission at " + atPath);
+    }
+    Permission;  // returns
+  }
+  else
+    pathElems;  // returns
+}
+
+/**
+ * Traverse the rendered tree, building a path a.b.c as we go, and
+ * adding the corresponding value for the leaves as Value.Value at
+ * each level.
+ */
+local function addValuesToRenderTree(any rendered, any values, string atPath)
+{
+  foreach(rendered)
+  {
+    // For branches descend to the next level maintaining the path as we go.
+    // For leaves take the value at the current path, clone it and
+    // put it at the current level as Value.Value
+    if (call isBranch($loop.Permission))
+      call addValuesToRenderTree(rendered = $loop.permTree,
+                                 values,
+                                 atPath = atPath + "." + $loop.Permission.ThisElement);
+    else
+    {
+      //writeln($catalog.system.out, atPath + "." + $loop.Permission.ThisElement);
+      //writeln($catalog.system.out, values);
+      any $loop.Value.Value = clone(values.{atPath}.{$loop.Permission.ThisElement});
+      //writeln($catalog.system.out, $loop);
+    }
+  }
+}
+

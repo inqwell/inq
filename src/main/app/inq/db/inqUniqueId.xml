@@ -1,0 +1,15 @@
+<?xml version="1.0" ?>
+<table name="inqUniqueId">
+Unique Ids Table
+
+Private &amp; Confidential Copyright &#169; Xylinq Ltd 2004.
+All rights reserved.
+  <columns>
+    <column name="Name" nullable="false" type="var_char" type_precision_1="64"/>
+    <column name="Value" nullable="false" type="big_integer"/>
+    <column name="LastUsed" nullable="false" type="date_time"/>
+  </columns>
+  <primary_key name="pk_inqUniqueId">
+    <column name="Name"/>
+  </primary_key>
+</table>

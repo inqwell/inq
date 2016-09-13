@@ -1,0 +1,30 @@
+<?xml version="1.0" ?>
+<table name="inqUser">
+An Authorisation Database
+User Table
+
+Private &amp; Confidential Copyright &#169; Xylinq Ltd 2004.
+All rights reserved.
+  <columns>
+    <column name="UserName" nullable="false" type="var_char" type_precision_1="16"/>
+    <column name="FullName" nullable="false" type="var_char" type_precision_1="64"/>
+    <column name="Email" nullable="false" type="var_char" type_precision_1="48"/>
+    <column name="State" nullable="false" type="char" type_precision_1="1">
+      'A' active; 'S' suspended; 'I' inactive
+    </column>
+    <column name="LastLogin" nullable="true" type="date_time">
+      NULL means never logged in
+    </column>
+    <column name="Expires" nullable="true" type="date_time">
+      NULL means never expires
+    </column>
+    <column name="CurSessions" nullable="false" type="small_integer"/>
+    <column name="MaxSessions" nullable="false" type="small_integer"/>
+    <column name="PrivLevel" nullable="false" type="small_integer"/>
+    <column name="LastUpdated" nullable="false" type="date_time"/>
+    <column name="User" nullable="false" type="var_char" type_precision_1="16"/>
+  </columns>
+  <primary_key name="pk_inqUser">
+    <column name="UserName"/>
+  </primary_key>
+</table>

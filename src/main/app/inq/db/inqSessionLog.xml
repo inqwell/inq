@@ -1,0 +1,27 @@
+<?xml version="1.0" ?>
+<table name="inqSessionLog">
+An Authorisation Database
+SessionLog Table
+
+Private &amp; Confidential Copyright &#169; Xylinq Ltd 2004.
+All rights reserved.
+  <columns>
+    <column name="SessionLog" nullable="false" type="big_integer"/>
+    <column name="UserName" nullable="false" type="var_char" type_precision_1="16"/>
+    <column name="IP" nullable="false" type="var_char" type_precision_1="64"/>
+    <column name="HostName" nullable="false" type="var_char" type_precision_1="128"/>
+    <column name="LocalHostName" nullable="false" type="var_char" type_precision_1="32"/>
+    <column name="StartedAt" nullable="false" type="date_time"/>
+    <column name="EndedAt" nullable="true" type="date_time">
+      Null means session still active
+    </column>
+  </columns>
+  <primary_key name="pk_inqSessionLog">
+    <column name="SessionLog"/>
+  </primary_key>
+  <foreign_keys>
+    <foreign_key name="fk_inqSessionLog_UserName" to="inqUser">
+      <column name="UserName" to="UserName"/>
+    </foreign_key>
+  </foreign_keys>
+</table>

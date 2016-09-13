@@ -24,6 +24,7 @@ if "%INQJMSFACTORY%"=="" set INQJMSFACTORY="com.sun.messaging.ConnectionFactory"
 rem ----- if JAVAHOME is set then use that for the launcher. Otherwise just assume java
 set LAUNCHER=java
 if "%JAVAHOME%" NEQ "" set LAUNCHER=%JAVAHOME%\bin\java
+if "%JAVA_HOME%" NEQ "" set LAUNCHER=%JAVA_HOME%\bin\java
 
 rem ----- set the current working dir variable  ----
 if NOT "%OS%"=="Windows_NT" call "%INQHOME%\bin\setpwdvar98.bat"
@@ -71,14 +72,16 @@ GOTO END
 rem -- Server Startup
 :SERVER
 rem Add the headless and logging config system properties
-set INQSERVERARGS=-Djava.awt.headless=true -Djava.util.logging.config.file=%INQHOME%/etc/server.log.properties
+if "%INQSERVERARGS%"=="" set INQSERVERARGS=-Xmx512
+set INQSERVERARGS=-server %INQSERVERARGS% -Djava.awt.headless=true -Djava.util.logging.config.file=%INQHOME%/etc/server.log.properties
 rem Some JDBC drivers, though there are others
 set INQJDBCARGS=-Djdbc.drivers=com.mysql.jdbc.Driver:oracle.jdbc.driver.OracleDriver:com.sybase.jdbc.SybDriver
-%LAUNCHER% -Xmx512m %INQCOMMONARGS% %INQSERVERARGS% %INQJDBCARGS% com.inqwell.any.server.Server %arg1% %arg2% %arg3% %arg4% %arg5% %arg6% %arg7% %arg8% %arg9% %arg10% %arg11% %arg12%
+%LAUNCHER% -Xmx512m %INQCOMMONARGS% %INQCUSTOM% %INQSERVERARGS% %INQJDBCARGS% com.inqwell.any.server.Server %arg1% %arg2% %arg3% %arg4% %arg5% %arg6% %arg7% %arg8% %arg9% %arg10% %arg11% %arg12%
 GOTO END
 
 :CLIENT
-%LAUNCHER% %INQCOMMONARGS% %INQCUSTOM% -Dsun.java2d.noddraw=true  com.inqwell.any.tools.AnyClient %arg1% %arg2% %arg3% %arg4% %arg5% %arg6% %arg7% %arg8% %arg9% %arg10% %arg11% %arg12%
+if "%INQCLIENTARGS%"=="" set INQCLIENTARGS=-Xms256
+%LAUNCHER% -Dsun.java2d.noddraw=true %INQCOMMONARGS% %INQCUSTOM% %INQCLIENTARGS%  com.inqwell.any.tools.AnyClient %arg1% %arg2% %arg3% %arg4% %arg5% %arg6% %arg7% %arg8% %arg9% %arg10% %arg11% %arg12%
 GOTO END
 
 :LOADSERVER

@@ -1,0 +1,260 @@
+/**
+ * Inqwell Auth The Login service
+ *
+ * Private & Confidential Copyright � Inqwell Ltd 2004.
+ * All rights reserved.
+ */
+package inq.auth;
+
+import inq.meta as META;
+
+function authenticateUser(string  loginName,
+                          string  passwd,
+                          string  .package,
+                          any     url,
+                          boolean ignoreExpiring)
+{
+  any UserName = loginName;  // field name for key
+  passwd = call canonicalPasswd(passwd);
+  if (read(User, .))
+  {
+    //writeln($catalog.system.out, User);
+    read(Password, User);  // Its an integrity error not to get a pwd, TODO.
+    any Control = call getControl();
+
+    switch
+    {
+      when(User.State == enum(State, SUSPENDED))
+        call system:LoginDenied(reason="Account suspended", suspended=true);
+
+      when(passwd != Password.Password && User.State == enum(State, ACTIVE))
+      {
+        Password.FailedAttempts++;
+        if (Control.MaxAttempts == Password.FailedAttempts)
+        {
+          User.State = enum(State, SUSPENDED);
+          call system:LoginDenied(reason="Account suspended", suspended=true);
+        }
+        else
+          call system:LoginDenied(reason="Invalid password", badpwd=true);
+      }
+
+      when(!isnull(User.Expires) && User.Expires < getdate())  // Just in case there's no "batch" job
+        call system:LoginDenied(reason="Authentication failure", denied=true);
+
+      when(User.MaxSessions > 0 && User.CurSessions >= User.MaxSessions)
+        call system:LoginDenied(reason="Too many sessions", denied=true);
+
+      when(User.State == enum(State, INACTIVE))
+        call system:LoginDenied(reason="Authentication failure", denied=true);
+
+      otherwise
+      {
+        if (any Package = call verifyPackage(UserName=loginName, Package=.package))
+        {
+          // Check for expiry/ing password
+          if (Control.AgeingEnabled)
+          {
+            if (datediff(DAY,  getdate(), Password.Expires) <= 0)
+            {
+              // Pwd has expired
+              //User.LastLogin = getdate();
+              Password.FailedAttempts = 0;
+              call system:LoginOK(privLevel=User.PrivLevel, expired=true);
+            }
+            else if (((any expiresIn = datediff(DAY,  getdate(), Password.Expires)) < Control.WarnDays) &&
+                     (!ignoreExpiring))
+            {
+              // Pwd nearing expiry
+              //User.LastLogin = getdate();
+              Password.FailedAttempts = 0;
+              call system:LoginOK(privLevel=User.PrivLevel, expiresIn);
+            }
+            else
+            {
+              // Normal login
+              User.LastLogin = getdate();
+              User.CurSessions++;
+              create(new(Session));
+              Password.FailedAttempts = 0;
+              call system:LoginOK(privLevel=User.PrivLevel, url);
+            }
+          }
+          else
+          {
+            // Normal login
+            User.LastLogin = getdate();
+            User.CurSessions++;
+            create(new(Session));
+            Password.FailedAttempts = 0;
+            call system:LoginOK(privLevel=User.PrivLevel, url);
+          }
+        }
+        else
+          call system:LoginDenied(reason="Authentication failure", denied=true);
+      }
+    }
+  }
+  else
+  {
+    // User not found
+    //writeln($catalog.system.out, "NO USER");
+    call system:LoginDenied(reason="Authentication failure", denied=true);
+  }
+}
+
+// By default we authenticate the user.  This means that the client
+// must suppply a valid username/password at this point and will be
+// disconnected from the server if authentication fails.
+// If the application prefers to handle authentication itself then
+// it can use this function passing authenticate=false. In this case
+// the Inq login protocol will always allow the connection to proceed
+// although there must still be a record in the User table if the
+// privilege level is to be set to anything other than the default.
+// There is no other opportunity to set a process's privilege level.
+function login(string  loginName,
+               string  passwd,
+               boolean authenticate=true,
+               boolean ignoreExpiring)
+{
+  if (authenticate)
+    call authenticateUser(loginName,
+                          passwd,
+                          ignoreExpiring,
+                          url="inqAuthGUI.inq");
+  else
+  {
+    any UserName = loginName;  // field name for key
+    if (read(User, .))
+    {
+      User.LastLogin = getdate();
+      call system:LoginOK(privLevel=User.PrivLevel);
+    }
+    else
+      call system:LoginOK();
+  }
+}
+
+function notifyLogout(string loginName)
+{
+  // Look for the session associated with this user
+  any k = new(Session.unique);
+  k.Session = $process.properties.id;
+  if (read(Session, k))
+  {
+    delete(Session);
+
+    any UserName = loginName;  // field name for key
+    if (read(User, .))
+    {
+      lock(User);
+      User.CurSessions--;
+    }
+  }
+}
+
+function clearDefunctSessions(string loginName)
+{
+  // Look for the session associated with this user
+  any k = new(Session.ByUserName);
+  k.UserName = loginName;
+  read(Session, k, setname="sessions");
+  foreach(sessions)
+    delete($loop.Session);
+
+  any UserName = loginName;  // field name for key
+  if (read(User, .))
+  {
+    lock(User);
+    User.CurSessions = 0;
+  }
+}
+
+function logoutSession(any Session, long delay = 30000, string message)
+{
+  // Send a logout notification to the specified session
+  if (read(Session, Session))
+  {
+    any proc = getprocess(Session.Session);
+    if (proc)
+    {
+      //writeln($catalog.system.out, proc);
+      //writeln($catalog.system.out, "\e \l " + message);
+      send sendLogoutSession(@channel = proc.ichannel,
+                             @context = "$root.login.login",
+                             delay, message);
+    }
+    else
+    {
+      // Hmmm, process not found - exceptional cleanup!
+      call clearDefunctSessions(loginName = Session.UserName);
+    }
+  }
+  else
+    throw("No such session", Session);
+}
+
+local function verifyPackage(User.UserName, META:Package.Package)
+{
+  // Verify that the specified user is allowed to log in as the given
+  // package.
+
+  // TODO (returns the package or true if there is no meta-data for the
+  // package)
+  true;
+}
+
+// We define a Login service in case an administrator logs in as this
+// package.  Any application package can use the above login function
+// for authentication by calling inq.auth:login as well as doing any
+// application specific processing.
+// This service will force authentication of the given user and password.
+// See above also.
+service Login(string loginName, string passwd, string .package, boolean ignoreExpiring)
+{
+  //writeln($catalog.system.out, "LOGIN:  " + loginName);
+  //writeln($catalog.system.out, "PASSWD: " + passwd);
+
+  call login(loginName, passwd, .package, ignoreExpiring);
+}
+
+service Logout()
+{
+  call notifyLogout($process.loginName);
+}
+
+service logoutSession(any Session, long delay = 30000, string message)
+{
+  call logoutSession(Session, delay, message);
+}
+
+service sendLogoutSession(long delay = 30000, string message)
+{
+  send system.client:logoutRequest(delay,
+                                   message);
+}
+
+// Create a package instance or update current if reparsing
+/*
+string Package   = "\p";  // Unique key for read, below
+string ClientURL = absurl("inqAuthGUI.inq", "\i");
+string InitStmt  = "call userMain();";
+string LongName  = "User and Role Administration";
+date   Parsed    = getdate();
+
+if (read(inq.meta:Package, .))
+{
+  Package.Parsed = getdate();
+}
+else
+{
+  any newPackage = new(inq.meta:Package);
+  create(newPackage);  // ctor initialises from current stack
+}
+*/
+
+
+call inq.meta:createPackage(Package = "\p",
+                            ClientURL = absurl("inqAuthGUI.inq", "\i"),
+                            InitStmt = "call userMain();",
+                            LongName  = "User and Role Administration");

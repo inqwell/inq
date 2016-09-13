@@ -1,0 +1,17 @@
+<?xml version="1.0" ?>
+<table name="inqRole">
+An Authorisation Database
+Role Table - list the available roles.
+
+Private &amp; Confidential Copyright &#169; Xylinq Ltd 2004.
+All rights reserved.
+  <columns>
+    <column name="Role" nullable="false" type="var_char" type_precision_1="16"/>
+    <column name="FullName" nullable="false" type="var_char" type_precision_1="64"/>
+    <column name="LastUpdated" nullable="false" type="date_time"/>
+    <column name="User" nullable="false" type="var_char" type_precision_1="16"/>
+  </columns>
+  <primary_key name="pk_inqRole">
+    <column name="Role"/>
+  </primary_key>
+</table>
