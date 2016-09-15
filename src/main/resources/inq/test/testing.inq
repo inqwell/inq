@@ -167,7 +167,10 @@ function compareNodeSets(any results, any expected, any paths)
   any ce = count(expected);
 
   if (ct != ce)
-    throw(renderf("Node set count expected {0} but have {1}", ce, ct));
+    throw(renderf("Node set count for {0} expected {1} but have {2}",
+                  getnodeset(results),
+                  ce,
+                  ct));
   
   foreach(results)
   {
