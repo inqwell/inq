@@ -49,8 +49,8 @@ public class WriteStream extends    AbstractFunc
 		Any   toWrite    = EvalExpr.evalFunc(t,
 																				 a,
 																				 toWrite_);
-    if (toWrite == null)
-      nullOperand(toWrite_);
+//    if (toWrite == null)
+//      nullOperand(toWrite_);
       
 		
 		BooleanI ret = new AnyBoolean();
