@@ -109,6 +109,10 @@ public class Try extends    AbstractFunc
     }
 
     int throwLine = -1;
+    
+    // Note how many call stack entries there are
+    // so we can throw away to this point if there is a catch {...}
+    int callStackEntries = t.getCallStack().entries();
 
 		try
 		{
@@ -169,7 +173,7 @@ public class Try extends    AbstractFunc
         // are "back to normal". Any catch block is free to use the (now
         // cleared down) transaction as it wishes.
 
-        outerEx = pushException(aex, t, true);
+        outerEx = pushException(aex, t, true, callStackEntries);
 
         // If the catch expression throws (either a new exception or
         // by rethrowing the one just caught) then the return value from
@@ -247,7 +251,7 @@ public class Try extends    AbstractFunc
           t.abort();
         }
 
-        outerEx = pushException(arex, t, true);
+        outerEx = pushException(arex, t, true, callStackEntries);
 				ret = doExpression(catch_, a, t, anyEx, anyREx, aflowEx);
 				killed = (anyREx[0] instanceof ProcessKilledException);
 
@@ -280,7 +284,7 @@ public class Try extends    AbstractFunc
           t.abort();
         }
 
-        outerEx = pushException(curEx, t, true);
+        outerEx = pushException(curEx, t, true, callStackEntries);
 
 				ret = doExpression(catch_, a, t, anyEx, anyREx, aflowEx);
 				killed = (anyREx[0] instanceof ProcessKilledException);
@@ -552,7 +556,8 @@ public class Try extends    AbstractFunc
   }
 	private ExceptionI pushException(ExceptionI  e,
                                    Transaction t,
-                                   boolean     setLineNumber)
+                                   boolean     setLineNumber,
+                                   int         callStackEntries)
 	{
     if (setLineNumber)
       e.setLineNumber(t.getLineNumber());
@@ -599,6 +604,9 @@ public class Try extends    AbstractFunc
 
     }
 
+    if (setLineNumber)
+      unwindCallStack(callStackEntries, t);
+
     return ret;
 	}
 
@@ -610,7 +618,7 @@ public class Try extends    AbstractFunc
       return;
 
     if (outerEx != null)
-      pushException(outerEx, t, false);
+      pushException(outerEx, t, false, Integer.MAX_VALUE);
     else if (curEx != null)
     {
       Map stackFrame = getTransaction().getCurrentStackFrame();
@@ -672,6 +680,14 @@ public class Try extends    AbstractFunc
     }
 
     return ret;
+	}
+	
+	private void unwindCallStack(int to, Transaction t)
+	{
+		// Reset the call stack entries to the memo point
+		Stack s = t.getCallStack();
+		while (s.entries() > to)
+			s.pop();
 	}
 	
 	private class JavaStack extends AbstractFunc
