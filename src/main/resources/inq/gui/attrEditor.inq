@@ -197,7 +197,7 @@ local function createGui(any parent,
            Caption tl \"Old\"; Row { oldTable }
            Caption tl \"New\"; Row { newTable }
          }
-         Geometry xy:vf Table Gap 5 Columns 110, GRID_FILL, GRID_PREF, 20, 75, 75
+         Margin d:3 Geometry xy:vf Table Gap 5 Columns 140, GRID_FILL, GRID_PREF, 20, 100, 100
                                       Rows GRID_PREF;
          {
            Row
