@@ -15,12 +15,6 @@ import java.util.ArrayList;
 import javax.swing.Icon;
 import javax.swing.JComponent;
 
-import bibliothek.gui.dock.common.action.CAction;
-import bibliothek.gui.dock.common.event.CVetoClosingEvent;
-import bibliothek.gui.dock.common.event.CVetoClosingListener;
-import bibliothek.gui.dock.common.intern.CDockable;
-import bibliothek.gui.dock.common.intern.DefaultCDockable;
-
 import com.inqwell.any.AbstractComposite;
 import com.inqwell.any.AbstractValue;
 import com.inqwell.any.Any;
@@ -30,7 +24,6 @@ import com.inqwell.any.AnyRuntimeException;
 import com.inqwell.any.Event;
 import com.inqwell.any.EventListener;
 import com.inqwell.any.IntI;
-import com.inqwell.any.Iter;
 import com.inqwell.any.Set;
 import com.inqwell.any.beans.WindowF;
 import com.inqwell.any.client.AnyComponent;
@@ -39,6 +32,12 @@ import com.inqwell.any.client.AnyView;
 import com.inqwell.any.client.AnyWindow;
 import com.inqwell.any.client.RenderInfo;
 import com.inqwell.any.client.swing.SwingInvoker;
+
+import bibliothek.gui.dock.common.action.CAction;
+import bibliothek.gui.dock.common.event.CVetoClosingEvent;
+import bibliothek.gui.dock.common.event.CVetoClosingListener;
+import bibliothek.gui.dock.common.intern.CDockable;
+import bibliothek.gui.dock.common.intern.DefaultCDockable;
 
 public abstract class AnyCDockable extends    AnyView
                                    implements WindowF
@@ -64,6 +63,7 @@ public abstract class AnyCDockable extends    AnyView
     dockableProperties__.add(AnyComponent.contextNode__);
     dockableProperties__.add(AnyWindow.defaultButton__);
     dockableProperties__.add(AnyWindow.defaultableButtons__);
+    dockableProperties__.add(AnyWindow.disabledText__);
     dockableProperties__.add(actions__);
   }
 
@@ -256,6 +256,12 @@ public abstract class AnyCDockable extends    AnyView
     getDefaultCDockable().setTitleText(text);
   }
 
+  public void setDisabledText(Any text)
+  {
+  	boolean enable = AnyNull.isNull(text) ? false : true;
+    // What to do? 
+  }
+  
   /**
    * Gets the text that is shown as title.
    * 

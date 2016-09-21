@@ -23,17 +23,14 @@ import java.awt.EventQueue;
 import java.awt.Frame;
 import java.awt.Point;
 import java.awt.Toolkit;
-import java.awt.Window;
 import java.awt.event.FocusAdapter;
 import java.awt.event.FocusEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
 import java.awt.event.WindowEvent;
 import java.beans.PropertyVetoException;
-import java.io.File;
 
 import javax.swing.JButton;
-import javax.swing.JInternalFrame;
 import javax.swing.RootPaneContainer;
 import javax.swing.SwingUtilities;
 import javax.swing.WindowConstants;
@@ -42,7 +39,6 @@ import com.inqwell.any.AbstractComposite;
 import com.inqwell.any.AbstractValue;
 import com.inqwell.any.Any;
 import com.inqwell.any.AnyException;
-import com.inqwell.any.AnyFile;
 import com.inqwell.any.AnyInt;
 import com.inqwell.any.AnyRuntimeException;
 import com.inqwell.any.Array;
@@ -63,10 +59,9 @@ import com.inqwell.any.Transaction;
 import com.inqwell.any.beans.Facade;
 import com.inqwell.any.beans.WindowF;
 import com.inqwell.any.client.dock.AnyCControl;
+import com.inqwell.any.client.dock.AnyCDockable;
 import com.inqwell.any.client.swing.InqWindow;
 import com.inqwell.any.client.swing.SwingInvoker;
-import com.inqwell.any.io.PhysicalIO;
-import com.inqwell.any.io.XMLXStream;
 
 
 public class AnyWindow extends    AnyComponent
@@ -85,7 +80,7 @@ public class AnyWindow extends    AnyComponent
   protected  static Any   active__               = AbstractValue.flyweightString("active");
   protected  static Any   focused__              = AbstractValue.flyweightString("focused");
   protected  static Any   toolBarChild__         = AbstractValue.flyweightString("toolBar__");
-  protected  static Any   disabledText__         = AbstractValue.flyweightString("disabledText");
+  public     static Any   disabledText__         = AbstractValue.flyweightString("disabledText");
 
   private    static Any   desktop__              = AbstractValue.flyweightString("desktop");
 
@@ -559,7 +554,7 @@ public class AnyWindow extends    AnyComponent
         // Only process the window if its parent is the same as the
         // iterator parent. That way we only dispose of windows beneath
         // ourselves that we are actually responsible for.
-        AnyWindow w = (AnyWindow)node;
+        Composite w = (Composite)node;
         
         if (isChild(w))
           s.add(node);
@@ -632,6 +627,8 @@ public class AnyWindow extends    AnyComponent
 				packed_ = true;
 
         WindowF w = AnyWindow.getParentWindow(AnyWindow.this);
+        while (w instanceof AnyCDockable)
+        	w = AnyWindow.getParentWindow(w);
 
         if (relativeTo_ == null && !(AnyWindow.this instanceof AnyInternalFrame))
         {
