@@ -10389,13 +10389,13 @@ void FormalParameter(AbstractInputFunc f) :
           throw new AnyRuntimeException("Can't resolve formal parameter " + s + " at line " + token.beginLine);
         }
         Descriptor des = (Descriptor)ds;
-        Any param = des.getDataField(AbstractValue.flyweightString(field), true);
+        Any param = des.getDataField(AbstractValue.flyweightString(field), true).cloneAny();
         // If there is an initialiser then evaluate it now and copy to clone.
         if (a != null)
         {
-          param = param.cloneAny().copyFrom(EvalExpr.evalFunc(userTxn_,
-                                                              Catalog.instance().getCatalog(),
-                                                              a));
+          param.copyFrom(EvalExpr.evalFunc(userTxn_,
+                                           Catalog.instance().getCatalog(),
+                                           a));
         }
         f.addParam((pname == null) ? field : pname, param);
       }
