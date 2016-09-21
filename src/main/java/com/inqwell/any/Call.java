@@ -285,7 +285,7 @@ public class Call extends    AbstractFunc
 			  if (logged)
   	    {
   	    	// Log return coming out
-  	    	l.log(Level.INFO, "Leaving {0} ret: {1}", new Object[] {af.getFQName(), args});
+  	    	l.log(Level.INFO, "Leaving {0} ret: {1}", new Object[] {af.getFQName(), ret});
   	    }
       }
 		}
@@ -299,6 +299,12 @@ public class Call extends    AbstractFunc
         t.getCallStack().pop();
       }
 			ret = re.getResult();
+			
+		  if (logged)
+	    {
+	    	// Log return coming out (forced return)
+	    	l.log(Level.INFO, "Leaving {0} ret: {1}", new Object[] {af.getFQName(), ret});
+	    }
 		}
 		finally
 		{
@@ -685,6 +691,7 @@ public class Call extends    AbstractFunc
           sourceArg = t.getLastTField();
           if (sourceArg != null)
             sourceArg = sourceArg.bestowConstness();
+          t.resetResolving();
         }
 
 				target.replaceItem(pName, sourceArg);
