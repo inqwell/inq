@@ -1010,7 +1010,14 @@ public class AnyFile extends    PropertyAccessMap
       try
       {
         URL url = openUrl.getURL(baseUrl);
-        URI uri = new URI(url.toString());
+        // If by the time we get here it's not file: (it might be gile:) then
+        // force it to be file.
+        String us = url.toString();
+        if (us.startsWith("gile"))
+        	us = us.replaceFirst("gile", "file");
+          
+        URI uri = new URI(us);
+        
         AnyFile.this.setFile(new File(uri));
       }
       catch (URISyntaxException use)
