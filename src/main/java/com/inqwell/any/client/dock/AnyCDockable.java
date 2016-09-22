@@ -16,6 +16,8 @@ import java.util.ArrayList;
 
 import javax.swing.Icon;
 import javax.swing.JComponent;
+import javax.swing.JDialog;
+import javax.swing.JFrame;
 import javax.swing.SwingUtilities;
 
 import com.inqwell.any.AbstractComposite;
@@ -34,6 +36,7 @@ import com.inqwell.any.client.AnyFrame;
 import com.inqwell.any.client.AnyView;
 import com.inqwell.any.client.AnyWindow;
 import com.inqwell.any.client.RenderInfo;
+import com.inqwell.any.client.swing.DisabledGlassPane;
 import com.inqwell.any.client.swing.SwingInvoker;
 
 import bibliothek.gui.dock.common.action.CAction;
@@ -157,8 +160,31 @@ public abstract class AnyCDockable extends    AnyView
   @Override
   public Component getGlassPane()
   {
-    // TODO Auto-generated method stub
-    return null;
+  	Window w = SwingUtilities.getWindowAncestor(getDefaultCDockable().getContentPane());
+  	DisabledGlassPane dgp = null;
+  	if (w instanceof JFrame)
+  	{
+    	JFrame f = (JFrame)w;
+    	if (!((f.getRootPane().getGlassPane() instanceof DisabledGlassPane)))
+    	{
+    		dgp = new DisabledGlassPane();
+    		f.getRootPane().setGlassPane(dgp);
+    	}
+    	else
+    		dgp = (DisabledGlassPane)f.getRootPane().getGlassPane();
+  	}
+  	else if (w instanceof JDialog)
+  	{
+    	JDialog f = (JDialog)w;
+    	if (!((f.getRootPane().getGlassPane() instanceof DisabledGlassPane)))
+    	{
+    		dgp = new DisabledGlassPane();
+    		f.getRootPane().setGlassPane(dgp);
+    	}
+    	else
+    		dgp = (DisabledGlassPane)f.getRootPane().getGlassPane();
+  	}
+    return dgp;
   }
 
   /* (non-Javadoc)
@@ -186,8 +212,21 @@ public abstract class AnyCDockable extends    AnyView
   @Override
   public void toFront()
   {
-    // TODO Auto-generated method stub
+    SwingInvoker ss = new SwingInvoker()
+    {
+      protected void doSwing()
+      {
+      	d_.setVisible(true);
+      	getDefaultCDockable().toFront();
+      	Window w = SwingUtilities.getWindowAncestor(getDefaultCDockable().getContentPane());
+      	Frame f = (Frame)w;
+      	f.setState(Frame.NORMAL);
+      	w.setVisible(true);
+      	w.toFront();
+      }
+    };
     
+    ss.maybeAsync(false);    
   }
 
   @Override
@@ -266,8 +305,15 @@ public abstract class AnyCDockable extends    AnyView
 
   public void setDisabledText(Any text)
   {
-  	boolean enable = AnyNull.isNull(text) ? false : true;
-    // What to do? 
+  	DisabledGlassPane g = (DisabledGlassPane)getGlassPane();
+
+  	if (g != null)
+  	{
+    	if (AnyNull.isNull(text))
+        g.deactivate();
+      else
+        g.activate(text.toString());
+  	}
   }
   
   /**
