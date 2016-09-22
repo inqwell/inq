@@ -640,12 +640,19 @@ public class AnyFormat extends    Format
     	if (fd < d.scale())
     	{
     		BigDecimal bd = d.getValue().setScale(fd, RoundingMode.HALF_UP);
-        toAppendTo.append(bd.toPlainString());
+    		if (f.isGroupingUsed())
+    			formatDouble(bd.doubleValue(), toAppendTo, pos);
+    		else
+          toAppendTo.append(bd.toPlainString());
     	}
     	else
     	{
-        toAppendTo.append(d.getValue().toPlainString());
-        if (!_trailingZeros)
+    		if (f.isGroupingUsed())
+    			formatDouble(d.doubleValue(), toAppendTo, pos);
+    		else
+          toAppendTo.append(d.getValue().toPlainString());
+
+    		if (!_trailingZeros)
         {
           trimTrailingZeros(toAppendTo, pos);
         }
