@@ -10,10 +10,13 @@ package com.inqwell.any.client.dock;
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.Dimension;
+import java.awt.Frame;
+import java.awt.Window;
 import java.util.ArrayList;
 
 import javax.swing.Icon;
 import javax.swing.JComponent;
+import javax.swing.SwingUtilities;
 
 import com.inqwell.any.AbstractComposite;
 import com.inqwell.any.AbstractValue;
@@ -224,8 +227,13 @@ public abstract class AnyCDockable extends    AnyView
     {
       protected void doSwing()
       {
-        d_.setVisible(true);
-        getDefaultCDockable().toFront();
+      	d_.setVisible(true);
+      	getDefaultCDockable().toFront();
+      	Window w = SwingUtilities.getWindowAncestor(getDefaultCDockable().getContentPane());
+      	Frame f = (Frame)w;
+      	f.setState(Frame.NORMAL);
+      	w.setVisible(true);
+      	w.toFront();
         if (withResize)
         {
           Dimension d = getDefaultCDockable().getContentPane().getPreferredSize();
