@@ -215,14 +215,14 @@
     <!--
     For running unit tests only - we are hard-coded
     against the glassfish JMS implementation in imq.jar 
-    -->
     <dependency>
       <groupId>com.sun.messaging</groupId>
       <artifactId>imq</artifactId>
       <version>4.4</version>
-      <scope>system</scope>
+      <scope>test</scope>
       <systemPath>${external.apps}/MessageQueue44/mq/lib/imq.jar</systemPath>
     </dependency>
+    -->
 
   </dependencies>
 </project>
