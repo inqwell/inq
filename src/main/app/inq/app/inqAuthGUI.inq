@@ -9,7 +9,7 @@ package inq.auth;
 
 // Can't do this yet when logged in as admin/system.server because
 // of relative URL problems running "srctxt". To be fixed.
-//loadclient("inqPermsClient.inq");
+loadclient("inqPermsClient.inq");
 
 /**
  * Build the authorisation GUI.  The parent is assumed to support
