@@ -37,6 +37,8 @@ then
 fi
 export CLASSPATH
 
+INQ_DEBUG="-Xdebug -Xrunjdwp:transport=dt_socket,address=3999,server=y,suspend=n"
+
 # VM args to the client. Use whatever you wish
 if [ "$INQCLIENTARGS" = "" ]
 then
