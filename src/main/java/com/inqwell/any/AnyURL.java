@@ -237,7 +237,7 @@ public class AnyURL extends    AnyObject
   {
     if (this.isRelative())
     {
-    	if (baseProtocol.equals("gile"))
+    	if (baseProtocol != null && baseProtocol.equals("gile"))
     	{
         getCwd();
         this.setURL(gcwd__.getURL(), this.toString());
