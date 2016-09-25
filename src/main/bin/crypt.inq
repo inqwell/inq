@@ -18,7 +18,8 @@ local function usage()
   writeln($catalog.system.err, "usage: \i:");
   writeln($catalog.system.err, "  -encrypt | -decrypt");
   writeln($catalog.system.err, "  -file <file ...>");
-  writeln($catalog.system.err, "  -out <directory>");
+  writeln($catalog.system.err, "  [-q]");
+  writeln($catalog.system.err, "  [-out <directory>]");
   exit(1);
 }
 
@@ -28,18 +29,27 @@ if (($catalog.argsMap.encrypt && $catalog.argsMap.decrypt)
 
 // Must supply -out and -file command line arguments:
 // what we're encrypting and where to write the o/p
-if (!$catalog.argsMap.out || !$catalog.argsMap.file)
+if (!$catalog.argsMap.file)
   call usage();
 
-file outdir = $catalog.argsMap.out;
+if ($catalog.argsMap.out)
+  file outdir = $catalog.argsMap.out;
+
 any infiles = $catalog.argsMap.arrays.file;
+if (!infiles)
+{
+  writeln($catalog.system.err, "No input files specified");
+  exit(1);
+}
 
 // Check outdir exists and is a directory
-if (!outdir.properties.exists || !outdir.properties.directory)
+if (outdir && (!outdir.properties.exists || !outdir.properties.directory))
 {
   writeln($catalog.system.err, outdir + "does not exist or not a directory");
   exit(1);
 }
+
+boolean $this.verbose = ($catalog.argsMap.q ? false : true);
 
 local function encrypt(any infiles, any outdir)
 {
@@ -52,11 +62,11 @@ local function encrypt(any infiles, any outdir)
   
   foreach(infiles)
   {
-    writeln($catalog.system.out, $loop);
-  
     ifile = $loop;
     
-    file outfilef = absurl(ifile.properties.name, outdir);
+    any outto = (outdir ? outdir : ifile.properties.parentFile);
+    
+    file outfilef = absurl(ifile.properties.name, outto);
 
     if (ifile.properties.absolutePath == outfilef.properties.absolutePath)
     {
@@ -78,7 +88,8 @@ local function encrypt(any infiles, any outdir)
     // with open()
     any outfile = "gile:" + outfilef.properties.path;
     
-    writeln($catalog.system.out, "Output file is " + (backTo ? backTo : outfilef));
+    if ($this.verbose)
+      writeln($catalog.system.out, (backTo ? backTo : outfilef));
   
     // Open the output stream and write the input to it
     open(o, outfile, OPEN_WRITE);
@@ -111,8 +122,6 @@ local function decrypt(any infiles, any outdir)
   
   foreach(infiles)
   {
-    writeln($catalog.system.out, $loop);
-  
     ifilef = $loop;
     
     // We can't make files of protocol "gile:", only file: is
@@ -120,7 +129,9 @@ local function decrypt(any infiles, any outdir)
     // with open()
     any infile = "gile:" + ifilef.properties.path;
 
-    file outfile = absurl(ifilef.properties.name, outdir);
+    any outto = (outdir ? outdir : ifilef.properties.parentFile);
+    
+    file outfile = absurl(ifilef.properties.name, outto);
 
     if (ifilef.properties.absolutePath == outfile.properties.absolutePath)
     {
@@ -137,7 +148,8 @@ local function decrypt(any infiles, any outdir)
 
     any lastMod = ifilef.properties.lastModified;
 
-    writeln($catalog.system.out, "Output file is " + (backTo ? backTo : outfile));
+    if ($this.verbose)
+      writeln($catalog.system.out, (backTo ? backTo : outfile));
   
     // Open the output stream and write the input to it
     open(o, outfile, OPEN_WRITE);
