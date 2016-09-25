@@ -90,6 +90,17 @@ local function resultsPath(any test, any root, string ext = ".xml")
   p += ext;
 }
 
+// If a stream is present at $this.strm then write
+// the message to it. Otherwise throw an exception carrying
+// the message
+local function error(any msg)
+{
+  if($this.strm)
+    writeln($this.strm, msg);
+  else
+    throw(msg);
+}
+
 function storeCSV(any results, any test, any root, any base)
 {
   any p = call resultsPath(test, root, ext=".csv");
@@ -154,8 +165,8 @@ function compareSingle(any test, any expected, any paths)
     any t = call adjustPrecision(t, atPath = object p = path($this.{$loop}));
  
     if (t != e)
-      throw(renderf("Expected {0} got {1} for field {2}\ntest {3}\nexpected {4}",
-                    e, t, $loop, test, expected));
+      call error(msg=renderf("Expected {0} got {1} for field {2}\ntest {3}\nexpected {4}",
+                             e, t, $loop, test, expected));
   }
 }
 
@@ -167,30 +178,32 @@ function compareNodeSets(any results, any expected, any paths)
   any ce = count(expected);
 
   if (ct != ce)
-    throw(renderf("Node set count for {0} expected {1} but have {2}",
-                  getnodeset(results),
-                  ce,
-                  ct));
-  
-  foreach(results)
+    call error(msg=renderf("Node set count for {0} expected {1} but have {2}",
+                           getnodeset(results),
+                      ce,
+                      ct));
+  else
   {
-    any c = @count;
-    any n = $loop;
-    foreach(paths)
+    foreach(results)
     {
-      any t = n.{$loop};  // Value under test
-      any e = expected[c].{$loop};  // Expected value
-      
-      any t = call adjustPrecision(t, atPath = object p = path($this.{$loop}));
- 
-      if (t != e)
-        throw(renderf("Expected {0} got {1} for field {2} ordinal {3}\nnode {4}\nexpected {5}",
-                      e, t, $loop, c, n, expected[c]));
+      any c = @count;
+      any n = $loop;
+      foreach(paths)
+      {
+        any t = n.{$loop};  // Value under test
+        any e = expected[c].{$loop};  // Expected value
+        
+        any t = call adjustPrecision(t, atPath = object p = path($this.{$loop}));
+   
+        if (t != e)
+          call error(msg=renderf("Expected {0} got {1} for field {2} ordinal {3}\nnode {4}\nexpected {5}",
+                                 e, t, $loop, c, n, expected[c]));
+      }
     }
   }
 }
 
-function runTests (any tests, any base)
+function runTests (any tests, any base, boolean batch = false)
 {
   int success = 0;
   int fail    = 0;
@@ -223,6 +236,14 @@ function runTests (any tests, any base)
         any ts = getdate();
         writeln ($catalog.system.out, ts);
         writeln ($catalog.system.out, renderf("{0} test {1}", (record ? "Recording" : "Running"), $loop));
+        
+        if (batch)
+        {
+          string errtxt;
+          ioPrint $this.strm;
+          open($this.strm, "string://errtxt", OPEN_WRITE);
+        }
+        
         try
         {
           any results = xfunc($loop); // No use for results in here yet
@@ -230,8 +251,22 @@ function runTests (any tests, any base)
           date td = getdate() - ts;
           writeln($catalog.system.out, renderf("Duration: {0}", render(td, format=durationFmt)));
 
-          test.success++;
-          success++;
+          if (batch)
+          {
+            close($this.strm);
+  
+            if (length(errtxt) == 0)
+            {
+              test.success++;
+              success++;
+            }
+            else
+            {
+              fail++;
+              writeln($catalog.system.err, errtxt);
+              writeln($catalog.system.err, renderf("Test {0} failed", $loop));
+            }
+          }
         }
         catch
         {
