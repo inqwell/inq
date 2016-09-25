@@ -1,0 +1,60 @@
+/**
+ * Copyright (C) 2016 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+/**
+ * Commonly useful utilities
+ */
+
+package inq.util;
+
+local function toFileProtocol (any f)
+{
+  // Force files to be file:/ protocol. We don't want to
+  // interpret them as cipher text, just treat them as
+  // byte streams
+
+  // Make sure it's a file (could be a string)  
+  file fi = f;
+  
+  fi = "file:" + fi.properties.absolutePath;
+}
+
+function copyFile(any from, any to, boolean append = false)
+{
+  file fi = call toFileProtocol(f = from);
+  file fo = call toFileProtocol(f = to);
+  
+  ioByte i;
+  ioByte o;
+  
+  boolean res = false;
+  
+  try
+  {
+    if (!open(i, fi, OPEN_READ))
+      throw ("Can't open " + fi + " for read");
+      
+    if (append)
+      boolean b = open(o, to, OPEN_APPEND);
+    else
+      boolean b = open(o, to, OPEN_WRITE);
+    
+    if (!b)
+      throw ("Can't open " + fo + " for write");
+    
+    while(any a = readstream(i))
+      writestream(o, a);
+    
+    res = true;
+  }
+  finally
+  {
+    close(i);
+    close(o);
+  }
+  res;
+}
