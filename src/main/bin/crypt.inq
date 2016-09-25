@@ -10,6 +10,9 @@
 // Inq encryption and decryption tool. Uses the prevailing Inq
 // security properties to en/decrypt a set of files.
 
+exec("classpath:///com/inqwell/any/tools/util.inq");
+
+
 local function usage()
 {
   writeln($catalog.system.err, "usage: \i:");
@@ -53,6 +56,14 @@ local function encrypt(any infiles, any outdir)
   
     ifile = $loop;
     
+    file outfilef = absurl(ifile.properties.name, outdir);
+
+    if (ifile.properties.absolutePath == outfilef.properties.absolutePath)
+    {
+      file backTo = outfilef;
+      any outfilef = createtmpfile("crypt", ".tmp");
+    }
+
     // Open the inputs
     if (!open(i, ifile, OPEN_READ))
     {
@@ -60,14 +71,14 @@ local function encrypt(any infiles, any outdir)
       continue;
     }
   
+    any lastMod = ifile.properties.lastModified;
     
     // We can't make files of protocol "gile:", only file: is
     // allowed there, but we can open URLs (which are only strings)
     // with open()
-    file outfilef = absurl(ifile.properties.name, outdir);
     any outfile = "gile:" + outfilef.properties.path;
     
-    writeln($catalog.system.out, "Output file is " + outfile);
+    writeln($catalog.system.out, "Output file is " + (backTo ? backTo : outfilef));
   
     // Open the output stream and write the input to it
     open(o, outfile, OPEN_WRITE);
@@ -77,9 +88,15 @@ local function encrypt(any infiles, any outdir)
     close(i);
     close(o);
 
+    if (backTo)
+    {
+      call inq.util:copyFile(from = outfilef, to = backTo);
+      deletefile(outfile);
+      outfilef = backTo;
+    }
+    
     // Preserve mod time
-    outfilef.properties.lastModified =
-      ifile.properties.lastModified;
+    outfilef.properties.lastModified = lastMod;
   }
 }
 
@@ -103,16 +120,24 @@ local function decrypt(any infiles, any outdir)
     // with open()
     any infile = "gile:" + ifilef.properties.path;
 
+    file outfile = absurl(ifilef.properties.name, outdir);
+
+    if (ifilef.properties.absolutePath == outfile.properties.absolutePath)
+    {
+      file backTo = outfile;
+      any outfile = createtmpfile("crypt", ".tmp");
+    }
+
     // Open the inputs
     if (!open(i, infile, OPEN_READ))
     {
       writeln($catalog.system.err, "Can't open " + ifile);
       continue;
     }
-  
-    file outfile = absurl(ifilef.properties.name, outdir);
-    
-    writeln($catalog.system.out, "Output file is " + outfile);
+
+    any lastMod = ifilef.properties.lastModified;
+
+    writeln($catalog.system.out, "Output file is " + (backTo ? backTo : outfile));
   
     // Open the output stream and write the input to it
     open(o, outfile, OPEN_WRITE);
@@ -122,9 +147,15 @@ local function decrypt(any infiles, any outdir)
     close(i);
     close(o);
     
+    if (backTo)
+    {
+      call inq.util:copyFile(from = outfile, to = backTo);
+      deletefile(outfile);
+      outfile = backTo;
+    }
+    
     // Preserve mod time
-    outfile.properties.lastModified =
-      ifilef.properties.lastModified;
+    outfile.properties.lastModified = lastMod;
   }
 }
 
@@ -133,3 +164,4 @@ if ($catalog.argsMap.encrypt)
 else
   call decrypt(infiles, outdir);
   
+exit(0);
