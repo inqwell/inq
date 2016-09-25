@@ -51,7 +51,7 @@ INQCOMMONARGS="-Dinq.home=$INQHOME -Djava.util.logging.manager=com.inqwell.any.A
 # VM args to the server. Use whatever you wish
 if [ "$INQSERVERARGS" = "" ]
 then
-  INQSERVERARGS="-Xmx512m"
+  INQSERVERARGS="-Xmx6g"
 fi
 # Add the headless and logging config system properties. Mandatory.
 INQSERVERARGS="$INQSERVERARGS -server -Djava.awt.headless=true -Djava.util.logging.config.file=$INQHOME/etc/server.log.properties"
