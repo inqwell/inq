@@ -56,7 +56,7 @@ public class GileURLConnection extends URLConnection
     // Try to decrypt. If successful open the stream again. Else
     // open a plain one again.
     boolean encrypted = true;
-    byte[] b = new byte[64];
+    byte[] b = new byte[32];
     InputStream is = connection_.getInputStream();
     FileDecryption fd = new FileDecryption();
     is = fd.decrypt(is);
