@@ -120,6 +120,22 @@ public class AnyURL extends    AnyObject
 	  
     URL base = bu.getURL();
     
+    if (this.getURL() != null && !this.getURL().getProtocol().equals(base.getProtocol()))
+    {
+    	// Align the base URL's protocol to that of this or we
+    	// get nowhere. To handle resolving relative gile: against file:
+    	// but would in fact allow the resolution of any protocol
+    	// against any other.
+    	try
+			{
+				base = new URL(base.toString().replaceFirst(base.getProtocol(), this.getURL().getProtocol()));
+			}
+    	catch (MalformedURLException e)
+			{
+				throw new RuntimeContainedException(e);
+			}
+    }
+    
     String s = this.toString();
     
     // For windows paths that begin like C:\... it is a
