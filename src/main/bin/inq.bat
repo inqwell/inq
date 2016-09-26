@@ -1,4 +1,4 @@
-@echo off
+rem @echo off
 rem Copyright 2006 Inqwell Ltd
 rem
 rem
@@ -37,7 +37,7 @@ set INQCOMMONARGS=-Dinq.home=%INQHOME% -Djava.util.logging.manager=com.inqwell.a
 
 rem ----- Save and set CLASSPATH --------------------------------------------
 set OLD_CLASSPATH=%CLASSPATH%
-set CLASSPATH=%INQHOME%\lib\${project.artifactId}-${project.version}-runtime.jar
+set CLASSPATH=%INQHOME%\lib\inq-runtime.jar
 cd /d "%INQHOME%\lib\endorsed\"
 for %%i in ("*.jar") do call "%INQHOME%\bin\appendcp.bat" "%INQHOME%\lib\endorsed\%%i"
 cd /d %PWD%
@@ -72,16 +72,16 @@ GOTO END
 rem -- Server Startup
 :SERVER
 rem Add the headless and logging config system properties
-if "%INQSERVERARGS%"=="" set INQSERVERARGS=-Xmx512
-set INQSERVERARGS=-server %INQSERVERARGS% -Djava.awt.headless=true -Djava.util.logging.config.file=%INQHOME%/etc/server.log.properties
+rem if "%INQSERVERARGS%"=="" set INQSERVERARGS=-Xmx1024m
+set INQSERVERARGS=-server -Xmx1024m -Djava.awt.headless=true -Djava.util.logging.config.file=%INQHOME%/etc/server.log.properties -Dinq_rsa.pub=%INQHOME%/keys/public.der
 rem Some JDBC drivers, though there are others
 set INQJDBCARGS=-Djdbc.drivers=com.mysql.jdbc.Driver:oracle.jdbc.driver.OracleDriver:com.sybase.jdbc.SybDriver
-%LAUNCHER% -Xmx512m %INQCOMMONARGS% %INQCUSTOM% %INQSERVERARGS% %INQJDBCARGS% com.inqwell.any.server.Server %arg1% %arg2% %arg3% %arg4% %arg5% %arg6% %arg7% %arg8% %arg9% %arg10% %arg11% %arg12%
+%LAUNCHER% %INQSERVERARGS% %INQCOMMONARGS% %INQCUSTOM% -Xms512m %INQJDBCARGS% com.inqwell.any.server.Server %arg1% %arg2% %arg3% %arg4% %arg5% %arg6% %arg7% %arg8% %arg9% %arg10% %arg11% %arg12%
 GOTO END
 
 :CLIENT
-if "%INQCLIENTARGS%"=="" set INQCLIENTARGS=-Xms256
-%LAUNCHER% -Dsun.java2d.noddraw=true %INQCOMMONARGS% %INQCUSTOM% %INQCLIENTARGS%  com.inqwell.any.tools.AnyClient %arg1% %arg2% %arg3% %arg4% %arg5% %arg6% %arg7% %arg8% %arg9% %arg10% %arg11% %arg12%
+if "%INQCLIENTARGS%"=="" set INQCLIENTARGS="-Xms256m"
+%LAUNCHER% -Dsun.java2d.noddraw=true %INQCOMMONARGS% %INQCUSTOM% -Xms256m  com.inqwell.any.tools.AnyClient %arg1% %arg2% %arg3% %arg4% %arg5% %arg6% %arg7% %arg8% %arg9% %arg10% %arg11% %arg12%
 GOTO END
 
 :LOADSERVER
