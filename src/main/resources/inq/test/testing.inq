@@ -267,6 +267,11 @@ function runTests (any tests, any base, boolean batch = false)
               writeln($catalog.system.err, renderf("Test {0} failed", $loop));
             }
           }
+          else
+          {
+            test.success++;
+            success++;
+          }
         }
         catch
         {
