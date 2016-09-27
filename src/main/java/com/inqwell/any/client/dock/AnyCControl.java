@@ -159,11 +159,13 @@ public class AnyCControl extends AnyObject
 
   public void removeDockable(AnySingleCDockable dockable)
   {
+    untrackLayout(dockable);
     getCControl().removeDockable(dockable.getDefaultSingleCDockable());
   }
 
   public void removeDockable(AnyMultipleCDockable dockable)
   {
+    untrackLayout(dockable);
     getCControl().removeDockable(dockable.getDefaultMultipleCDockable());
   }
 
@@ -176,6 +178,11 @@ public class AnyCControl extends AnyObject
   public void trackLayout(AnyCDockable dockable)
   {
     dockable.getCDockable().addCDockableLocationListener(trackLayout__);
+  }
+
+  public void untrackLayout(AnyCDockable dockable)
+  {
+    dockable.getCDockable().removeCDockableLocationListener(trackLayout__);
   }
 
   public void saveLayout(Map m)

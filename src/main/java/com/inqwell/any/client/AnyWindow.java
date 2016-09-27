@@ -60,6 +60,7 @@ import com.inqwell.any.beans.Facade;
 import com.inqwell.any.beans.WindowF;
 import com.inqwell.any.client.dock.AnyCControl;
 import com.inqwell.any.client.dock.AnyCDockable;
+import com.inqwell.any.client.dock.AnyMultipleCDockable;
 import com.inqwell.any.client.swing.InqWindow;
 import com.inqwell.any.client.swing.SwingInvoker;
 
@@ -567,6 +568,7 @@ public class AnyWindow extends    AnyComponent
       WindowF w = (WindowF)i.next();
       w.dispose(false);
     }
+    AnyMultipleCDockable.clearFactory();
   }
   
   private boolean isChild(Composite w)
