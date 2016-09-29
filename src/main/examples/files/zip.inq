@@ -1,0 +1,50 @@
+#! /bin/inq -shebang
+
+/**
+ * Copyright (C) 2011 Inqwell Ltd
+ *
+ * You may distribute under the terms of the Artistic License, as specified in
+ * the README file.
+ */
+
+ioZip zip;
+ioByte b;
+
+// Add the file to the zip stream using the given path
+local function zipFile(any zstrm, any f, any p, any b)
+{
+  any zipEntry.name = p;
+  any zipEntry.file = f;
+  zstrm.properties.zipEntry = zipEntry;
+  if (open(b, f, OPEN_READ))
+  {
+    while(any a = readstream(b))
+      writestream(zstrm, a);
+    
+    close(b);
+  }
+  else
+    writeln($catalog.system.out, "Can't open " + f);
+}
+
+// Using absurl with one argument bases the given (relative) url
+// against the current script. "test.csv" as-is bases against cwd.
+// Using absurl makes running scripts as unit tests easier.
+any u = absurl("test.csv");
+
+if (open(zip, absurl("test.zip"), OPEN_WRITE))
+{
+  writeln($catalog.system.out, "Opened test.zip");
+  file f = absurl("test.csv");
+  call zipFile(zstrm = zip, f, p = "path/to/file/test.csv", b);
+    
+  file f = absurl("image_0460.JPG");
+  call zipFile(zstrm = zip, f, p = "path/to/elsewhere/" + f.properties.name, b);
+
+  close(zip);
+}
+else
+{
+  writeln($catalog.system.out, "Can't open test.zip");
+}
+
