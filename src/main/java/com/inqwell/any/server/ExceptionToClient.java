@@ -14,6 +14,11 @@
 
 package com.inqwell.any.server;
 
+import java.io.CharArrayWriter;
+import java.io.PrintWriter;
+import java.util.logging.LogManager;
+import java.util.logging.Logger;
+
 import com.inqwell.any.*;
 import com.inqwell.any.channel.*;
 
@@ -30,7 +35,10 @@ public class ExceptionToClient extends    AbstractExceptionHandler
 
 	private AnyFuncHolder.FuncHolder f_;
 	
-	public ExceptionToClient(OutputChannel oc)
+  private static     LogManager lm = LogManager.getLogManager();
+  private static     Logger l = lm.getLogger("inq");
+
+  public ExceptionToClient(OutputChannel oc)
 	{
 		oc_ = oc;
 	}
@@ -75,6 +83,8 @@ public class ExceptionToClient extends    AbstractExceptionHandler
 	  
 		try
 		{
+			l.severe(e.getMessage());
+			l.severe(getStackTrace(e));
 			oc_.write (e);
 			oc_.flushOutput();
 		}
@@ -94,6 +104,8 @@ public class ExceptionToClient extends    AbstractExceptionHandler
     
 		try
 		{
+			l.severe(e.getMessage());
+			l.severe(getStackTrace(e));
 			oc_.write (e);
 			oc_.flushOutput();
 		}
@@ -104,4 +116,11 @@ public class ExceptionToClient extends    AbstractExceptionHandler
 		}
 	}
 
+	private String getStackTrace(ExceptionI e)
+	{
+    CharArrayWriter cw;
+    PrintWriter pw = new PrintWriter(cw = new CharArrayWriter());
+    e.printStackTrace(pw);
+    return cw.toString();
+	}
 }
