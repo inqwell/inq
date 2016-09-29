@@ -125,6 +125,7 @@ import com.inqwell.any.io.AbstractStream;
 import com.inqwell.any.io.NativeStream;
 import com.inqwell.any.io.XMLStream;
 import com.inqwell.any.io.XMLXStream;
+import com.inqwell.any.io.ZipStream;
 import com.inqwell.any.io.PrintStream;
 import com.inqwell.any.io.FixedFieldStream;
 import com.inqwell.any.io.ByteStream;
@@ -2823,6 +2824,7 @@ SKIP :
 | < IOPROPS:          "ioProps" >
 | < IOXML:            "ioXML" >
 | < IOXMLX:           "ioXMLX" >
+| < IOZIP:            "ioZip" >
 | < IOMQ:             "ioMq" >
 | < MQCRCONN:         "mqcreateconnection" >
 | < MQCRSESS:         "mqcreatesession" >
@@ -9946,6 +9948,7 @@ AbstractStream MakeStream() :
   | "ioPrint"  { a = new PrintStream();  }
   | "ioXML"    { a = new XMLStream();  }
   | "ioXMLX"   { a = new XMLXStream();  }
+  | "ioZip"    { a = new ZipStream();  }
   | "ioFixed"  { a = new FixedFieldStream();  }
   | "ioByte"   { a = new ByteStream();  }
   | "ioCSV"    { a = new CSVStream();  }
