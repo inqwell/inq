@@ -7,12 +7,17 @@
 
 package com.inqwellx;
 
+import com.inqwell.any.AbstractComposite;
 import com.inqwell.any.AbstractValue;
 import com.inqwell.any.Any;
+import com.inqwell.any.Call;
+import com.inqwell.any.LocateNode;
 import com.inqwell.any.Map;
 
 public class Configurator
 {
+  static private Any which__      = AbstractValue.flyweightString("which");
+
   static private Any xylinq__     = AbstractValue.flyweightString("xylinq");
   static private Any inq__        = AbstractValue.flyweightString("inq");
 
@@ -69,14 +74,40 @@ public class Configurator
    */
   static public Any getDatabaseLogin(Map argsMap, Any id)
   {
-    if (id.equals(xylinq__))
-      return mXylinqDb__;
-    else if (id.equals(inq__))
-      return mInqDb__;
+//    if (id.equals(xylinq__))
+//      return mXylinqDb__;
+//    else if (id.equals(inq__))
+//      return mInqDb__;
     
-    return null;
+    return getDbLogin(id);
   }
   
+  static public Any getDbPwd()
+  {
+  	return getPwd();
+  }
+    
+  static private Any getPwd()
+  {
+    Call fetchDbPwd = new Call(new LocateNode("$catalog.xy.test.exprs.fetchDbPwd"));
+
+		Any ret = Call.call(fetchDbPwd, null);
+
+		return ret;
+	}
+
+  static private Any getDbLogin(Any which)
+  {
+    Call fetchLogins = new Call(new LocateNode("$catalog.xy.test.exprs.fetchLogins"));
+
+		Map args = AbstractComposite.simpleMap();
+		args.add(which__, which);
+
+		Any ret = Call.call(fetchLogins, args);
+
+		return ret;
+	}
+
   /**
    * Returns a JMS Connection Factory object. This (default) implementation
    * uses the Sun GlassFish Message Queue 4.4 specific connection factory
