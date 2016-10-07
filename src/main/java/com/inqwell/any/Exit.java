@@ -38,10 +38,12 @@ public class Exit extends    AbstractFunc
 	private static final long serialVersionUID = 1L;
 	
 	private Any exitStatus_;
+	private BooleanI vmExit_;
 
-	public Exit(Any exitStatus)
+	public Exit(Any exitStatus, BooleanI vmExit)
 	{
     exitStatus_ = exitStatus;
+    vmExit_     = vmExit;
 	}
 
 	public Any exec(Any a) throws AnyException
@@ -101,6 +103,10 @@ public class Exit extends    AbstractFunc
   
   private void terminateProcess(Any a, IntI status) throws AnyException
   {
+  	// If vmExit_ is TRUE then just exit anyway
+  	if (vmExit_ != null && vmExit_.getValue())
+	    System.exit(status.getValue());
+
     // Server. Terminate the calling process gracefully by closing its
     // input channel, setting any status at $process.status.
   	
