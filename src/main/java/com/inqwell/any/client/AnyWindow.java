@@ -38,6 +38,7 @@ import javax.swing.WindowConstants;
 import com.inqwell.any.AbstractComposite;
 import com.inqwell.any.AbstractValue;
 import com.inqwell.any.Any;
+import com.inqwell.any.AnyBoolean;
 import com.inqwell.any.AnyException;
 import com.inqwell.any.AnyInt;
 import com.inqwell.any.AnyRuntimeException;
@@ -280,7 +281,7 @@ public class AnyWindow extends    AnyComponent
   
   public void inqExit()
   {
-    Exit exit = new Exit(new ConstInt(0));
+    Exit exit = new Exit(new ConstInt(0), AnyBoolean.FALSE);
     Process p = Globals.getProcessForCurrentThread();
     exit.setTransaction(p.getTransaction());
     try
