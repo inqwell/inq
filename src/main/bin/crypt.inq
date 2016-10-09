@@ -26,12 +26,16 @@ local function usage()
 // Must be one of enc or dec
 if (($catalog.argsMap.encrypt && $catalog.argsMap.decrypt)
     || (!$catalog.argsMap.encrypt && !$catalog.argsMap.decrypt))
+  call usage();
 
-// Must supply -out and -file command line arguments:
-// what we're encrypting and where to write the o/p
+// Must supply -file command line argument:
+// what we're de/encrypting
 if (!$catalog.argsMap.file)
   call usage();
 
+// -out is optional. If supplied the directory where the output
+// files will be written. If not, overwrite input with output.
+// Either way modification times are preserved.
 if ($catalog.argsMap.out)
   file outdir = $catalog.argsMap.out;
 

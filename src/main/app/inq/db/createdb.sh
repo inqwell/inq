@@ -32,7 +32,7 @@ validateArgs()
 {
   if [ "${ACTION}" = "" ]
   then
-    echo "Specify action with -a create|loadtest" 1>&2
+    echo "Specify action with -a create|loadtest|password" 1>&2
     exit 1
   fi
 
@@ -60,8 +60,14 @@ validateArgs()
     exit 1
   fi
 
+  if [ "$ACTION" = "password" -a "$USERPASSWORD" = "" ]
+  then
+    echo "No user password specified" 1>&2
+    exit 1
+  fi
+
   validateList "$VENDOR" "mysql oracle" "Not a valid DB vendor"
-  validateList "$ACTION" "create loadtest" "Not a valid action"
+  validateList "$ACTION" "create loadtest password" "Not a valid action"
 }
 
 createDb()
@@ -85,6 +91,17 @@ grant all on $DBNAME.* to 'inq'@'localhost.localdomain' identified by 'inq123';
   fi
 }
 
+alterPwd()
+{ 
+  typeset p=$(echo \'"$USERPASSWORD"\')
+
+  $MYSQL << !EOF
+ALTER USER 'inq'@'localhost' IDENTIFIED BY $p;
+ALTER USER 'inq'@'%' IDENTIFIED BY $p;
+ALTER USER 'inq'@'localhost.localdomain' IDENTIFIED BY $p;
+!EOF
+}
+
 loadTest()
 {
   echo "Loading the test static data...."
@@ -101,17 +118,19 @@ loadTest()
 USAGE=$'[-?\n@(#)$Id: 1.0]'
 USAGE+="[-author?tom.sanders@inqwell.com]"
 USAGE+="[+NAME?$0 -- Create database for specific database vendor]"
-USAGE+="[+DESCRIPTION?Create DB, load with test data"
+USAGE+="[+DESCRIPTION?Create DB, load with test data]"
 #       -a, --action action to perform
-USAGE+="[a:action?action]:[The action to perform, one of create|loadtest]"
+USAGE+="[a:action?action]:[The action to perform, one of create|loadtest|password]"
 #       -v, --vendor db vendor
 USAGE+="[v:vendor?vendor]:[The database vendor, presently mysql|oracle]"
 #       -n, --name database name 
 USAGE+="[n:name?DB_Name]:[The database name]"
-#       -u, --user SQL server user name
-USAGE+="[u:user?User]:[SQL server user name]"
-#       -p, --password SQL server password
-USAGE+="[p:password?Password]:[SQL server password]"
+#       -u, --user SQL server root user name
+USAGE+="[u:user?User]:[SQL server root user name]"
+#       -p, --password SQL server root password
+USAGE+="[p:password?Password]:[SQL server root password]"
+#       -q, --userpassword SQL server root password
+USAGE+="[q:userpassword?Password]:[SQL server user password]"
 #       -h, --man
 USAGE+="[h:help?Help]"
 
@@ -130,6 +149,8 @@ do
                 ;;
         p)      PASSWORD=${OPTARG}
                 ;;
+        q)      USERPASSWORD=${OPTARG}
+                ;;
         h)      $0 --man
                 exit 0
                 ;;
@@ -144,6 +165,8 @@ case ${ACTION} in
   create)    createDb
              ;;
   loadtest)  loadTest
+             ;;
+  password)  alterPwd
              ;;
 esac
 

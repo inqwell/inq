@@ -15,6 +15,8 @@
 
 package com.inqwell.any.io;
 
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -23,6 +25,16 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.net.UnknownServiceException;
+import java.security.GeneralSecurityException;
+import java.security.InvalidKeyException;
+import java.security.KeyFactory;
+import java.security.PublicKey;
+import java.security.spec.X509EncodedKeySpec;
+
+import javax.crypto.Cipher;
+import javax.crypto.CipherInputStream;
+import javax.crypto.CipherOutputStream;
+import javax.crypto.spec.SecretKeySpec;
 
 import com.inqwell.any.Any;
 import com.inqwell.any.AnyException;
@@ -39,6 +51,7 @@ import com.inqwell.any.Map;
 import com.inqwell.any.Process;
 import com.inqwell.any.PropertyAccessMap;
 import com.inqwell.any.RuntimeContainedException;
+import com.inqwell.any.io.AbstractStream.FileDecryption;
 import com.inqwell.any.net.GileURLConnection;
 import com.inqwell.any.net.PipedURLConnection;
 import com.inqwell.any.net.PlainSocketURLConnection;
@@ -62,6 +75,8 @@ public abstract class AbstractStream extends    PropertyAccessMap
   private   URLConnection urlc_;
 
   private transient Map  propertyMap_;
+  
+  private boolean isCipher_;
 
   private static    Any  tiedStream__ = new ConstString("tiedStream__");
 
@@ -310,6 +325,11 @@ public abstract class AbstractStream extends    PropertyAccessMap
     else
       notOpenedRead();
   }
+  
+  public void setCipherText(boolean encrypt)
+  {
+  	isCipher_ = encrypt;
+  }
 
   protected void doCopyFrom(Any a)
   {
@@ -409,6 +429,12 @@ public abstract class AbstractStream extends    PropertyAccessMap
               (uc instanceof StreamURLConnection))
           {
             istream_ = getInputStream(uc);
+
+            if (isCipher_)
+            {
+              FileDecryption fd = new FileDecryption();
+              istream_ = fd.decrypt(istream_);
+            }
             
             if (uc instanceof StreamURLConnection)
             {
@@ -416,12 +442,24 @@ public abstract class AbstractStream extends    PropertyAccessMap
             }
           }
         }
+        
+        if (isCipher_)
+        {
+          FileDecryption fd = new FileDecryption();
+          ostream_ = fd.encrypt(ostream_);
+        }
 			}
 			else
 			{
 				InputStream istream = getInputStream(uc);
         close();
         istream_ = istream;
+        
+        if (isCipher_)
+        {
+          FileDecryption fd = new FileDecryption();
+          istream_ = fd.decrypt(istream_);
+        }
 
         // If its a piped or socket stream then get the input one at
         // the same time.
@@ -430,6 +468,12 @@ public abstract class AbstractStream extends    PropertyAccessMap
             (uc instanceof StreamURLConnection))
         {
           ostream_ = getOutputStream(uc, mode);
+          
+          if (isCipher_)
+          {
+            FileDecryption fd = new FileDecryption();
+            ostream_ = fd.encrypt(ostream_);
+          }
           
           if (uc instanceof StreamURLConnection)
           {
@@ -552,5 +596,124 @@ public abstract class AbstractStream extends    PropertyAccessMap
 	private InputStream getInputStream(URLConnection uc) throws IOException
 	{
     return uc.getInputStream();
+	}
+
+	static public class FileDecryption
+	{
+
+		public static final int	AES_Key_Size = 128;
+
+		/**
+		 * String to hold name of the public key file.
+		 */
+		public static final String PUBLIC_KEY_FILE	= System.getProperty("inq_rsa.pub");
+
+		/**
+		 * String to hold name of the AES key file.
+		 */
+		public static final String AES_KEY_FILE	= PUBLIC_KEY_FILE + ".aes"; // System.getProperty("inq.aes");
+
+		private Cipher									pkCipher, aesCipher;
+		private byte[]									aesKey;
+		private SecretKeySpec						aeskeySpec;
+
+		/**
+		 * Constructor: creates ciphers
+		 */
+		public FileDecryption()
+		{
+			if (PUBLIC_KEY_FILE == null || AES_KEY_FILE == null)
+				throw new AnyRuntimeException("No public key specified");
+			
+			try
+			{
+				// create RSA public key cipher
+  			pkCipher = Cipher.getInstance("RSA");
+  			// create AES shared key cipher
+  			aesCipher = Cipher.getInstance("AES");
+			}
+			catch (GeneralSecurityException e)
+			{
+				throw new RuntimeContainedException(e);
+			}
+		}
+
+		/**
+		 * Decrypts an AES key from a file using an RSA public key
+		 */
+		public void loadKey(File in, File publicKeyFile)
+				throws GeneralSecurityException, IOException
+		{
+			// read private key to be used to decrypt the AES key
+			byte[] encodedKey = new byte[(int) publicKeyFile.length()];
+			FileInputStream fis = new FileInputStream(publicKeyFile);
+			fis.read(encodedKey);
+			fis.close();
+
+			// create public key
+			X509EncodedKeySpec publicKeySpec = new X509EncodedKeySpec(encodedKey);
+			KeyFactory kf = KeyFactory.getInstance("RSA");
+			PublicKey pk = kf.generatePublic(publicKeySpec);
+
+			// read AES key
+			pkCipher.init(Cipher.DECRYPT_MODE, pk);
+			aesKey = new byte[AES_Key_Size / 8];
+			CipherInputStream is = new CipherInputStream(new FileInputStream(in),
+					pkCipher);
+			is.read(aesKey);
+			aeskeySpec = new SecretKeySpec(aesKey, "AES");
+			is.close();
+		}
+
+		/**
+		 * Given a stream, returns a stream that will decrypt the input source.
+		 */
+		public InputStream decrypt(InputStream cipherTextStream) throws IOException
+		{
+			try
+			{
+  			loadKey(new File(AES_KEY_FILE), new File(PUBLIC_KEY_FILE));
+  			
+  			aesCipher.init(Cipher.DECRYPT_MODE, aeskeySpec);
+  
+  			CipherInputStream is = new CipherInputStream(cipherTextStream, aesCipher);
+  			
+  			return is;
+			}
+			catch (InvalidKeyException e)
+			{
+				throw new RuntimeContainedException(e);
+			}
+			catch (GeneralSecurityException e)
+			{
+				throw new RuntimeContainedException(e);
+			}
+		}
+
+		/**
+		 * Encrypts and then copies the contents of a given file.
+		 */
+		public OutputStream encrypt(OutputStream plainTextStream) throws IOException
+		{
+			try
+			{
+  			loadKey(new File(AES_KEY_FILE), new File(PUBLIC_KEY_FILE));
+  
+  			aesCipher.init(Cipher.ENCRYPT_MODE, aeskeySpec);
+  
+  			CipherOutputStream os = new CipherOutputStream(plainTextStream, aesCipher);
+  			
+  			return os;
+			}
+			catch (InvalidKeyException e)
+			{
+				throw new RuntimeContainedException(e);
+			}
+			catch (GeneralSecurityException e)
+			{
+				throw new RuntimeContainedException(e);
+			}
+		}
+
 	}
 }

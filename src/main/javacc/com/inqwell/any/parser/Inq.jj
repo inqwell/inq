@@ -5775,14 +5775,14 @@ Any Compile() :
 }
 
 Any Exit() :
-{ Any exitStatus = null; int line; }
+{ Any exitStatus = null; BooleanI vmExit = null; int line; }
 {
   "exit"  { line = token.beginLine; }
   "("
-  [ exitStatus = Expression() ]
+  [ exitStatus = Expression() [ "," vmExit = BooleanLiteralAsAny() ] ]
   ")"
   {
-    Exit e = new Exit(exitStatus);
+    Exit e = new Exit(exitStatus, vmExit);
     e.setLineNumber(line);
     return e;
   }
