@@ -234,6 +234,18 @@ public class Call extends    AbstractFunc
 			f.setTransaction(t);
 			if (af != null)
 			{
+				// By logging function entry before pushing the call stack entry
+				// the log message conveniently has the function/line we came from :)
+        logged = isLogged(af.getPackage(), af.getName());
+  	    if (logged)
+  	    {
+          CallStackEntry se = (CallStackEntry)t.getCallStack().peek();
+          t.setLineNumber(se.getLineNumber());
+
+          // Log args going in
+  	    	l.log(Level.INFO, "Entering {0} args: {1}", new Object[] {af.getFQName(), args});
+  	    }
+
         // Make a new stack entry. The top-most entry doesn't carry any
 			  // line number until CallStackEntry.setLineNumber is called, for
         // example in ExceptionI.fillInCallStack()
@@ -247,13 +259,6 @@ public class Call extends    AbstractFunc
         Any funcFQName = af.getFQName();
         if (funcFQName != null)
         	t.setExecFQName(funcFQName);
-
-        logged = isLogged(af.getPackage(), af.getName());
-  	    if (logged)
-  	    {
-  	    	// Log args going in
-  	    	l.log(Level.INFO, "Entering {0} args: {1}", new Object[] {af.getFQName(), args});
-  	    }
 
       }
       else
@@ -280,13 +285,13 @@ public class Call extends    AbstractFunc
       
 			if (af != null || fh != null)
       {
-			  t.getCallStack().pop();
-
 			  if (logged)
   	    {
   	    	// Log return coming out
   	    	l.log(Level.INFO, "Leaving {0} ret: {1}", new Object[] {af.getFQName(), ret});
   	    }
+
+			  t.getCallStack().pop();
       }
 		}
 		catch(ReturnException re)
