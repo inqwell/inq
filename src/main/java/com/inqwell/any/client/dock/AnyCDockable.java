@@ -9,6 +9,7 @@ package com.inqwell.any.client.dock;
 
 import java.awt.Component;
 import java.awt.Container;
+import java.awt.Dialog;
 import java.awt.Dimension;
 import java.awt.Frame;
 import java.awt.Window;
@@ -269,8 +270,11 @@ public abstract class AnyCDockable extends    AnyView
       	d_.setVisible(true);
       	getDefaultCDockable().toFront();
       	Window w = SwingUtilities.getWindowAncestor(getDefaultCDockable().getContentPane());
-      	Frame f = (Frame)w;
-      	f.setState(Frame.NORMAL);
+      	if (w instanceof Frame)
+      	{
+      	  Frame f = (Frame)w;
+      	  f.setState(Frame.NORMAL);
+      	}
       	w.setVisible(true);
       	w.toFront();
         if (withResize)
