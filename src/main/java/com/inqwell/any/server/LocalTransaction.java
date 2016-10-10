@@ -432,6 +432,9 @@ public abstract class LocalTransaction extends    TwoPhaseTransaction
   
   protected Any getActiveObject(Any k)
   {
+    if (p1Alt_ != null && p1Alt_.contains(k))
+    	return p1Alt_.get(k);
+    
     // must be present or will throw
     return participants_.get(k);
   }
