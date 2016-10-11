@@ -93,12 +93,20 @@ grant all on $DBNAME.* to 'inq'@'localhost.localdomain' identified by 'inq123';
 
 alterPwd()
 { 
+  # Sets the password of the inq login in the inq database.
+  # Since the inq user is benign as regards security concerns
+  # of application databases we use it to support server
+  # shutdown also.
   typeset p=$(echo \'"$USERPASSWORD"\')
-
+  
   $MYSQL << !EOF
 ALTER USER 'inq'@'localhost' IDENTIFIED BY $p;
 ALTER USER 'inq'@'%' IDENTIFIED BY $p;
 ALTER USER 'inq'@'localhost.localdomain' IDENTIFIED BY $p;
+
+GRANT SHUTDOWN ON *.* TO 'inq'@'localhost';
+GRANT SHUTDOWN ON *.* TO 'inq'@'%';
+GRANT SHUTDOWN ON *.* TO 'inq'@'localhost.localdomain';
 !EOF
 }
 
