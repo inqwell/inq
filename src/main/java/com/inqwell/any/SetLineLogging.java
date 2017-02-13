@@ -19,18 +19,20 @@ public class SetLineLogging extends    AbstractFunc
 	private Any execFQName_;
 	private int start_;
 	private int end_;
+	private AnyFuncHolder.FuncHolder expr_;
 		
-	public SetLineLogging(Any execFQName, int start, int end)
+	public SetLineLogging(Any execFQName, int start, int end, AnyFuncHolder.FuncHolder expr)
 	{
 		start_ = start;
 		end_   = end;
+		expr_  = expr;
 
 		execFQName_ = execFQName;
 	}
 	
 	public Any exec(Any a) throws AnyException
 	{
-    EvalExpr.setLineLogging(execFQName_, start_, end_);
+    EvalExpr.setLineLogging(execFQName_, start_, end_, expr_);
     
 		return AnyNull.instance();
 	}
