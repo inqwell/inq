@@ -48,20 +48,22 @@ public interface Plugin
   public void stop();
   
   /**
-   * Starts an Inq transaction. If called by the external environment,
-   * all calls to <code>create()</code> and <code>modify()</code>
+   * Starts a transaction. If called by the external environment,
+   * all calls to {@link #create(Map)}, {@link #modify(Map)}
+   * and {@link #delete(Map)}
    * have their effects deferred until the transaction is committed
-   * by calling <code>end()</code>.
+   * by calling {@link #end(boolean)}
    * <p>
-   * If <code>create()</code> or <code>modify()</code> throw an
-   * exception while an transaction is open then all actions
+   * If these methods throw an
+   * exception while a transaction is open then all actions
    * hitherto are discarded. The external environment may continue
-   * with further actions and if there no exceptions are encountered
-   * these will be committed when <code>end()</code> is called.
+   * with further actions and if no exceptions are encountered
+   * these will be committed when {@link #end(boolean)} is called.
    * <p>
-   * If <code>begin()</code> is not called then actions submitted
-   * through <code>create()</code> and <code>modify()</code> are
-   * committed after each call.
+   * If <code>begin()</code> is not called then actions submitted are
+   * committed after each invocation of those methods. <code>begin()</code>
+   * cannot be called more than once before {@link #end(boolean)} is called
+   * to close the transaction.
    * @throws AnyRuntimeException if a transaction is already open.
    */
   public void begin();
@@ -75,7 +77,7 @@ public interface Plugin
    * @throws AnyRuntimeException if any kind of error occurs in the Inq
    * environment
    */
-  public String create(Map m);
+  public String create(Map<String, String> m);
   
   /**
    * Called by the external system to indicate that the entity
@@ -85,7 +87,7 @@ public interface Plugin
    * @throws AnyRuntimeException if any kind of error occurs in the Inq
    * environment
    */
-  public void modify(Map m);
+  public void modify(Map<String, String> m);
   
   /**
    * Called by the external system to indicate that the entity
@@ -97,16 +99,16 @@ public interface Plugin
    * @throws AnyRuntimeException if any kind of error occurs in the Inq
    * environment
    */
-  public boolean delete(Map m);
+  public boolean delete(Map<String, String> m);
   
   /**
    * Commits the transaction opened by <code>begin()</code>. If
    * no transaction was opened this method has no effect.
    * <p>
-   * <bold>Note:</bold> If <code>begin</code> is called and later
+   * <bold>Note:</bold> If <code>begin()</code> is called and later
    * an exception is thrown while submitting actions
    * to <code>create()</code> or <code>modify()</code> then
-   * the external environment must still call <code>end()</code>
+   * the external environment must still call <code>end(boolean)</code>
    * to tidy the transaction state.
    * @param commit if true then the transaction (if open) is committed.
    * Otherwise it is rolled back.
