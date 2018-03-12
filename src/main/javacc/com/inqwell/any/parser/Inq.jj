@@ -4182,6 +4182,7 @@ Any Operand() :
   | a = Round()
   | a = GarbageCollect()
   | a = Null()
+  | a = KeyCfg(null)
   )
   {
     return a;
@@ -11201,7 +11202,7 @@ void KeyExists(KeyDef key) :
   }
 }
 
-void KeyCfg(KeyDef key) :
+Any KeyCfg(KeyDef key) :
 { Any a; }
 {
   "auxcfg"
@@ -11218,8 +11219,11 @@ void KeyCfg(KeyDef key) :
     {
       throw new RuntimeContainedException(e);
     }
-    if (a != null)
+    if (a != null &&
+        key != null)    // This is to call this form directly
       key.setAuxInfo(a);
+
+    return a;
   }
 }
 
