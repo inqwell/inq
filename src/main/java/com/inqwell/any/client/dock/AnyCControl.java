@@ -12,8 +12,8 @@ import bibliothek.gui.dock.common.MultipleCDockableFactory;
 import bibliothek.gui.dock.common.event.CDockableLocationEvent;
 import bibliothek.gui.dock.common.event.CDockableLocationListener;
 import bibliothek.gui.dock.common.theme.ThemeMap;
-import bibliothek.gui.dock.station.screen.DefaultScreenDockWindowFactory;
-import bibliothek.gui.dock.station.screen.DefaultScreenDockWindowFactory.Kind;
+import bibliothek.gui.dock.station.screen.window.DefaultScreenDockWindowFactory;
+import bibliothek.gui.dock.station.screen.window.DefaultScreenDockWindowFactory.Kind;
 import bibliothek.util.xml.XElement;
 import bibliothek.util.xml.XIO;
 
