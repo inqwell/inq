@@ -3298,6 +3298,12 @@ TOKEN:
       | (["0"-"9"])+ (<EXPONENT>)? ["f","F","d","D"] )
   >
 |
+  < BIG_DECIMAL_LITERAL:
+       ("-")? ( (["0"-"9"])+ "." (["0"-"9"])* ["m","M"]
+      | "." (["0"-"9"])+ ["m","M"]
+      | (["0"-"9"])+ ["m","M"] )
+  >
+|
   < #EXPONENT: ["e","E"] (["+","-"])? (["0"-"9"])+ >
 |
   < CHARACTER_LITERAL:
@@ -9651,6 +9657,11 @@ Any LiteralAsAny() :
     return AbstractValue.flyweightConst(a);
   }
   |
+  a = BigDecimalLiteralAsAny()
+  {
+    return a;
+  }
+  |
   a = FloatingLiteralAsAny()
   {
     return a;
@@ -9770,6 +9781,19 @@ Any FloatingLiteralAsAny() :
   }
 }
 
+Any BigDecimalLiteralAsAny() :
+{
+  Any a;
+}
+{
+  <BIG_DECIMAL_LITERAL>
+  {
+    a = new ConstBigDecimal(token.image.substring(0, token.image.length() - 1));
+
+    return AbstractValue.flyweightConst(a);
+  }
+}
+
 Map LiteralMap() :
 { Map m = AbstractComposite.simpleMap(); Any k, v; }
 {
@@ -9787,6 +9811,7 @@ String LiteralAsString() :
 {
   ( <INTEGER_LITERAL>
   | <FLOATING_POINT_LITERAL>
+  | <BIG_DECIMAL_LITERAL>
   | <BOOLEAN_LITERAL>
   ) { return token.image; }
   | <STRING_LITERAL> { return processStringEscapes(token.image.substring(1, token.image.length()-1)); }
