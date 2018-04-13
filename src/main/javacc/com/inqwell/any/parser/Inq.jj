@@ -4820,12 +4820,12 @@ Any Contains() :
 }
 
 Any IndexOf() :
-{ Any container; Any contained; int line; }
+{ Any container; Any contained; Any func = null; int line; }
 {
   "indexof" { line = token.beginLine; }
-  "(" container = Expression() "," contained = Expression() ")"
+  "(" container = Expression() "," contained = Expression() ["," func = Expression() ] ")"
   {
-    IndexOf i = new IndexOf(container, contained);
+    IndexOf i = new IndexOf(container, contained, func);
     i.setLineNumber(line);
     return i;
   }
@@ -7305,16 +7305,25 @@ Any Max() :
 }
 
 Any Min() :
-{ Any op1; Any op2; int line; }
+{ Any    op1;
+  Any    op2;
+  Any    moreItem = null;
+  Array  more     = null;
+  int    line;
+}
 {
   "min" { line = token.beginLine; }
   "("
   op1 = Expression()
   ","
   op2 = Expression()
+  ( "," { if (more == null) more = AbstractComposite.array(); }
+    moreItem = Expression() { more.add(moreItem); }
+  )*
   ")"
   {
-    Func m = new EvalExpr(op1, op2, new Min());
+    //Func m = new EvalExpr(op1, op2, new Min());
+    Func m = new MinOutOf(op1, op2, more);
     m.setLineNumber(line);
     return m;
   }

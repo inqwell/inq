@@ -299,6 +299,7 @@ public class Call extends    AbstractFunc
       t.setLineNumber(lineNumber);
       t.setColumn(column);
       t.setExecURL(execURL);
+      t.setExecFQName(execFQName);
       if (af != null)
       {
         t.getCallStack().pop();
