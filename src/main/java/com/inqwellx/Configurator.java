@@ -14,6 +14,23 @@ import com.inqwell.any.Call;
 import com.inqwell.any.LocateNode;
 import com.inqwell.any.Map;
 
+/**
+ * This class is an example configurator for systems requiring host database
+ * credentials and integration plugins. It is also the default when no
+ * override is provided with the <code>-configurator</code> command line
+ * option to the server.
+ * <p>
+ * A "configurator" is a class containing static methods to provide
+ * information about the environment to an Inq application. The static
+ * methods herein may be called from Inq script as and when the
+ * information is required.
+ * <p>
+ * A system may require such things as database credentials to be stored
+ * securely. Integrators may wish to implement this class to silently
+ * decrypt and return passwords, for example. 
+ * @author tom
+ *
+ */
 public class Configurator
 {
   static private Any which__      = AbstractValue.flyweightString("which");
@@ -47,11 +64,10 @@ public class Configurator
 
   /**
    * Returns a map whose keys are plugin names and values are
-   * the fully-qualified class names of AbstractPlugin extensions
-   * <p>
+   * the fully-qualified class names of {@link com.inqwellx.plugin.AbstractPlugin} extensions.
    * The return type must be a {@link com.inqwell.any.Map} and
-   * classes may use {@link Helpers.makeInqMap()}
-   * and {@link Helpers.convertToInqMap()} as appropriate.
+   * classes may use {@link com.inqwellx.Helpers#makeInqMap()}
+   * and {@link com.inqwellx.Helpers#convertToInqMap(java.util.Map)} as appropriate.
    * @param argsMap Inq environment's command line arguments.
    * @return a {@link com.inqwell.any.Map} describing the plugins
    * or null if there are no plugins configured.
@@ -64,12 +80,14 @@ public class Configurator
   /**
    * Returns a map describing a database connection, consisting of
    * a user name, password and url. The map keys must
-   * be {@link Helpers.USER}, {@link Helpers.PASSWORD}
-   * and {@link Helpers.URL}. The values are strings to be used
+   * be {@link Helpers#USER}, {@link Helpers#PASSWORD}
+   * and {@link Helpers#URL}. The values are strings to be used
    * in the JDBC connection.
-   * @param argsMap Inq environment's command line arguments.
-   * @param id the identifier of the databae connection being requested.
-   * Current valid values are "xylinq" and "inq".
+   * @param argsMap
+   * Inq environment's command line arguments.
+   * @param id
+   * the identifier of the database connection being requested,
+   * for example, <code>"xylinq"</code>.
    * @return
    */
   static public Any getDatabaseLogin(Map argsMap, Any id)
@@ -82,6 +100,11 @@ public class Configurator
     return getDbLogin(id);
   }
   
+  /**
+   * Returns the database administrative password. This method need
+   * not be implemented if there is no need to provide privileged
+   * database access
+   */
   static public Any getDbPwd()
   {
   	return getPwd();

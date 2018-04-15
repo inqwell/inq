@@ -29,6 +29,7 @@ import com.inqwell.any.BooleanI;
 import com.inqwell.any.Call;
 import com.inqwell.any.DefaultPropertyAccessMap;
 import com.inqwell.any.Globals;
+import com.inqwell.any.LocateNode;
 import com.inqwell.any.Plugin;
 import com.inqwell.any.Process;
 import com.inqwell.any.RuntimeContainedException;
@@ -37,7 +38,66 @@ import com.inqwell.any.Transaction;
 
 /**
  * An implementation of {@link com.inqwell.any.Plugin} that provides
- * support for calling back to Inq scripted functions.
+ * support for calling back to Inq scripted functions. Applications
+ * requiring integration with external systems need only extend this
+ * class and implement the {@link com.inqwell.any.Plugin#start(com.inqwell.any.Map)}
+ * and {@link com.inqwell.any.Plugin#stop()} methods.
+ * <p>
+ * This example Inq script will instantiate a plugin (to manage securities) in
+ * the current process:  
+ * <pre>
+ * // Functions for the plugin.
+ * cfunc beginSecurity  = call beginSecurity(),
+ * cfunc createSecurity = call createSecurity(item),
+ * cfunc modifySecurity = call modifySecurity(item),
+ * 
+ * // Instantiate the plugin. This calls the class's 3-argument constructor
+ * any securityPlugin = callmethod(class = "com.mycompany.xylinq.SecuritiesPlugin",
+ *                                 $process,
+ *                                 createSecurity,
+ *                                 modifySecurity);
+ *
+ * // Set the 'begin' function into the plugin
+ * securityPlugin.properties.begin  = beginSecurity;
+ * 
+ * // Call the plugin's start() method. The implementation can perform
+ * // any required initialisation for example establishing a database
+ * // connection to a reference data system. $catalog.argsMap is the
+ * // command line arguments when Inq was started.
+ * callmethod("start",
+ *             instance=securityPlugin,
+ *             $catalog.argsMap);
+ * .
+ * .
+ * function beginSecurity()
+ * {
+ *   // Perform any required setup before processing
+ *   // securities in this transaction
+ * }
+ * .
+ * .
+ * function createSecurity(any item)
+ * {
+ *   // Very simplistic create example. Just create the security
+ *   // in the transaction, but probably all sorts of
+ *   // validation to do.
+ *   any security = new(Security, item);
+ *   create(security);
+ * }
+ * .
+ * .
+ * function modifySecurity(any item)
+ * {
+ *   // At a minimum, just fetch this security and update it
+ *   // with the given value.
+ *   any primaryKey = new(Security.unique, item);
+ *   if (read(Security, primaryKey))
+ *     Security = item;
+ *   else
+ *     throw("No such security " + item);
+ * }
+ * </pre>
+ * Consult any Integration Guide provided by the implementors. 
  * @author Tom
  *
  */
@@ -77,6 +137,13 @@ public abstract class AbstractPlugin extends    DefaultPropertyAccessMap
   
   static private Any item__ = AbstractValue.flyweightString("item");
   
+  /**
+   * Create a plugin that supports entity creation and modification. These
+   * two functions are mandatory.
+   * @param process The Inq process hosting this plugin. 
+   * @param createF The Inq function that will handle entity creations.
+   * @param modifyF The Inq function that will handle entity modifications.
+   */
   protected AbstractPlugin(Any process, Any createF, Any modifyF)
   {
     if (process != null)
@@ -89,6 +156,10 @@ public abstract class AbstractPlugin extends    DefaultPropertyAccessMap
     }
   }
 
+  /**
+   * This constructor is only for dummy environments.
+   * @param process The Inq process hosting this plugin. 
+   */
   protected AbstractPlugin(Any process)
   {
     if (process != null)
@@ -99,6 +170,9 @@ public abstract class AbstractPlugin extends    DefaultPropertyAccessMap
     }
   }
 
+  /**
+   * This constructor is only for dummy environments.
+   */
   protected AbstractPlugin()
   {
   }
@@ -145,7 +219,7 @@ public abstract class AbstractPlugin extends    DefaultPropertyAccessMap
     txnOpen_ = true;
   }
   
-  final public String create(Map m)
+  final public String create(Map<String, String> m)
   {
     if (process_ == null)
     {
@@ -165,7 +239,7 @@ public abstract class AbstractPlugin extends    DefaultPropertyAccessMap
       return callCreate(m).toString();
   }
 
-  final public void modify(Map m)
+  final public void modify(Map<String, String> m)
   {
     if (process_ == null)
     {
@@ -185,7 +259,7 @@ public abstract class AbstractPlugin extends    DefaultPropertyAccessMap
       callModify(m);
   }
   
-  final public boolean delete(Map m)
+  final public boolean delete(Map<String, String> m)
   {
   	boolean b;
   	
@@ -248,48 +322,109 @@ public abstract class AbstractPlugin extends    DefaultPropertyAccessMap
     }
   }
 
-  // Property access
+  /**
+   * Set the Inq expression that will be run when the implementation
+   * calls {@link #create(Map)}. This must be a <code>call</code> statement
+   * to which the given <code>Map</code> will be passed as the single argument.
+   * <p>
+   * This method is intended to be called from Inq script, as described in
+   * this class's javadoc.    
+   * @param f the expression.
+   */
   public void setCreate(Any f)
   {
     AbstractFunc.verifyCall(f);
     createF_ = f;
   }
 
+  /**
+   * Set the Inq expression that will be run when the implementation
+   * calls {@link #modify(Map)}. This must be a <code>call</code> statement
+   * to which the given <code>Map</code> will be passed as the single argument.
+   * <p>
+   * This method is intended to be called from Inq script, as described in
+   * this class's javadoc.    
+   * @param f the expression.
+   */
   public void setModify(Any f)
   {
     AbstractFunc.verifyCall(f);
     modifyF_ = f;
   }
 
+  /**
+   * Set the Inq expression that will be run when the implementation
+   * calls {@link #delete(Map)}. A delete expression is optional; if not
+   * set then {@link AnyRuntimeException} is thrown if the implementation
+   * calls {@link #delete(Map)}.
+   * <p>
+   * The expression must be a <code>call</code> statement
+   * to which the given <code>Map</code> will be passed as the single argument.
+   * <p>
+   * This method is intended to be called from Inq script.    
+   * @param f the expression.
+   */
   public void setDelete(Any f)
   {
     AbstractFunc.verifyCall(f);
     deleteF_ = f;
   }
 
+  /**
+   * Set the Inq expression that will be run when the implementation
+   * calls {@link #begin()}. This expression is optional. If supplied
+   * it must be a <code>call</code> statement, which will be called with
+   * no arguments when (if ever) {@link #begin()} is called.
+   * <p>
+   * This method is intended to be called from Inq script.
+   * @param f the expression.
+   */
   public void setBegin(Any f)
   {
     AbstractFunc.verifyCall(f);
     beginF_ = f;
   }
 
+  /**
+   * Set the Inq expression that will be run when the implementation
+   * calls {@link #end(boolean)}. This expression is optional. If supplied
+   * it must be a <code>call</code> statement, which will be called
+   * with no arguments when (if ever) {@link #end(boolean)} is called.
+   * <p>
+   * This method is intended to be called from Inq script.
+   * @param f the expression.
+   */
   public void setEnd(Any f)
   {
     AbstractFunc.verifyCall(f);
     endF_ = f;
   }
+  
+  /**
+   * A host request to stop a plugin. If plugins should have a finite lifetime
+   * implementations can call this method to release resources within the
+   * application used to manage this plugin.
+   * <p>
+   * Once this method has been called the plugin is no longer viable and any
+   * further method invocations will throw {@link AnyRuntimeException}.
+   */
+  protected final void hostStopPlugin()
+  {
+    Call hostStop = new Call(new LocateNode("$catalog.xy.plugin.hostStopPlugin"));
+    callInq(hostStop, null, false);
+  }
 
-  final protected Any callCreate(Map item)
+  private Any callCreate(Map<String, String> item)
   {
     return callInq(createF_, item, false);
   }
   
-  final protected void callModify(Map item)
+  private void callModify(Map<String, String> item)
   {
     callInq(modifyF_, item, false);
   }
   
-  private Any callInq(Any func, Map item, boolean closeTxn)
+  private Any callInq(Any func, Map<String, String> item, boolean closeTxn)
   {
     if (!process_.isAlive())
     {
@@ -310,29 +445,29 @@ public abstract class AbstractPlugin extends    DefaultPropertyAccessMap
     {
       item_.empty();   // if we want to be safe
       
-      Iterator i = item.keySet().iterator();
+      Iterator<String> i = item.keySet().iterator();
       while (i.hasNext())
       {
         // Key
-        Object k = i.next();
-        k_.setValue(k.toString());
+        String k = i.next();
+        k_.setValue(k);
         
         // Value
-        Object v = item.get(k);
+        String v = item.get(k);
         Any av = item_.getIfContains(k_);
         if (av == null)
         {
           if (v == null)
             av = AnyString.NULL;
           else
-            av = new AnyString(v.toString());
+            av = new AnyString(v);
           
           item_.add(k_.cloneAny(), av);
         }
         else
         {
           StringI s = (StringI)av;
-          s.setValue(v.toString());
+          s.setValue(v);
         }
       }
     }
@@ -358,8 +493,7 @@ public abstract class AbstractPlugin extends    DefaultPropertyAccessMap
    * an {@link com.inqwell.any.Any}, as required for retrieval
    * from an Inq {@link com.inqwell.any.Map}.
    * <p>
-   * <bold>Note:</bold> This method is not thread-safe
-   * with respect to itself or any other method in this class.
+   * <bold>Note:</bold> This method is thread-safe.
    * @param map the map to query
    * @param key the key to be applied
    * @return a {@link java.lang.String} by calling the
@@ -368,8 +502,8 @@ public abstract class AbstractPlugin extends    DefaultPropertyAccessMap
    */
   protected String get(com.inqwell.any.Map map, String key)
   {
-    k_.setValue(key);
-    Any ret = map.getIfContains(k_);
+    AnyString k = new AnyString(key);
+    Any ret = map.getIfContains(k);
     if (ret != null)
       return ret.toString();
     

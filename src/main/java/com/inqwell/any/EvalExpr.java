@@ -83,7 +83,7 @@ public class EvalExpr extends    AbstractFunc
   private static     LogManager lm = LogManager.getLogManager();
   private static     Logger l = lm.getLogger("inq");
 
-  private static boolean find(int line, ArrayList<LineNumberRange> al)
+  private static LineNumberRange find(int line, ArrayList<LineNumberRange> al)
   {
   	for (LineNumberRange l : al)
   	{
@@ -94,12 +94,12 @@ public class EvalExpr extends    AbstractFunc
   		  continue;
   		
   		if (line >= l.start_)
-  			return true;
+  			return l;
   	}
-  	return false;
+  	return null;
   }
   
-  public static boolean isLogged(Any execFQName, int line)
+  public static LineNumberRange isLogged(Any execFQName, int line)
   {
   	ArrayList<LineNumberRange> al = null;
   	
@@ -108,7 +108,12 @@ public class EvalExpr extends    AbstractFunc
   		al = loggedLines__.get(execFQName);
   	}
   	
-  	return (al != null && find(line, al));
+  	LineNumberRange l = null;
+  	
+  	if(al != null)
+      l = find(line, al);
+  	
+  	return l;
   }
   
   public static void clearLineLogging()
@@ -119,7 +124,7 @@ public class EvalExpr extends    AbstractFunc
   	}
   }
   
-  public static void setLineLogging(Any execFQName, int start, int end)
+  public static void setLineLogging(Any execFQName, int start, int end, AnyFuncHolder.FuncHolder f)
   {
   	synchronized(loggedLines__)
   	{
@@ -132,12 +137,12 @@ public class EvalExpr extends    AbstractFunc
     		if (al == null)
     		{
     			al = new ArrayList<LineNumberRange>();
-    			al.add(new LineNumberRange(start, end));
+    			al.add(new LineNumberRange(start, end, f));
     			loggedLines__.put(execFQName, al);
     		}
     		else
     		{
-    			al.add(new LineNumberRange(start, end));
+    			al.add(new LineNumberRange(start, end, f));
     			Collections.sort(al);
     		}
   		}
@@ -220,10 +225,19 @@ public class EvalExpr extends    AbstractFunc
       t.resetResolving();
       
     // Are we logging at this FQName/line number?
-    if (isLogged(t.getExecFQName(), t.getLineNumber()))
+    LineNumberRange ln;
+    if ((ln = isLogged(t.getExecFQName(), t.getLineNumber())) != null)
 		{
-    	l.log(Level.INFO, "Eval: {0}", orig);
-    	l.log(Level.INFO, "Expr: {0}", a);
+    	if (ln.expr_ == null)
+    	{
+    		l.log(Level.INFO, "Eval: {0}", orig);
+    		l.log(Level.INFO, "Expr: {0}", a);
+    	}
+    	else
+    	{
+    		Any msg = ln.expr_.doFunc(t, null, root);
+    		l.log(Level.INFO, msg.toString());
+    	}
 		}
     
     return a;
@@ -428,11 +442,13 @@ public class EvalExpr extends    AbstractFunc
   {
     public final int start_;
     public final int end_;
+    public final AnyFuncHolder.FuncHolder expr_;
     
-    public LineNumberRange(int s, int e)
+    public LineNumberRange(int s, int e, AnyFuncHolder.FuncHolder expr)
     {
     	start_ = s;
     	end_   = e;
+    	expr_  = expr;
     }
 
 		@Override
@@ -446,6 +462,8 @@ public class EvalExpr extends    AbstractFunc
 
 			return 0;
 		}
+		
+		
 		
 		public int hashCode()
 		{

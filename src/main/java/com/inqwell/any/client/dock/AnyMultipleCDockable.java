@@ -70,7 +70,7 @@ public class AnyMultipleCDockable extends AnyCDockable
   
   public static void clearFactory()
   {
-  	factory__ = null;
+  	//factory__ = null;
   }
   
   public AnyMultipleCDockable(Map reference, Call buildGui)

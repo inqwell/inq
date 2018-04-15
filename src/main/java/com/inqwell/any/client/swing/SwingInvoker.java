@@ -109,6 +109,12 @@ public abstract class SwingInvoker implements Runnable
         javax.swing.plaf.FontUIResource f2 =
           new javax.swing.plaf.FontUIResource(f1.deriveFont(f1.getSize2D() + sizeAdjust));
         UIManager.put(key, f2);
+
+//        if (key.equals("Table.font"))
+//        {
+//          Object o = UIManager.get("Table.rowHeight");
+//          System.out.println("Table.rowHeight " + o);
+//        }
       }
     }
   }

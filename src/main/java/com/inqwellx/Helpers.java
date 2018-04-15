@@ -20,8 +20,17 @@ import com.inqwell.any.StringI;
 public class Helpers
 {
   // DB Keys
+	/**
+	 * "user"
+	 */
   static public Any USER     = AbstractValue.flyweightString("user");
+	/**
+	 * "password"
+	 */
   static public Any PASSWORD = AbstractValue.flyweightString("password");
+	/**
+	 * "url"
+	 */
   static public Any URL      = AbstractValue.flyweightString("url");
 
   static public com.inqwell.any.Map makeInqMap()
@@ -29,6 +38,16 @@ public class Helpers
     return AbstractComposite.simpleMap();
   }
   
+  /**
+   * Convert a java.util.Map to an Inq map. This helper function can
+   * be used to convert any {@link java.util.Map} implementation into
+   * an Inq map of the type returned by {@link AbstractComposite#simpleMap}.
+   * Keys and values from the input map are considered to be strings,
+   * that is, their <code>toString</code> method will be called.
+   * 
+   * @param in a Java map
+   * @return An Inq map
+   */
   static public com.inqwell.any.Map convertToInqMap(Map in)
   {
     return convertToInqMap(in, AbstractComposite.simpleMap());
