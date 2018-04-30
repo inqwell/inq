@@ -890,7 +890,8 @@ public final class BOTDescriptor extends    AbstractDescriptor
                      Transaction t) throws AnyException
 	{
     startUse();
-      
+    Any execFQName = t.getExecFQName();
+
     try
     {
       predicateBadDescriptor(this, oldVal.getDescriptor());
@@ -905,6 +906,7 @@ public final class BOTDescriptor extends    AbstractDescriptor
         int curLine = se.getLineNumber();
         se.setLineNumber(t.getLineNumber());
 			  t.getCallStack().push(new Call.CallStackEntry(this.getBaseURL(), Descriptor.mutate__));
+			  t.setExecFQName(logMutate_);
         f.execFunc(context);
         if (Call.isLogged(getFQName(), mutatef__))
   	    	l.log(Level.INFO, "Mutated {0} ", context);
@@ -923,6 +925,7 @@ public final class BOTDescriptor extends    AbstractDescriptor
     }
     finally
     {
+      t.setExecFQName(execFQName);
       endUse();
     }
 	}

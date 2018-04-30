@@ -7789,6 +7789,8 @@ Any SetLineLogging() :
   String    endLine;
   AnyFuncHolder afh = null;
   Declare   d = null;
+  String    special = null;
+  Any       aSpecial = null;
   AnyFuncHolder.FuncHolder afhh = null;
   int       line;
 }
@@ -7798,6 +7800,13 @@ Any SetLineLogging() :
   [LOOKAHEAD(Name() ":") (Name() { packageOverride = mapImport(token.image); } ":" )]
   ( <IDENTIFIER> { entity = token.image; } )
   ","
+  ( ( "construct"  { special = token.image; }
+    | "join"       { special = token.image; }
+    | "mutate"     { special = token.image; }
+    | "destroy"    { special = token.image; }
+    )
+    ","
+  )? { aSpecial = AbstractValue.flyweightString(special); }
   ( "start"
     "="
     <INTEGER_LITERAL> { startLine  = token.image; }
@@ -7815,6 +7824,9 @@ Any SetLineLogging() :
     if (s > e)
       throw new AnyRuntimeException("Starting line is beyond ending one");
     Any execFQName = AbstractValue.flyweightString(packageOverride + ":" + entity);
+    if (aSpecial != null)
+      execFQName = AbstractValue.flyweightString(packageOverride + ".types." + entity + ":" + aSpecial);
+
     if (d != null)
     {
       afh = (AnyFuncHolder)d.getVariable();
