@@ -62,8 +62,11 @@ public class AnyDateChooser extends AnyDocView
   
   static private Any  globalToday__  = AbstractValue.flyweightString("globalToday");
   static private Any  dateVerifier__ = AbstractValue.flyweightString("dateVerifier");
+  static private Any  globalDateVerifier__ = AbstractValue.flyweightString("globalDateVerifier");
   static private Any  vDate__        = AbstractValue.flyweightString("vDate");
   static private Any  vCal__         = AbstractValue.flyweightString("vCalendar");
+
+  static private AnyFuncHolder.FuncHolder globalDateVerifierF__;
 
   static private Any  minSelectableDate__  = AbstractValue.flyweightString("minSelectableDate");
   static private Any  maxSelectableDate__  = AbstractValue.flyweightString("maxSelectableDate");
@@ -75,6 +78,7 @@ public class AnyDateChooser extends AnyDocView
     chooserProperties__.add(dateVerifier__);
     chooserProperties__.add(minSelectableDate__);
     chooserProperties__.add(maxSelectableDate__);
+    chooserProperties__.add(globalDateVerifier__);
   }
 
 	public void setObject(Object o)
@@ -92,6 +96,7 @@ public class AnyDateChooser extends AnyDocView
     super.setObject(d_);
 		setupEventSet(getTextComponent());
 		addAdaptedEventListener(new TextFocusListener(focusEventTypes__));
+    d_.setDateVerifier(new VerifyDate());
 	}
 	
   public Container getComponent()
@@ -166,15 +171,30 @@ public class AnyDateChooser extends AnyDocView
     {
       AnyComponent.verifyCallFuncHolder(verifier);
       dateVerifier_ = (AnyFuncHolder.FuncHolder)verifier.cloneAny();
-      d_.setDateVerifier(new VerifyDate());
     }
     else
-      d_.setDateVerifier(null);
+      dateVerifier_ = null;
   }
-  
+
   public Any getDateVerifier()
   {
     return dateVerifier_;
+  }
+
+  public void setGlobalDateVerifier(Any verifier)
+  {
+    if (!AnyNull.isNull(verifier))
+    {
+      AnyComponent.verifyCallFuncHolder(verifier);
+      globalDateVerifierF__ = (AnyFuncHolder.FuncHolder)verifier.cloneAny();
+    }
+    else
+      globalDateVerifierF__ = null;
+  }
+
+  public Any getGlobalDateVerifier()
+  {
+    return globalDateVerifierF__;
   }
 
   public void setMinSelectableDate(Any date)
@@ -309,8 +329,16 @@ public class AnyDateChooser extends AnyDocView
       // Ignore if the context is not set yet
       if (getContextNode() == null)
         return true;
-      
-      Call dateVerifier = (Call)dateVerifier_.getFunc();
+
+      Call dateVerifier = null;
+      if (dateVerifier_  != null)
+        dateVerifier = (Call)dateVerifier_.getFunc();
+      else if (globalDateVerifierF__ != null)
+        dateVerifier = (Call)globalDateVerifierF__.getFunc();
+
+      if (dateVerifier == null)
+        return true;
+
       Map context = Globals.process__.getContext();
       Any contextPath = Globals.process__.getContextPath();
       
