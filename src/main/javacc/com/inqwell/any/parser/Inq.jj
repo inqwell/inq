@@ -3298,6 +3298,12 @@ TOKEN:
       | (["0"-"9"])+ (<EXPONENT>)? ["f","F","d","D"] )
   >
 |
+  < BIG_DECIMAL_LITERAL:
+       ("-")? ( (["0"-"9"])+ "." (["0"-"9"])* ["m","M"]
+      | "." (["0"-"9"])+ ["m","M"]
+      | (["0"-"9"])+ ["m","M"] )
+  >
+|
   < #EXPONENT: ["e","E"] (["+","-"])? (["0"-"9"])+ >
 |
   < CHARACTER_LITERAL:
@@ -4182,6 +4188,7 @@ Any Operand() :
   | a = Round()
   | a = GarbageCollect()
   | a = Null()
+  | a = KeyCfg(null)
   )
   {
     return a;
@@ -4819,12 +4826,12 @@ Any Contains() :
 }
 
 Any IndexOf() :
-{ Any container; Any contained; int line; }
+{ Any container; Any contained; Any func = null; int line; }
 {
   "indexof" { line = token.beginLine; }
-  "(" container = Expression() "," contained = Expression() ")"
+  "(" container = Expression() "," contained = Expression() ["," func = Expression() ] ")"
   {
-    IndexOf i = new IndexOf(container, contained);
+    IndexOf i = new IndexOf(container, contained, func);
     i.setLineNumber(line);
     return i;
   }
@@ -7304,16 +7311,25 @@ Any Max() :
 }
 
 Any Min() :
-{ Any op1; Any op2; int line; }
+{ Any    op1;
+  Any    op2;
+  Any    moreItem = null;
+  Array  more     = null;
+  int    line;
+}
 {
   "min" { line = token.beginLine; }
   "("
   op1 = Expression()
   ","
   op2 = Expression()
+  ( "," { if (more == null) more = AbstractComposite.array(); }
+    moreItem = Expression() { more.add(moreItem); }
+  )*
   ")"
   {
-    Func m = new EvalExpr(op1, op2, new Min());
+    //Func m = new EvalExpr(op1, op2, new Min());
+    Func m = new MinOutOf(op1, op2, more);
     m.setLineNumber(line);
     return m;
   }
@@ -7771,6 +7787,11 @@ Any SetLineLogging() :
   String    packageOverride  = _package;
   String    startLine;
   String    endLine;
+  AnyFuncHolder afh = null;
+  Declare   d = null;
+  String    special = null;
+  Any       aSpecial = null;
+  AnyFuncHolder.FuncHolder afhh = null;
   int       line;
 }
 {
@@ -7779,6 +7800,13 @@ Any SetLineLogging() :
   [LOOKAHEAD(Name() ":") (Name() { packageOverride = mapImport(token.image); } ":" )]
   ( <IDENTIFIER> { entity = token.image; } )
   ","
+  ( ( "construct"  { special = token.image; }
+    | "join"       { special = token.image; }
+    | "mutate"     { special = token.image; }
+    | "destroy"    { special = token.image; }
+    )
+    ","
+  )? { aSpecial = AbstractValue.flyweightString(special); }
   ( "start"
     "="
     <INTEGER_LITERAL> { startLine  = token.image; }
@@ -7788,6 +7816,7 @@ Any SetLineLogging() :
     "="
     <INTEGER_LITERAL> { endLine  = token.image; }
   )
+  [ "," d = FuncDeclaration(true) ]
   ")"
   {
     int s = Integer.valueOf(startLine).intValue();
@@ -7795,7 +7824,22 @@ Any SetLineLogging() :
     if (s > e)
       throw new AnyRuntimeException("Starting line is beyond ending one");
     Any execFQName = AbstractValue.flyweightString(packageOverride + ":" + entity);
-    SetLineLogging sll = new SetLineLogging(execFQName, s, e);
+    if (aSpecial != null)
+      execFQName = AbstractValue.flyweightString(packageOverride + ".types." + entity + ":" + aSpecial);
+
+    if (d != null)
+    {
+      afh = (AnyFuncHolder)d.getVariable();
+      try
+      {
+        afhh = (AnyFuncHolder.FuncHolder)afh.exec(null);
+      }
+      catch (AnyException ex)
+      {
+        throw new RuntimeContainedException(ex);
+      }
+    }
+    SetLineLogging sll = new SetLineLogging(execFQName, s, e, afhh);
     sll.setLineNumber(line);
     return sll;
   }
@@ -9625,6 +9669,11 @@ Any LiteralAsAny() :
     return AbstractValue.flyweightConst(a);
   }
   |
+  a = BigDecimalLiteralAsAny()
+  {
+    return a;
+  }
+  |
   a = FloatingLiteralAsAny()
   {
     return a;
@@ -9744,6 +9793,19 @@ Any FloatingLiteralAsAny() :
   }
 }
 
+Any BigDecimalLiteralAsAny() :
+{
+  Any a;
+}
+{
+  <BIG_DECIMAL_LITERAL>
+  {
+    a = new ConstBigDecimal(token.image.substring(0, token.image.length() - 1));
+
+    return AbstractValue.flyweightConst(a);
+  }
+}
+
 Map LiteralMap() :
 { Map m = AbstractComposite.simpleMap(); Any k, v; }
 {
@@ -9761,6 +9823,7 @@ String LiteralAsString() :
 {
   ( <INTEGER_LITERAL>
   | <FLOATING_POINT_LITERAL>
+  | <BIG_DECIMAL_LITERAL>
   | <BOOLEAN_LITERAL>
   ) { return token.image; }
   | <STRING_LITERAL> { return processStringEscapes(token.image.substring(1, token.image.length()-1)); }
@@ -9794,33 +9857,15 @@ Any TypedDeclaration() :
 { Any     a                = null;
   Locate  l                = null;
   String  str              = null;
-  boolean preserveContext  = true;
   boolean set              = false;
   boolean bytearray        = false;
   Any     byteinit         = null;
-  Any     s                = null;
   Array   compositeMembers = null;
   int     line;
   int     startLine        = token.endLine;
 }
 {
-  ( ( ( "func"
-      | "cfunc" { preserveContext = false; }
-      ) { line = token.beginLine; }
-      l = NodeRef()
-      [ LOOKAHEAD(2) "="  // because of Ternary
-        s = Expression()
-      ]
-      {
-        if (s != null && !(s instanceof Func))
-          throw new AnyRuntimeException("func variables can only hold functions");
-        AnyFuncHolder af;
-        a = af = new AnyFuncHolder((Func)s,
-                                   preserveContext,
-                                   new ConstString(l.toString()),
-                                   documentAnyURL_);
-        af.setLineNumber(line);
-      }
+  ( ( a = FuncDeclaration(false) { return a; }
     )
   | ( a = MakeAnyNotSet()
 
@@ -9870,6 +9915,39 @@ Any TypedDeclaration() :
   }
 }
 
+Declare FuncDeclaration(boolean forceNoContext) :
+{
+  boolean preserveContext  = true;
+  Any     s                = null;
+  Locate  l                = null;
+  int     line             = token.beginLine;
+}
+{
+  ( "func"
+    | "cfunc" { preserveContext = false; }
+  ) { line = token.beginLine; }
+  l = NodeRef()
+  [ LOOKAHEAD(2) "="  // because of Ternary
+    s = Expression()
+  ]
+  {
+    if (forceNoContext)
+      preserveContext = false;
+    if (s != null && !(s instanceof Func))
+      throw new AnyRuntimeException("func variables can only hold functions");
+    AnyFuncHolder af;
+    af = new AnyFuncHolder((Func)s,
+                           preserveContext,
+                           new ConstString(l.toString()),
+                           documentAnyURL_);
+    af.setLineNumber(line);
+    
+    Declare d = new Declare(l, af);
+    d.setLineNumber(line);
+    return d;
+  }
+}
+
 Any ReferencedDeclaration(Any a) :
 { Locate l; Any value; }
 {
@@ -9892,7 +9970,10 @@ Any ReferencedDeclaration(Any a) :
     )
   ]
   {
-    return new Declare(l, a);
+    Declare d = new Declare(l, a);
+    d.setLineNumber(token.beginLine);
+
+    return d;
   }
 }
 
@@ -11167,7 +11248,7 @@ void KeyExists(KeyDef key) :
   }
 }
 
-void KeyCfg(KeyDef key) :
+Any KeyCfg(KeyDef key) :
 { Any a; }
 {
   "auxcfg"
@@ -11184,8 +11265,11 @@ void KeyCfg(KeyDef key) :
     {
       throw new RuntimeContainedException(e);
     }
-    if (a != null)
+    if (a != null &&
+        key != null)    // This is to call this form directly
       key.setAuxInfo(a);
+
+    return a;
   }
 }
 

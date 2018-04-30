@@ -275,8 +275,14 @@ public abstract class AnyCDockable extends    AnyView
       	  Frame f = (Frame)w;
       	  f.setState(Frame.NORMAL);
       	}
-      	w.setVisible(true);
-      	w.toFront();
+      	
+      	// Seems during Docking restore we might not always have a window ancestor
+      	if (w != null)
+      	{
+        	w.setVisible(true);
+        	w.toFront();
+      	}
+      	
         if (withResize)
         {
           Dimension d = getDefaultCDockable().getContentPane().getPreferredSize();

@@ -14,12 +14,12 @@
     <cat stuff="toys">Stuff on my cat</cat>
     <a3></a3>
     <fooinstance typedef="xmltest.types.FooType">
+      <Big field="Big">3,456,789.01</Big>
       <Comment field="Comment">Comments &amp; a &#039; character, überslackers of the world unite</Comment>
       <HotFlag field="HotFlag">M</HotFlag>
       <LastUpdated field="LastUpdated"></LastUpdated>
       <ProductId field="ProductId"></ProductId>
       <Rate field="Rate">1.235</Rate>
-      <Big field="Big">3,456,789.01</Big>
     </fooinstance>
     <keyK typedef="xmltest.types.FooType" __key="K">
       <HotFlag></HotFlag>
@@ -27,6 +27,20 @@
   </z>
   <INQmetadata>
     <INQtypedef INQfqname="xmltest.types.FooType">
+      <INQfield INQname="Comment">
+        <INQwidth INQname="Comment">32</INQwidth>
+        <INQlabel INQname="Comment">Comment</INQlabel>
+      </INQfield>
+      <INQfield INQname="Big">
+        <INQisnumeric>true</INQisnumeric>
+        <INQwidth INQname="Big">10</INQwidth>
+        <INQlabel INQname="Big">Big</INQlabel>
+      </INQfield>
+      <INQfield INQname="Rate">
+        <INQisnumeric>true</INQisnumeric>
+        <INQwidth INQname="Rate">5</INQwidth>
+        <INQlabel INQname="Rate">Rate</INQlabel>
+      </INQfield>
       <INQfield INQname="HotFlag">
         <INQwidth INQname="HotFlag">5</INQwidth>
         <INQlabel INQname="HotFlag">HotFlag</INQlabel>
@@ -34,28 +48,14 @@
         <INQenum INQinternal="M">Warm</INQenum>
         <INQenum INQinternal="E">Cold</INQenum>
       </INQfield>
-      <INQfield INQname="LastUpdated">
-        <INQwidth INQname="LastUpdated">10</INQwidth>
-        <INQlabel INQname="LastUpdated">LastUpdated</INQlabel>
-      </INQfield>
-      <INQfield INQname="Big">
-        <INQisnumeric>true</INQisnumeric>
-        <INQwidth INQname="Big">10</INQwidth>
-        <INQlabel INQname="Big">Big</INQlabel>
-      </INQfield>
-      <INQfield INQname="Comment">
-        <INQwidth INQname="Comment">32</INQwidth>
-        <INQlabel INQname="Comment">Comment</INQlabel>
-      </INQfield>
-      <INQfield INQname="Rate">
-        <INQisnumeric>true</INQisnumeric>
-        <INQwidth INQname="Rate">5</INQwidth>
-        <INQlabel INQname="Rate">Rate</INQlabel>
-      </INQfield>
       <INQfield INQname="ProductId">
         <INQisnumeric>true</INQisnumeric>
         <INQwidth INQname="ProductId">10</INQwidth>
         <INQlabel INQname="ProductId">ProductId</INQlabel>
+      </INQfield>
+      <INQfield INQname="LastUpdated">
+        <INQwidth INQname="LastUpdated">10</INQwidth>
+        <INQlabel INQname="LastUpdated">LastUpdated</INQlabel>
       </INQfield>
     </INQtypedef>
   </INQmetadata>

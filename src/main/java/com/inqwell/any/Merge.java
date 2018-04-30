@@ -49,7 +49,7 @@ public class Merge extends    AbstractFunc
       nullOperand(mergeTo_);
 
 		if (mergeFrom == null)
-      nullOperand(mergeTo_);
+      nullOperand(mergeFrom_);
     
     Iter i = mergeFrom.createKeysIterator();
     while (i.hasNext())

@@ -126,8 +126,10 @@ public class XMLXStream extends AbstractStream
   private boolean inqAttributes_;
   private boolean preserveTypes_;
   private boolean enumExt_;
-  private boolean groupingUsed_ = true;
-  
+  private boolean groupingUsed_  = true;
+  private boolean includeRoot_   = false;
+  private boolean inlineContent_ = false;
+
   // The DOM result if we were in DOM mode
   private Document root_;
   
@@ -148,6 +150,7 @@ public class XMLXStream extends AbstractStream
   public static final Any NODE_NAME   = AbstractValue.flyweightString("nodeName");
   public static final Any ORDINAL     = AbstractValue.flyweightString("ordinal");
   public static final Any CONTENT     = AbstractValue.flyweightString("content");
+  public static final Any INLINECONTENT = AbstractValue.flyweightString("inlineContent");
   public static final Any LAST        = AbstractValue.flyweightString("last");
   public static final Any DESCEND     = AbstractValue.flyweightString("descend");
   public static final Any ATTRIBUTES  = AbstractValue.flyweightString("attributes");
@@ -723,12 +726,25 @@ public class XMLXStream extends AbstractStream
   {
     enumExt_ = enumExt;
   }
-  
+
   public void setGroupingUsed(boolean groupingUsed)
   {
     groupingUsed_ = groupingUsed;
   }
-  
+
+  public void setIncludeRoot(boolean includeRoot)
+  {
+    // Whether to make a map for the root tag.
+    includeRoot_ = includeRoot;
+  }
+
+  public void setInlineContent(boolean inlineContent)
+  {
+    // When inline content is encountered, whether to add to the current
+    // tag map as INLINECONTENT
+    inlineContent_ = inlineContent;
+  }
+
   public void setMetaName(Any metaName)
   {
     if(AnyNull.isNull(metaName))
@@ -2594,9 +2610,19 @@ public class XMLXStream extends AbstractStream
     public void endElement(String uri, String localName, String qName)
         throws SAXException
     {
+      // Now we're processing our end tag we don't need the number of children
+      // we have anymore. Remove it fro the stack.
       ordStack_.pop();
+
+      // This is the map that represents this tag. Any children are already in it.
+      // If this tag represents a scalar then this map will be null.
       Map                     m    = mapStack_.pop();
+
+      // Recover our attributes
       HashMap<String, String> attr = popAttrs();
+
+      // Recover our content and process it. If there is a class attribute
+      // then make the scalar value of this class, otherwise ake a string.
       StringBuilder           c    = contentStack_.pop();
       Any content = null;
       if (c != null)
@@ -2621,59 +2647,71 @@ public class XMLXStream extends AbstractStream
       Any k;
       if (tagNames_ != null && ((k = tagNames_.getIfContains(path_)) != null))
         tagName = k;
-      
+
+      // Check for function interception. If we have a function match for the
+      // current path we will call it. The return value is the tag name.
       Call call = null;
       if (tagFuncs_ != null)
       {
         call = (Call)tagFuncs_.getIfContains(path_);
-      
+
+        // Get our parent's child count
         if (!ordStack_.isEmpty())
         {
           IntI ii = (IntI)ordStack_.peek();
           ordinal_.setValue(ii.getValue());
         }
         else
-          ordinal_.setValue(0); // root element
+          ordinal_.setValue(0); // root[excluded] element
       }
       
       if (content != null)
       {
         if (m == null)
         {
+          // There is content and no map on the stack. In terms of an inq
+          // structure this means the tag is a scalar - at the close there
+          // are no children.
           if (mapStack_.empty())
           {
-            // TODO: Have only content within the root element. Result will be
-            // a scalar.
+            // Have only content within the root element and no forced map to
+            // represent the root tag. Result will be a scalar.
             
-            result_ = m;
+            result_ = content;
             return;
           }
-          
-          m = mapStack_.peek();
-          
-          if (m == null)
+
+          // Look for our parent
+          Map parent = mapStack_.peek();
+
+          // If there isn't a parent map yet we need to create one.
+          // Use any seed map or a simple map if none.
+          if (parent == null)
           {
             if (seed_ != null)
-              m = (Map)seed_.buildNew(null);
+              parent = (Map)seed_.buildNew(null);
             else
-              m = AbstractComposite.simpleMap();
-            
+              parent = AbstractComposite.simpleMap();
+
+            // Replace the parent map stack entry with the newly created map
             mapStack_.pop();
-            mapStack_.push(m);
+            mapStack_.push(parent);
           }
 
           if (call != null)
           {
-            tagName = callTagFunc(call, content, tagName, m, attr);
+            // Call the function intercept, passing the content, current tag name,
+            // parent map and attributes.
+            tagName = callTagFunc(call, content, tagName, parent, attr);
           }
-          
-          if (m.getDescriptor() != Descriptor.degenerateDescriptor__)
+
+          if (parent.getDescriptor() != Descriptor.degenerateDescriptor__)
           {
-            if (m.contains(tagName))
+            if (parent.contains(tagName))
             {
               // Typedef instance. Expect to have a field by the current tag name.
               // TODO: proper parsing
-              m.get(tagName).copyFrom(content);
+              parent.get(tagName).copyFrom(content);
             }
             else
             {
@@ -2682,19 +2720,85 @@ public class XMLXStream extends AbstractStream
           }
           else
           {
-            if (m.contains(tagName))
+            if (parent.contains(tagName))
             {
               // TODO: duplicate tag at this level
+              // [or may be it's OK if any tag function put the
+              // real value in]
             }
             else
             {
-              m.add(tagName, content);
+              parent.add(tagName, content);
             }
           }
         }
         else
         {
-          // TODO lost content
+          // There is a tag representing us and there is also content.
+          // While valid XML, this is unusual for an Inq structure - it
+          // means we have inline content and children.
+
+          if (mapStack_.empty())
+          {
+            // Leaving root[excluded] element
+
+            // Content at the root element is lost
+            result_ = m;
+            return;
+          }
+
+          // Look for our parent
+          Map parent = mapStack_.peek();
+
+          // If there isn't a parent map yet we need to create one.
+          // Use any seed map or a simple map if none.
+          if (parent == null)
+          {
+            if (seed_ != null)
+              parent = (Map)seed_.buildNew(null);
+            else
+              parent = AbstractComposite.simpleMap();
+
+            // Replace the parent map stack entry with the newly created map
+            mapStack_.pop();
+            mapStack_.push(parent);
+          }
+
+          if (call != null)
+          {
+            // Call the function intercept, passing the parent, current tag name,
+            // parent map and attributes.
+            tagName = callTagFunc(call, m, tagName, parent, attr);
+          }
+
+          if (parent.getDescriptor() != Descriptor.degenerateDescriptor__)
+          {
+            if (parent.contains(tagName))
+            {
+              // Typedef instance. Expect to have a field by the current tag name.
+              // TODO: proper parsing
+              parent.get(tagName).copyFrom(content);
+            }
+            else
+            {
+              // TODO: missing field...
+            }
+          }
+          else
+          {
+            if (parent.contains(tagName))
+            {
+              // TODO: duplicate tag at this level
+            }
+            else
+            {
+              parent.add(tagName, m);
+            }
+          }
+
+          if (inlineContent_)
+            m.add(INLINECONTENT, content);
+
         }
       }
       else
@@ -2746,8 +2850,30 @@ public class XMLXStream extends AbstractStream
     @Override
     public void startDocument() throws SAXException
     {
-      // TODO Auto-generated method stub
+      if (includeRoot_)
+      {
+        // If we're including the document root tag in the output structure then set up
+        // the stacks.
+
+        // There can ony e one root tag, so in normal processing of elements this
+        // will just be incremented to zero.
+        IntI count = new AnyInt(-1);
+        ordStack_.push(count);
+
+        contentStack_.push(null);
+        mapStack_.push(null);
+      }
+
       super.startDocument();
+    }
+
+    @Override
+    public void endDocument() throws SAXException
+    {
+      if (includeRoot_)
+        result_ = mapStack_.pop();
+
+      super.endDocument();
     }
 
     @Override
@@ -2757,9 +2883,9 @@ public class XMLXStream extends AbstractStream
       depth_++;
       
       Any tagName = flyweightTagName(qName);
-      
-      // If the stack is not empty (all cases except root) increment
-      // the value at the top
+
+      // If the stack is not empty (all cases except root[exclude root]) increment
+      // the value at the top (our parent's child index, zero-based)
       if (!ordStack_.isEmpty())
       {
         IntI count = (IntI)ordStack_.peek();
@@ -2770,7 +2896,7 @@ public class XMLXStream extends AbstractStream
       IntI count = new AnyInt(-1);
       ordStack_.push(count);
 
-      if (depth_ > 0)
+      if (depth_ > 0 || includeRoot_)
       {
         // Append current key to the path for matching. The root
         // element is not included in the path - in Inq terms the
@@ -2785,6 +2911,10 @@ public class XMLXStream extends AbstractStream
       String mapType = attributes.getValue(MAP_TYPE);
       String typedef = attributes.getValue(TYPEDEF);
 
+      // Push a stack entry that would contain our children, should we have any
+      // If either of the special attributes to specify a map implementation
+      // are parent then we can create the map now. Otherwise push a null
+      // place-holder.
       Map m = null;
 
       if (mapType != null)

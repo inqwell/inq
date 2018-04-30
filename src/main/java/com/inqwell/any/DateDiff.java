@@ -140,7 +140,8 @@ public class DateDiff extends    AbstractFunc
 	{
     c.setTimeInMillis(d.getTime());
 		c.clear (Calendar.HOUR);
-		c.clear (Calendar.HOUR_OF_DAY);
+    c.clear (Calendar.HOUR_OF_DAY);
+    c.set   (Calendar.HOUR_OF_DAY, 0);
 		c.clear (Calendar.MINUTE);
 		c.clear (Calendar.SECOND);
 		c.clear (Calendar.MILLISECOND);

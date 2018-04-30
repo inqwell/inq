@@ -64,7 +64,12 @@ public abstract class AbstractDescriptor extends    PropertyAccessMap //Abstract
   private Any  package_;
 
   private transient Map   propertyMap_;
-  
+
+  protected Any logConstruct_;
+  protected Any logJoin_;
+  protected Any logMutate_;
+  protected Any logDestroy_;
+
 	protected AbstractDescriptor (Any name,
 																Any alias,
 																Any fQName,
@@ -77,6 +82,7 @@ public abstract class AbstractDescriptor extends    PropertyAccessMap //Abstract
     package_       = inqPackage;
     
 		init();
+    setLoggingNames();
   }
   
 	protected AbstractDescriptor (Any name,
@@ -104,6 +110,7 @@ public abstract class AbstractDescriptor extends    PropertyAccessMap //Abstract
     enumSymbols_   = enumSymbols;
     proxy_         = new ProxyDescriptor(fQName);
     setPrivileges(privileges);
+    setLoggingNames();
   }
 
   public Map getProto()
@@ -590,4 +597,12 @@ public abstract class AbstractDescriptor extends    PropertyAccessMap //Abstract
 		widths_        = AbstractComposite.simpleMap();
 		privileges_    = AbstractComposite.simpleMap();
 	}
+
+	private void setLoggingNames()
+  {
+    logConstruct_ = AbstractValue.flyweightString(fQName_.toString() + ":" + "construct");
+    logJoin_      = AbstractValue.flyweightString(fQName_.toString() + ":" + "join");
+    logMutate_    = AbstractValue.flyweightString(fQName_.toString() + ":" + "mutate");
+    logDestroy_   = AbstractValue.flyweightString(fQName_.toString() + ":" + "destroy");
+  }
 }
