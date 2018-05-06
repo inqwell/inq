@@ -54,7 +54,10 @@ public class ConstString extends AbstractValue
 
   public int hashCode()
   {
-    return value_.hashCode();
+    if (value_ != null)
+      return value_.hashCode();
+
+    return 0;
   }
 
   public boolean equals(Any a)
