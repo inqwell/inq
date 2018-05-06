@@ -91,7 +91,9 @@ public class IsType extends    AbstractFunc
     {
       result_ = AnyByte.class__;
     }
-  
+
+    public void visitAnyBoolean (BooleanI b) { result_ = AnyBoolean.class__; }
+
     public void visitAnyChar (CharI c)
     {
       result_ = AnyChar.class__;
