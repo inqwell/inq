@@ -7806,7 +7806,7 @@ Any SetLineLogging() :
     | "destroy"    { special = token.image; }
     )
     ","
-  )? { aSpecial = AbstractValue.flyweightString(special); }
+  )? { if (special != null) aSpecial = AbstractValue.flyweightString(special); }
   ( "start"
     "="
     <INTEGER_LITERAL> { startLine  = token.image; }

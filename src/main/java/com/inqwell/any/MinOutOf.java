@@ -47,25 +47,11 @@ public class MinOutOf extends    AbstractFunc
   {
     Transaction t = getTransaction();
 
-    Any op1 = EvalExpr.evalFunc(t,
-            a,
-            op1_);
-
-    if (op1 == null)
-      nullOperand(op1_);
-
-    Any op2 = EvalExpr.evalFunc(t,
-            a,
-            op2_);
-
-    if (op2 == null)
-      nullOperand(op2_);
-
     OperatorVisitor min = new Min();
     min.setParam(a);
     min.setTransaction(t);
 
-    Any ret = min.doOperation(op1, op2);
+    Any ret = min.doOperation(op1_, op2_);
 
     if (more_ != null)
     {
@@ -82,6 +68,8 @@ public class MinOutOf extends    AbstractFunc
         Any moreItem = EvalExpr.evalFunc(t,
                                          a,
                                          more.get(i));
+        moreItem = AbstractAny.ripSafe(moreItem, t);
+        t.resetResolving();
 
         if (AnyNull.isNull(moreItem))
           continue;
