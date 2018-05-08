@@ -191,9 +191,10 @@ public class JComboBox extends javax.swing.JComboBox
     {
       ComboRenderer cr = (ComboRenderer)lr;
       cr.rList_ = ar;
+      cr.rSel_ = ar;
     }
     else
-		  this.setRenderer(new ComboRenderer(lr, ar));
+		  this.setRenderer(new ComboRenderer(ar, ar));
 
     r = m.getItemRenderInfo();
     if (r != null)// && !r.isEnum())
